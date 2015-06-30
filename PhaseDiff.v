@@ -8,6 +8,10 @@ Require Import Coq.ZArith.BinInt.
 
 Require Import ListUtil.
 Require Import MapUtil.
+Require Graphs.FGraphs.
+Require Graphs.Core.
+Module G := Graphs.Core.
+Module FG := Graphs.FGraphs.
 
 Module TID := Nat_as_OT.
 Definition tid := TID.t.
@@ -352,11 +356,6 @@ Proof.
   assumption.
 Qed.
 
-Notation "'Sig_no'" := (False_rec _ _) (at level 42).
-Notation "'Sig_yes' e" := (exist _ e _) (at level 42).
-Notation "'Sig_take' e" :=
-  (match e with Sig_yes ex => ex end) (at level 42).  
-
 Lemma in_inv_eq:
   forall {A} (x y:A),
   In x (y :: nil) ->
@@ -525,7 +524,255 @@ Proof.
     assumption.
 Qed.
 
+Lemma LE_trans:
+  forall t1 t2 t3,
+  LE t1 t2 ->
+  LE t2 t3 ->
+  LE t1 t3.
+Proof.
+  intros.
+  apply t_trans with (y:=t2).
+  auto.
+  auto.
+Qed.
+
+(** We now view the phase difference relation [LE] as a graph. 
+    An edge of the graph is just a pair of two tasks. *)
+
+Definition edge (T:Type) := (T * T) % type.
+
+Definition Edge (e:edge tid) := LE (fst e) (snd e).
+
+Definition fgraph (T:Type) := list (edge T).
+
+(** Predicate [PhaseDiff] holds when the following list represnts the LE relation. *)
+Definition PhaseDiff (g:fgraph tid) :=
+  forall e, In e g <-> Edge e.
+
+Definition EQ t t' := LE t t' /\ LE t' t.
+
+Definition Unrelated t t' := (~ LE t t' /\ ~ LE t' t).
+
+Lemma unrelated_symm:
+  forall t t',
+  Unrelated t t' ->
+  Unrelated t' t.
+Proof.
+  intros.
+  unfold Unrelated in *.
+  intuition.
+Qed.
+
+Definition Enabled (t:tid) (ts:list tid) := 
+  In t ts /\ forall t', In t' ts -> Unrelated t t' \/ LE t t'.
+(*
+Lemma phaser_mapsto_dec:
+  forall (t:tid) (ph:phaser),
+  { Map_TID.In t ph } + { ~ Map_TID.In t ph }.
+Proof.
+  intros.
+  
+
+Lemma ph_diff_dec:
+  forall ph t t' z,
+  { ph_diff ph t t' z } + { ~ ph_diff ph t t' z }.
+Proof.
+  intros.
+  unfold ph_diff.
+
+Lemma ph_le_dec:
+  forall ph t t',
+  { ph_le ph t t' } + { ~ ph_le ph t t' }.
+Proof.
+  intros.
+  unfold ph_le.
+  
+Qed.
+
+Lemma wp_le_dec:
+  forall t t',
+  { wp_le t t' } + { ~ wp_le t t' }.
+Proof.
+  unfold wp_le.
+Qed.
+*)
+
+Require Import PairUtil.
+
+Lemma edge_dec:
+  forall g,
+  PhaseDiff g ->
+  forall t t',
+  {In (t, t') g } + { ~ In (t, t') g }.
+Proof.
+  intros.
+  apply in_dec.
+  apply pair_eq_dec.
+  apply TID.eq_dec.
+Qed.
+
+Lemma LE_dec:
+  forall g,
+  PhaseDiff g ->
+  forall t t',
+  {LE t t'} + {~ LE t t'}.
+Proof.
+  intros.
+  unfold PhaseDiff in *.
+  unfold Edge in *.
+  assert (Hy := H (t, t')).
+  simpl in Hy.
+  destruct (edge_dec _ H t t'); repeat intuition.
+Qed.
+
+Lemma has_enabled_step_eq:
+  forall g x y ts,
+  PhaseDiff g ->
+  tid_In x pm ->
+  LE y x ->
+  In y ts ->
+  Enabled y ts ->
+  Enabled y (x :: ts).
+Proof.
+  intros.
+  unfold Enabled in *.
+  destruct H3 as (_, H3).
+  intuition.
+  inversion H4.
+  - subst. intuition.
+  - apply H3. intuition.
+Qed.
+
+Lemma has_enabled_step_le:
+  forall g t t' ts,
+  PhaseDiff g ->
+  tid_In t pm ->
+  Enabled t' ts ->
+  LE t t' ->
+  Enabled t (t::ts).
+Proof.
+  intros.
+  unfold Enabled.
+  intuition.
+  rename t'0 into x.
+  unfold Enabled in H1.
+  destruct H1 as (_, H1).
+  assert (Hx := H1 x).
+  inversion H3.
+  - subst.
+    right.
+    apply LE_refl.
+    assumption.
+  - apply Hx in H4. clear Hx H3 H1.
+    destruct (LE_dec _ H t x).
+    { intuition. }
+    left.
+    destruct H4.
+    + unfold Unrelated in *.
+      split. { intuition. }
+      destruct H1.
+      intuition.
+      assert (LE x t'). {
+        apply LE_trans with (t2:=t); repeat auto.
+      }
+      contradiction H5.
+    + assert (LE t x). {
+        apply LE_trans with (t2:=t'); repeat auto.
+      }
+      contradiction H3.
+Qed.
+
+Lemma has_enabled_step_unrelated:
+  forall g x y ts,
+  PhaseDiff g ->
+  tid_In x pm ->
+  In y ts ->
+  Enabled y ts ->
+  Unrelated x y ->
+  Enabled y (x :: ts).
+Proof.
+  intros.
+  unfold Enabled.
+  intuition.
+  inversion H4.
+  - subst.
+    left.
+    apply unrelated_symm.
+    assumption.
+  - unfold Enabled in H2.
+    destruct H2 as (_, H2).
+    apply H2.
+    assumption.
+Qed.
+
+Lemma has_enabled_step:
+  forall g x y ts,
+  PhaseDiff g ->
+  tid_In x pm ->
+  In y ts ->
+  Enabled y ts ->
+  exists t, In t (x :: ts) /\ Enabled t (x :: ts).
+Proof.
+  intros.
+  destruct (LE_dec _ H y x).
+  - exists y.
+    intuition.
+    apply has_enabled_step_eq with (g:=g); repeat auto.
+  - destruct (LE_dec _ H x y).
+    + exists x.
+      split. { intuition. }
+      apply has_enabled_step_le with (g:=g) (t':=y); repeat auto.
+    + exists y.
+      assert (Unrelated x y). {
+        unfold Unrelated; intuition.
+      }
+      intuition.
+      apply has_enabled_step_unrelated with (g:=g); repeat auto.
+Qed.
+
+Lemma has_enabled_simple:
+  forall ts g,
+  ts <> nil ->
+  PhaseDiff g ->
+  Wait ts ->
+  exists t, In t ts /\ Enabled t ts.
+Proof.
+  intros ts g Hnil Hphasediff Hwait.
+  induction ts.
+  (* absurd *) {
+    contradiction Hnil.
+    auto.
+  }
+  destruct ts.
+  - exists a.
+    intuition.
+    unfold Enabled.
+    split. intuition.
+    intros t' Hin.
+    apply in_inv_eq in Hin.
+    subst.
+    right; apply LE_refl.
+    apply wait_cons_inv_tid_In in Hwait.
+    assumption.
+  - assert (IHnil : t :: ts <> nil). {
+      intuition. inversion H.
+    }
+    assert (IHwait : Wait (t :: ts)). {
+      apply wait_cons_inv_decons in Hwait.
+      assumption.
+    }
+    destruct (IHts IHnil IHwait) as (x, (Hin, Hen)); clear IHts IHnil IHwait.
+    apply has_enabled_step with (g:=g) (y:=x); repeat auto.
+    apply wait_cons_inv_tid_In in Hwait.
+    assumption.
+Qed.
+
+Theorem has_enabled:
+  forall ts,
+  ts <> nil ->
+  exists t, In t ts /\ Enabled t ts.
+Proof.
+Qed.
+
 End ENABLED.
-        
-        
-        
+
