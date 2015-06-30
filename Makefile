@@ -17,8 +17,7 @@ clean:
 	rm -f */*/*.vo */*/*.v.d */*/*.glob
 
 coqide:
-	coqide 
-#-R . HJ
+	coqide -R . HJ
 
 #pdf: Completeness.pdf Soundness.pdf
 
