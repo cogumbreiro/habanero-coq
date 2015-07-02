@@ -5,6 +5,7 @@ Require Import Coq.FSets.FMapAVL.
 Require Coq.FSets.FMapFacts.
 Require Coq.FSets.FSetProperties.
 Require Import Coq.ZArith.BinInt.
+Require Import Coq.Relations.Relations.
 
 Require Import ListUtil.
 Require Import MapUtil.
@@ -114,8 +115,7 @@ Definition Trans (pm:phasermap) :=
   ph_diff ph'' t1 t3 i'' ->
   (i + i')%Z = i''.
 
-Definition WF (pm:phasermap) :=
-  Fun pm /\ Trans pm.
+Definition WF (pm:phasermap) := Fun pm /\ Trans pm.
 
 Definition tid_In (t:tid) (pm:phasermap) :=
   exists p ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
@@ -139,11 +139,20 @@ Proof.
   assumption.
 Qed.
 
+Lemma ph_le_inv:
+  forall t t' ph,
+  ph_le ph t t' ->
+  Map_TID.In t ph /\ Map_TID.In t' ph.
+Proof.
+  intros.
+  unfold ph_le in *.
+  destruct H as (z, (H1, H2)).
+  apply ph_diff_inv with (z:=z).
+  assumption.
+Qed.
+
 Section ENABLED.
 Variable pm:phasermap.
-Parameter wf_pm: WF pm.
-
-Require Import Coq.Relations.Relations.
 
 (** Less-than-equals *)
 Definition wp_le (t:tid) (t':tid) :=
@@ -164,7 +173,24 @@ Proof.
   assumption.
 Qed.
 
+Lemma wp_le_inv:
+  forall t t',
+  wp_le t t' ->
+  tid_In t pm /\ tid_In t' pm.
+Proof.
+  intros.
+  unfold wp_le in *.
+  destruct H as (p, (ph, (Hmt, Hin))).
+  apply ph_le_inv in Hin.
+  unfold tid_In.
+  split; repeat (exists p; exists ph; intuition).
+Qed.
+
 Definition LE := clos_trans tid wp_le.
+
+Variable LE_dec:
+  forall t t',
+  {LE t t'} + {~ LE t t'}.
 
 Lemma LE_refl:
   forall t,
@@ -178,86 +204,17 @@ Proof.
   assumption.
 Qed.
 
-(** All tasks in [Tids ts] are waiting tasks. *)
-Definition Wait (ts:list tid) :=
-  forall t', In t' ts -> tid_In t' pm.
-
-Lemma wait_in:
-  forall t ts,
-  Wait ts ->
-  In t ts ->
-  tid_In t pm.
+Lemma LE_inv:
+  forall t t',
+  LE t t' ->
+  tid_In t pm /\ tid_In t' pm.
 Proof.
   intros.
-  apply H in H0.
-  assumption.
-Qed.
-
-Lemma wait_cons:
-  forall t ts,
-  tid_In t pm ->
-  Wait ts ->
-  Wait (t :: ts).
-Proof.
-  intros.
-  unfold Wait in *.
-  intros.
-  inversion H1.
-  - subst.
-    assumption.
-  - apply H0 in H2.
-    assumption.
-Qed.
-
-Lemma wait_cons_inv_tid_In:
-  forall t ts,
-  Wait (t :: ts) ->
-  tid_In t pm.
-Proof.
-  intros.
-  assert (In t (t :: ts)). {
-    apply in_eq.
-  }
-  apply wait_in with (t::ts); repeat auto.
-Qed.
-
-Lemma wait_cons_inv_decons:
-  forall t ts,
-  Wait (t :: ts) ->
-  Wait ts.
-Proof.
-  intros.
-  unfold Wait in *.
-  intros.
-  assert (In t' (t :: ts)). {
-    apply in_cons.
-    assumption.
-  }
-  apply H.
-  assumption.
-Qed.
-
-Lemma in_inv_eq:
-  forall {A} (x y:A),
-  In x (y :: nil) ->
-  x = y.
-Proof.
-  intros.
-  inversion H.
-  auto.
-  inversion H0.
-Qed.
-
-Lemma in_inv_eq_2:
-  forall {A} (x y:A),
-  In x (y :: y :: nil) ->
-  x = y.
-Proof.
-  intros.
-  inversion H.
-  auto.
-  apply in_inv_eq.
-  auto.
+  unfold LE in H.
+  induction H.
+  - apply wp_le_inv in H.
+    intuition.
+  - intuition.
 Qed.
 
 Lemma LE_trans:
@@ -272,37 +229,68 @@ Proof.
   auto.
 Qed.
 
-(** We now view the phase difference relation [LE] as a graph. 
-    An edge of the graph is just a pair of two tasks. *)
+End ENABLED.
+
+Require Rel.
+
+Section HAS_SMALLEST.
+Variable pm: phasermap.
+Let IsA t := tid_In t pm.
+
+Let wtid_le (t1:tid) (t2:tid) := LE pm t1 t2.
+
+Let wtid_le_inv := LE_inv pm.
+
+Variable wtid_le_dec:
+  forall t1 t2,
+  { LE pm t1 t2 } + { ~ LE pm t1 t2 }.
+
+Let wtid_le_trans:
+  forall t1 t2 t3,
+  wtid_le t1 t2 ->
+  wtid_le t2 t3 ->
+  wtid_le t1 t3.
+Proof.
+  unfold wtid_le in *.
+  apply LE_trans.
+Qed.
+
+Let wtid_has_smallest :=
+  Rel.has_smallest tid IsA wtid_le (LE_inv pm) wtid_le_dec
+  (LE_refl pm) wtid_le_trans.
+
+Theorem has_smallest:
+  forall ts,
+  ts <> nil ->
+  Forall IsA ts ->
+  exists t,
+  In t ts /\
+  forall t', In t' ts -> (~ LE pm t t' /\ ~ LE pm t' t) \/ LE pm t t'.
+Proof.
+  intros.
+  destruct (wtid_has_smallest _ H H0) as (x, Hx).
+  unfold Rel.Smallest in *.
+  unfold Rel.Unrelated in *.
+  unfold wtid_le in *.
+  exists x.
+  auto.
+Qed.
+End HAS_SMALLEST.
+
+Require Import PairUtil.
+
+Section LE_DEC.
+Variable pm:phasermap.
 
 Definition edge (T:Type) := (T * T) % type.
 
-Definition Edge (e:edge tid) := LE (fst e) (snd e).
+Definition Edge (e:edge tid) := LE pm (fst e) (snd e).
 
 Definition fgraph (T:Type) := list (edge T).
 
 (** Predicate [PhaseDiff] holds when the following list represnts the LE relation. *)
 Definition PhaseDiff (g:fgraph tid) :=
   forall e, In e g <-> Edge e.
-
-Definition EQ t t' := LE t t' /\ LE t' t.
-
-Definition Unrelated t t' := (~ LE t t' /\ ~ LE t' t).
-
-Lemma unrelated_symm:
-  forall t t',
-  Unrelated t t' ->
-  Unrelated t' t.
-Proof.
-  intros.
-  unfold Unrelated in *.
-  intuition.
-Qed.
-
-Definition Enabled (t:tid) (ts:list tid) := 
-  In t ts /\ forall t', In t' ts -> Unrelated t t' \/ LE t t'.
-
-Require Import PairUtil.
 
 Lemma edge_dec:
   forall g,
@@ -320,7 +308,7 @@ Lemma LE_dec:
   forall g,
   PhaseDiff g ->
   forall t t',
-  {LE t t'} + {~ LE t t'}.
+  {LE pm t t'} + {~ LE pm t t'}.
 Proof.
   intros.
   unfold PhaseDiff in *.
@@ -329,148 +317,5 @@ Proof.
   simpl in Hy.
   destruct (edge_dec _ H t t'); repeat intuition.
 Qed.
-
-Lemma has_enabled_step_eq:
-  forall g x y ts,
-  PhaseDiff g ->
-  tid_In x pm ->
-  LE y x ->
-  In y ts ->
-  Enabled y ts ->
-  Enabled y (x :: ts).
-Proof.
-  intros.
-  unfold Enabled in *.
-  destruct H3 as (_, H3).
-  intuition.
-  inversion H4.
-  - subst. intuition.
-  - apply H3. intuition.
-Qed.
-
-Lemma has_enabled_step_le:
-  forall g t t' ts,
-  PhaseDiff g ->
-  tid_In t pm ->
-  Enabled t' ts ->
-  LE t t' ->
-  Enabled t (t::ts).
-Proof.
-  intros.
-  unfold Enabled.
-  intuition.
-  rename t'0 into x.
-  unfold Enabled in H1.
-  destruct H1 as (_, H1).
-  assert (Hx := H1 x).
-  inversion H3.
-  - subst.
-    right.
-    apply LE_refl.
-    assumption.
-  - apply Hx in H4. clear Hx H3 H1.
-    destruct (LE_dec _ H t x).
-    { intuition. }
-    left.
-    destruct H4.
-    + unfold Unrelated in *.
-      split. { intuition. }
-      destruct H1.
-      intuition.
-      assert (LE x t'). {
-        apply LE_trans with (t2:=t); repeat auto.
-      }
-      contradiction H5.
-    + assert (LE t x). {
-        apply LE_trans with (t2:=t'); repeat auto.
-      }
-      contradiction H3.
-Qed.
-
-Lemma has_enabled_step_unrelated:
-  forall g x y ts,
-  PhaseDiff g ->
-  tid_In x pm ->
-  In y ts ->
-  Enabled y ts ->
-  Unrelated x y ->
-  Enabled y (x :: ts).
-Proof.
-  intros.
-  unfold Enabled.
-  intuition.
-  inversion H4.
-  - subst.
-    left.
-    apply unrelated_symm.
-    assumption.
-  - unfold Enabled in H2.
-    destruct H2 as (_, H2).
-    apply H2.
-    assumption.
-Qed.
-
-Lemma has_enabled_step:
-  forall g x y ts,
-  PhaseDiff g ->
-  tid_In x pm ->
-  In y ts ->
-  Enabled y ts ->
-  exists t, In t (x :: ts) /\ Enabled t (x :: ts).
-Proof.
-  intros.
-  destruct (LE_dec _ H y x).
-  - exists y.
-    intuition.
-    apply has_enabled_step_eq with (g:=g); repeat auto.
-  - destruct (LE_dec _ H x y).
-    + exists x.
-      split. { intuition. }
-      apply has_enabled_step_le with (g:=g) (t':=y); repeat auto.
-    + exists y.
-      assert (Unrelated x y). {
-        unfold Unrelated; intuition.
-      }
-      intuition.
-      apply has_enabled_step_unrelated with (g:=g); repeat auto.
-Qed.
-
-Lemma has_enabled_simple:
-  forall ts g,
-  ts <> nil ->
-  PhaseDiff g ->
-  Wait ts ->
-  exists t, In t ts /\ Enabled t ts.
-Proof.
-  intros ts g Hnil Hphasediff Hwait.
-  induction ts.
-  (* absurd *) {
-    contradiction Hnil.
-    auto.
-  }
-  destruct ts.
-  - exists a.
-    intuition.
-    unfold Enabled.
-    split. intuition.
-    intros t' Hin.
-    apply in_inv_eq in Hin.
-    subst.
-    right; apply LE_refl.
-    apply wait_cons_inv_tid_In in Hwait.
-    assumption.
-  - assert (IHnil : t :: ts <> nil). {
-      intuition. inversion H.
-    }
-    assert (IHwait : Wait (t :: ts)). {
-      apply wait_cons_inv_decons in Hwait.
-      assumption.
-    }
-    destruct (IHts IHnil IHwait) as (x, (Hin, Hen)); clear IHts IHnil IHwait.
-    apply has_enabled_step with (g:=g) (y:=x); repeat auto.
-    apply wait_cons_inv_tid_In in Hwait.
-    assumption.
-Qed.
-
-End ENABLED.
+End LE_DEC.
 
