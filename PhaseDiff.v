@@ -4,28 +4,30 @@ Require Import Coq.Lists.List.
 Require Import Vars.
 Require Import ListUtil.
 Require Import MapUtil.
-
-(* a phaser with just wait-phase *)
-Definition phaser := Map_TID.t nat.
+Require Import Lang.
 
 Definition ph_diff (ph:phaser) (t1:tid) (t2:tid) (z:Z)
-  := exists n1, Map_TID.MapsTo t1 n1 ph /\
-     exists n2, Map_TID.MapsTo t2 n2 ph /\
+  := exists v1, Map_TID.MapsTo t1 v1 ph /\
+     exists v2, Map_TID.MapsTo t2 v2 ph /\
+     exists n1, WaitPhase v1 n1 /\
+     exists n2, WaitPhase v2 n2 /\
      ((Z_of_nat n1) - (Z_of_nat n2))%Z = z.
+
+Definition WTaskIn (t:tid) (ph:phaser) :=
+  exists v, Map_TID.MapsTo t v ph /\
+  exists n, WaitPhase v n.
 
 Lemma ph_diff_refl:
   forall t ph,
-  Map_TID.In t ph ->
+  WTaskIn t ph ->
   ph_diff ph t t 0.
 Proof.
   intros.
   unfold ph_diff.
-  apply Map_TID_Extra.in_to_mapsto in H.
-  destruct H as (n, Hmt).
-  exists n.
-  intuition.
-  exists n.
-  intuition.
+  unfold WTaskIn in H.
+  destruct H as (v, (Hmt, (n, Hw))).
+  repeat (exists v; intuition).
+  repeat (exists n; intuition).
 Qed.
 
 Lemma ph_diff_symm:
@@ -35,7 +37,10 @@ Lemma ph_diff_symm:
 Proof.
   intros.
   unfold ph_diff in *.
-  destruct H as (n1, (Hmt1, (n2, (Hmt2, H)))).
+  destruct H as (v1, (Hmt1, (v2, (Hmt2,
+    (n1, (Hw1, (n2, (Hw2, Hdiff)))))))).
+  exists v2; intuition.
+  exists v1; intuition.
   exists n2; intuition.
   exists n1; intuition.
 Qed.
@@ -43,20 +48,28 @@ Qed.
 Lemma ph_diff_inv:
   forall ph t t' z,
   ph_diff ph t t' z ->
-  Map_TID.In t ph /\ Map_TID.In t' ph.
+  WTaskIn t ph /\ WTaskIn t' ph.
 Proof.
   intros.
   unfold ph_diff in H.
-  destruct H as (n1, (Hmt1, (n2, (Hmt2, Hz)))).
-  apply Map_TID_Extra.mapsto_to_in in Hmt1.
-  apply Map_TID_Extra.mapsto_to_in in Hmt2.
-  intuition.
+  destruct H as (v1, (Hmt1, (v2, (Hmt2,
+    (n1, (Hw1, (n2, (Hw2, Hdiff)))))))).
+  unfold WTaskIn in *.
+  split.
+  - exists v1.
+    intuition.
+    exists n1.
+    intuition.
+  - exists v2.
+    intuition.
+    exists n2.
+    intuition.
 Qed.
 
 Lemma ph_diff_inv_left:
   forall ph t t' z,
   ph_diff ph t t' z ->
-  Map_TID.In t ph.
+  WTaskIn t ph.
 Proof.
   intros.
   apply ph_diff_inv in H.
@@ -66,47 +79,22 @@ Qed.
 Lemma ph_diff_inv_right:
   forall ph t t' z,
   ph_diff ph t t' z ->
-  Map_TID.In t' ph.
+  WTaskIn t' ph.
 Proof.
   intros.
   apply ph_diff_inv in H.
   intuition.
-Qed.  
-
-Definition phasermap := Map_PHID.t (phaser).
-
-Definition Fun (pm:phasermap) :=
-  forall t1 t2 p p' ph ph' i i',
-  Map_PHID.MapsTo p ph pm ->
-  Map_PHID.MapsTo p' ph' pm ->
-  ph_diff ph t1 t2 i ->
-  ph_diff ph' t1 t2 i' ->
-  i = i'.
-
-Definition Trans (pm:phasermap) :=
-  forall t1 t2 t3 p p' p'' ph ph' ph'' i i' i'',
-  Map_PHID.MapsTo p ph pm ->
-  Map_PHID.MapsTo p' ph' pm ->
-  Map_PHID.MapsTo p'' ph'' pm ->
-  ph_diff ph t1 t2 i ->
-  ph_diff ph' t2 t3 i' ->
-  ph_diff ph'' t1 t3 i'' ->
-  (i + i')%Z = i''.
-
-Definition WF (pm:phasermap) := Fun pm /\ Trans pm.
+Qed.
 
 Definition tid_In (t:tid) (pm:phasermap) :=
-  exists p ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
-
-Definition tids_Dom (l:list tid) (pm:phasermap) :=
-  forall t, In t l <-> tid_In t pm.
+  exists p ph, Map_PHID.MapsTo p ph pm /\ WTaskIn t ph.
 
 Definition ph_le (ph:phaser) (t1:tid) (t2:tid) :=
   exists (z:Z), ph_diff ph t1 t2 z /\ (z <= 0)%Z.
 
 Lemma ph_le_refl:
   forall t ph,
-  Map_TID.In t ph ->
+  WTaskIn t ph ->
   ph_le ph t t.
 Proof.
   intros.
@@ -120,7 +108,7 @@ Qed.
 Lemma ph_le_inv:
   forall t t' ph,
   ph_le ph t t' ->
-  Map_TID.In t ph /\ Map_TID.In t' ph.
+  WTaskIn t ph /\ WTaskIn t' ph.
 Proof.
   intros.
   unfold ph_le in *.
@@ -297,3 +285,23 @@ Proof.
 Qed.
 End LE_DEC.
 
+
+Definition Fun (pm:phasermap) :=
+  forall t1 t2 p p' ph ph' i i',
+  Map_PHID.MapsTo p ph pm ->
+  Map_PHID.MapsTo p' ph' pm ->
+  ph_diff ph t1 t2 i ->
+  ph_diff ph' t1 t2 i' ->
+  i = i'.
+
+Definition Trans (pm:phasermap) :=
+  forall t1 t2 t3 p p' p'' ph ph' ph'' i i' i'',
+  Map_PHID.MapsTo p ph pm ->
+  Map_PHID.MapsTo p' ph' pm ->
+  Map_PHID.MapsTo p'' ph'' pm ->
+  ph_diff ph t1 t2 i ->
+  ph_diff ph' t2 t3 i' ->
+  ph_diff ph'' t1 t3 i'' ->
+  (i + i')%Z = i''.
+
+Definition WF (pm:phasermap) := Fun pm /\ Trans pm.
