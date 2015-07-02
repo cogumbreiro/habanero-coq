@@ -1,31 +1,9 @@
-Require Import Coq.Structures.OrderedType.
-Require Import Coq.Structures.OrderedTypeEx.
-Require Import Coq.FSets.FSetAVL.
-Require Import Coq.FSets.FMapAVL.
-Require Coq.FSets.FMapFacts.
-Require Coq.FSets.FSetProperties.
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Relations.Relations.
-
+Require Import Coq.Lists.List.
+Require Import Vars.
 Require Import ListUtil.
 Require Import MapUtil.
-
-Module TID := Nat_as_OT.
-Definition tid := TID.t.
-Module TID_Facts := OrderedTypeFacts TID.
-Module Set_TID := FSetAVL.Make TID.
-Module Set_TID_Props := FSetProperties.Properties Set_TID.
-Module Map_TID := FMapAVL.Make TID.
-Module Map_TID_Facts := FMapFacts.Facts Map_TID.
-Module Map_TID_Props := FMapFacts.Properties Map_TID.
-Module Map_TID_Extra := MapUtil.MapUtil Map_TID.
-
-Module PHID := Nat_as_OT.
-Module Set_PHID := FSetAVL.Make PHID.
-Module Map_PHID := FMapAVL.Make PHID.
-Module Map_PHID_Facts := FMapFacts.Facts Map_PHID.
-Module Map_PHID_Props := FMapFacts.Properties Map_PHID.
-Module Map_PHID_Extra := MapUtil.MapUtil Map_PHID.
 
 (* a phaser with just wait-phase *)
 Definition phaser := Map_TID.t nat.
