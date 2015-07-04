@@ -17,6 +17,20 @@ Definition WTaskIn (t:tid) (ph:phaser) :=
   exists v, Map_TID.MapsTo t v ph /\
   exists n, WaitPhase v n.
 
+Lemma wtask_in_def:
+  forall t ph v n,
+  Map_TID.MapsTo t v ph ->
+  WaitPhase v n ->
+  WTaskIn t ph.
+Proof.
+  intros.
+  unfold WTaskIn.
+  exists v.
+  intuition.
+  exists n.
+  assumption.
+Qed.
+
 Lemma ph_diff_refl:
   forall t ph,
   WTaskIn t ph ->
@@ -225,13 +239,16 @@ Let wtid_has_smallest :=
   Rel.has_smallest tid IsA wtid_le (LE_inv pm) wtid_le_dec
   (LE_refl pm) wtid_le_trans.
 
+Definition Smallest (t:tid) (ts:list tid)  :=
+  In t ts /\
+  forall t', In t' ts -> (~ LE pm t t' /\ ~ LE pm t' t) \/ LE pm t t'.
+
 Theorem has_smallest:
   forall ts,
   ts <> nil ->
   Forall IsA ts ->
   exists t,
-  In t ts /\
-  forall t', In t' ts -> (~ LE pm t t' /\ ~ LE pm t' t) \/ LE pm t t'.
+  Smallest t ts.
 Proof.
   intros.
   destruct (wtid_has_smallest _ H H0) as (x, Hx).
@@ -240,6 +257,233 @@ Proof.
   unfold wtid_le in *.
   exists x.
   auto.
+Qed.
+
+Variable get_registered:
+  forall (t:tid),
+  exists ps, Registered pm t ps.
+
+Variable tids: list tid.
+
+Variable tids_def:
+  forall t, In t tids <-> IsA t.
+
+Let smallest_inv:
+  forall t,
+  Smallest t tids ->
+  In t tids.
+Proof.
+  intros.
+  unfold Smallest in *.
+  intuition.
+Qed.
+(*
+Variable t_in_tid:
+  forall t p ph v,
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.MapsTo t v ph ->
+  In t tids.
+
+Definition Diff (t:tid) (t':tid) (i:Z) :=
+  exists p ph, Map_PHID.MapsTo p ph pm /\ ph_diff ph t t' i.
+
+Definition RespectDiff :=
+  forall t t' p ph pm i v v' n n',
+  Diff t t' i ->
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.MapsTo t v ph ->
+  Map_TID.MapsTo t' v' ph ->
+  WaitPhase v n ->
+  SignalPhase v' n' ->
+  (((Z_of_nat n) - (Z_of_nat n')) >= i) % Z.
+
+Variable get_diff:
+  forall t t',
+  In t tids ->
+  In t' tids ->
+  exists i, Diff t t' i.
+
+Variable respect: RespectDiff.
+*)
+
+Variable OnlySW :
+  forall (ph:phaser) (t:tid) (v:taskview),
+  Map_TID.MapsTo t v ph ->
+  exists n, v = SW n true \/ v = WO n.
+
+Variable Smallest_to_WaitPhase :
+  forall t t' v v' p ph n n',
+  Smallest t tids ->
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.MapsTo t v ph ->
+  Map_TID.MapsTo t' v' ph ->
+  WaitPhase v n ->
+  WaitPhase v' n' ->
+  n <= n'.
+
+Lemma smallest_to_sync:
+  forall t p ph v,
+  Smallest t tids ->
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.MapsTo t v ph ->
+  Sync ph t.
+Proof.
+  intros.
+  destruct (wait_phase_inv v) as (n, [Hv|Hv]).
+  - apply sync_wait with (v:=v) (w:=n); repeat intuition.
+    unfold Await.
+    intros t' v' n' Hmt' Hsp.
+    destruct (OnlySW ph _ _ Hmt') as (n'', [Heq|Heq]).
+    + subst.
+      inversion Hsp.
+      subst.
+      assert (Hwait : WaitPhase (SW n'' true) n''). {
+        apply wait_phase_sw.
+      }
+      assert (Hle : n <= n''). {
+        apply Smallest_to_WaitPhase with
+        (t:=t) (t':=t') (v:=v) (v':=(SW n'' true))
+        (p:=p) (ph:=ph); repeat auto.
+      }
+      intuition.
+    + subst. (* absurd *)
+      inversion Hsp.
+  - subst.
+    apply sync_so with (s:=n).
+    assumption.
+Qed.
+
+Lemma smallest_to_reduce:
+  forall t p ph v,
+  Smallest t tids ->
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.MapsTo t v ph ->
+  exists ph', PhReduce ph t WAIT ph'.
+Proof.
+  intros.
+  exists (Map_TID.add t (wait v) ph).
+  apply ph_reduce_wait; repeat auto.
+  apply smallest_to_sync with (p:=p) (v:=v); repeat auto.
+Qed.
+
+Lemma smallest_to_call_wait:
+  forall t p ph v,
+  Smallest t tids ->
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.MapsTo t v ph ->
+  exists pm', Call pm t p WAIT pm'.
+Proof.
+  intros.
+  assert (Hx : exists ph', PhReduce ph t WAIT ph'). {
+    apply smallest_to_reduce with (p:=p) (v:=v); repeat auto.
+  }
+  destruct Hx as (ph', Hred).
+  exists (Map_PHID.add t ph' pm).
+  apply call_def with (ph:=ph).
+  assumption.
+  assumption.
+Qed.
+
+Lemma call_wait_preserves_task_in:
+  forall m m' t p p',
+  TaskIn t p m ->
+  Call m t p' WAIT m' ->
+  TaskIn t p m'.
+Proof.
+  intros.
+  inversion H0.
+  subst.
+  inversion H2.
+  subst.
+  unfold TaskIn in H.
+  destruct H as (ph', (Hmt', Hin)).
+Admitted.  
+
+Lemma wait_preserves_task_in:
+  forall t p pm' ps,
+  TaskIn t p pm ->
+  Foreach pm t ps WAIT pm' ->
+  TaskIn t p pm'.
+Proof.
+  intros t p pm' ps.
+  generalize pm'; clear pm'.
+  induction ps.
+  - intros.
+    inversion H0.
+    rewrite <- H5.
+    assumption.
+  - intros.
+    inversion H0.
+    subst.
+    apply call_wait_preserves_task_in with (p:=p) in H8; repeat auto.
+Qed.
+
+Lemma has_unblocked_step:
+  forall t ps,
+  Smallest t tids ->
+  TaskInMany t ps pm ->
+  exists pm', Foreach pm t ps WAIT pm'.
+Proof.
+  intros.
+  induction ps.
+  - exists pm.
+    apply foreach_nil.
+  - unfold TaskInMany in *.
+    assert (Hx : Forall (fun p : phid => TaskIn t p pm) ps). {
+      rewrite Forall_forall in *.
+      intros.
+      apply H0.
+      apply in_cons.
+      assumption.
+    }
+    assert (Hin : TaskIn t a pm). {
+      apply Forall_inv in H0.
+      assumption.
+    }
+    apply IHps in Hx; clear IHps.
+    destruct Hx as (pm', Hfor).
+    rename a into p.
+    assert (Hwait : exists pm'', Call pm' t p WAIT pm''). {
+      unfold TaskIn in Hin.
+      destruct Hin as (ph, (Hmt, Hin)).
+      apply Map_TID_Extra.in_to_mapsto in Hin.
+      destruct Hin as (v, Hmt2).
+      assert (Hcall : exists pm', Call pm t p WAIT pm'). {
+        apply smallest_to_call_wait with (ph:=ph) (v:=v); repeat auto.
+      }
+Qed.
+
+Theorem has_unblocked:
+  tids <> nil ->
+  exists t, In t tids /\
+  exists pm', Reduce pm t WAIT_ALL pm'.
+Proof.
+  intros.
+  assert (Hisa : Forall IsA tids). {
+    apply Forall_forall.
+    intros.
+    apply tids_def.
+    assumption.
+  }
+  assert (Hsmall := has_smallest _ H Hisa).
+  destruct Hsmall as (t, Hsmall).
+  exists t.
+  intuition. {
+    unfold Smallest in *; intuition.
+  }
+  destruct (get_registered t) as (ps, Hreg).
+  assert (Hx : exists m', Foreach pm t ps WAIT m'). {
+    inversion Hreg.
+    subst.
+    induction ps.
+    - 
+  induction ps. (* induction on the registered phasers *)
+  - (* no registered phasers *)
+    assert (Hforeach := foreach_nil pm t WAIT).
+    exists pm.
+    apply reduce_wait_all with (ps:=nil); repeat auto.
+  - 
+    assert (Hx := reduce_wait_all pm t pm ps Hreg).
 Qed.
 End HAS_SMALLEST.
 
@@ -285,7 +529,6 @@ Proof.
 Qed.
 End LE_DEC.
 
-
 Definition Fun (pm:phasermap) :=
   forall t1 t2 p p' ph ph' i i',
   Map_PHID.MapsTo p ph pm ->
@@ -305,3 +548,4 @@ Definition Trans (pm:phasermap) :=
   (i + i')%Z = i''.
 
 Definition WF (pm:phasermap) := Fun pm /\ Trans pm.
+
