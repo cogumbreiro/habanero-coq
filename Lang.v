@@ -3,36 +3,61 @@ Require Import Coq.Arith.Peano_dec.
 Require Import Coq.Lists.List.
 
 Inductive taskview : Set:=
-  | SW : nat -> nat -> taskview
+  | SW : nat -> bool -> taskview
   | SO : nat -> taskview
   | WO : nat -> taskview.
 
 Inductive SignalPhase: taskview -> nat -> Prop :=
-  | signal_phase_sw:
-    forall s w,
-    SignalPhase (SW s w) s
+  | signal_phase_sw_on:
+    forall w,
+    SignalPhase (SW w true) (S w)
+  | signal_phase_sw_off:
+    forall w,
+    SignalPhase (SW w false) w
   | signal_phase_so:
     forall s,
     SignalPhase (SO s) s.
 
 Inductive WaitPhase : taskview -> nat -> Prop :=
   | wait_phase_sw:
-    forall s w,
-    WaitPhase (SW s w) w
-  | wait_phase_so:
+    forall w b,
+    WaitPhase (SW w b) w
+  | wait_phase_wo:
     forall w,
     WaitPhase (WO w) w.
 
+Lemma wait_phase_inv:
+  forall (v:taskview),
+  exists n, (WaitPhase v n \/ v = SO n).
+Proof.
+  intros.
+  destruct v.
+  - (* SW *)
+    exists n.
+    left.
+    apply wait_phase_sw.
+  - (* SO *)
+    exists n; auto.
+  - (* WO *)
+    exists n.
+    left.
+    apply wait_phase_wo.
+Qed.
+
 Definition signal (v:taskview) := 
   match v with
-    | SW s w => if eq_nat_dec s w then (SW (S s) w) else (SW s w)
+    | SW s w => SW s true
     | SO s => SO (S s)
     | WO w => WO w
   end.
 
 Definition wait (v:taskview) := 
   match v with
-    | SW s w => if eq_nat_dec s (S w) then (SW s (S w)) else (SW s w)
+    | SW w b => 
+      match b with
+        | true => (SW (S w) false)
+        | false => SW w b
+      end
     | SO s => SO s
     | WO w => WO (S w)
   end.
@@ -51,10 +76,8 @@ Definition mode (v:taskview) : regmode :=
 
 Inductive Copy : taskview -> regmode -> taskview -> Prop :=
   | copy_sw:
-    forall v s w,
-    SignalPhase v s ->
-    WaitPhase v w ->
-    Copy v SIGNAL_WAIT (SW s w)
+    forall s b,
+    Copy (SW s b) SIGNAL_WAIT (SW s b)
   | copy_so:
     forall v s,
     SignalPhase v s ->
@@ -126,15 +149,15 @@ Inductive op : Type :=
   | PH_NEW : phid -> op
   | PH_SIGNAL : phid -> op
   | PH_DROP : phid -> op
-  | NEXT : op
   | SIGNAL_ALL : op
+  | WAIT_ALL : op
   | ASYNC : list phased -> tid -> op.
 
 Definition phasermap := Map_PHID.t phaser.
 
 Inductive Call : phasermap -> tid -> phid -> phop -> phasermap -> Prop :=
   call_def:
-    forall pm t p ph o ph' (pm':phasermap),
+    forall pm t p ph o ph',
     Map_PHID.MapsTo p ph pm ->
     PhReduce ph t o ph' ->
     Call pm t p o (Map_PHID.add t ph' pm).
@@ -163,16 +186,32 @@ Inductive Async : phasermap -> tid -> list phased -> tid -> phasermap -> Prop :=
     forall m t t',
     Async m t nil t' m.
 
-Definition newPhaser (t:tid) := Map_TID.add t (SW 0 0) (Map_TID.empty taskview).
+Definition newPhaser (t:tid) := Map_TID.add t (SW 0 false) (Map_TID.empty taskview).
 
 Definition TaskIn (t:tid) (p:phid) (pm:phasermap) :=
   exists ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
+
+Lemma task_in_def:
+  forall t p ph pm,
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.In t ph ->
+  TaskIn t p pm.
+Proof.
+  intros.
+  unfold TaskIn.
+  exists ph.
+  intuition.
+Qed.
+
+Definition TaskInMany (t:tid) (ps:list phid) (pm:phasermap) :=
+  Forall (fun p => TaskIn t p pm) ps.
 
 Inductive Registered : phasermap -> tid -> list phid -> Prop :=
   registered_def:
     forall pm t ps,
     NoDup ps ->
-    (forall p, In p ps <-> TaskIn t p pm) ->
+    TaskInMany t ps pm ->
+    (forall p, TaskIn t p pm -> In p ps) ->
     Registered pm t ps.
 
 Inductive Reduce : phasermap -> tid -> op -> phasermap -> Prop :=
@@ -194,17 +233,16 @@ Inductive Reduce : phasermap -> tid -> op -> phasermap -> Prop :=
     (* --------------- *)
     Reduce pm t (PH_DROP p) pm'
 
-  | reduce_next:
-    forall m t m' m'' ps,
-    Registered m t ps ->
-    Foreach m t ps SIGNAL m' ->
-    Foreach m' t ps WAIT m'' ->
-    (* --------------- *)
-    Reduce m t NEXT m''
-
  | reduce_signal_all:
     forall m t m' ps,
     Registered m t ps ->
     Foreach m t ps SIGNAL m' ->
     (* --------------- *)
-    Reduce m t SIGNAL_ALL m'.
+    Reduce m t SIGNAL_ALL m'
+
+ | reduce_wait_all:
+    forall m t m' ps,
+    Registered m t ps ->
+    Foreach m t ps WAIT m' ->
+    (* --------------- *)
+    Reduce m t WAIT_ALL m'.
