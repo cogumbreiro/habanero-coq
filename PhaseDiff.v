@@ -306,6 +306,7 @@ Variable get_diff:
 Variable respect: RespectDiff.
 *)
 
+(** XXX: add support for SO *)
 Variable OnlySW :
   forall (ph:phaser) (t:tid) (v:taskview),
   Map_TID.MapsTo t v ph ->
