@@ -347,7 +347,8 @@ Proof.
         (p:=p) (ph:=ph); repeat auto.
       }
       intuition.
-    + subst. (* absurd *)
+    + (* v' is WO *)
+      subst. (* absurd *)
       inversion Hsp.
   - subst.
     apply sync_so with (s:=n).
@@ -364,7 +365,6 @@ Proof.
   intros.
   exists (Map_TID.add t (wait v) ph).
   apply ph_reduce_wait; repeat auto.
-  apply smallest_to_sync with (p:=p) (v:=v); repeat auto.
 Qed.
 
 Lemma smallest_to_call_wait:
@@ -383,40 +383,6 @@ Proof.
   apply call_def with (ph:=ph).
   assumption.
   assumption.
-Qed.
-
-Lemma call_wait_preserves_task_in:
-  forall m m' t p p',
-  TaskIn t p m ->
-  Call m t p' WAIT m' ->
-  TaskIn t p m'.
-Proof.
-  intros.
-  inversion H0.
-  subst.
-  inversion H2.
-  subst.
-  unfold TaskIn in H.
-  destruct H as (ph', (Hmt', Hin)).
-Admitted.  
-
-Lemma wait_preserves_task_in:
-  forall t p pm' ps,
-  TaskIn t p pm ->
-  Foreach pm t ps WAIT pm' ->
-  TaskIn t p pm'.
-Proof.
-  intros t p pm' ps.
-  generalize pm'; clear pm'.
-  induction ps.
-  - intros.
-    inversion H0.
-    rewrite <- H5.
-    assumption.
-  - intros.
-    inversion H0.
-    subst.
-    apply call_wait_preserves_task_in with (p:=p) in H8; repeat auto.
 Qed.
 
 Lemma has_unblocked_step:
@@ -449,9 +415,8 @@ Proof.
       destruct Hin as (ph, (Hmt, Hin)).
       apply Map_TID_Extra.in_to_mapsto in Hin.
       destruct Hin as (v, Hmt2).
-      assert (Hcall : exists pm', Call pm t p WAIT pm'). {
-        apply smallest_to_call_wait with (ph:=ph) (v:=v); repeat auto.
-      }
+      apply smallest_to_call_wait with (ph:=ph) (v:=v); repeat auto.
+    }
 Qed.
 
 Theorem has_unblocked:
