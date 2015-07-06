@@ -121,6 +121,10 @@ Inductive Sync : phaser -> nat -> Prop :=
     Map_TID.MapsTo t v ph ->
     WaitPhase v w ->
     Await ph (S w) ->
+    Sync ph t
+  | sync_skip:
+    forall t ph,
+    ~ Map_TID.In t ph ->
     Sync ph t.
 
 Inductive PhReduce : phaser -> tid -> phop -> phaser -> Prop :=
@@ -131,7 +135,6 @@ Inductive PhReduce : phaser -> tid -> phop -> phaser -> Prop :=
   | ph_reduce_wait:
     forall t v ph,
     Map_TID.MapsTo t v ph ->
-    Sync ph t ->
     PhReduce ph t WAIT (Map_TID.add t (wait v) ph)
   | ph_reduce_register:
     forall t t' v v' ph m,
@@ -242,6 +245,8 @@ Inductive Reduce : phasermap -> tid -> op -> phasermap -> Prop :=
 
  | reduce_wait_all:
     forall m t m' ps,
+    (* check if it can synchronize on every phaser *)
+    (forall p ph, Map_PHID.MapsTo p ph m -> Sync ph t) ->
     Registered m t ps ->
     Foreach m t ps WAIT m' ->
     (* --------------- *)
