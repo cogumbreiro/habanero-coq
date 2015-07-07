@@ -277,40 +277,12 @@ Proof.
   unfold Smallest in *.
   intuition.
 Qed.
-(*
-Variable t_in_tid:
-  forall t p ph v,
-  Map_PHID.MapsTo p ph pm ->
-  Map_TID.MapsTo t v ph ->
-  In t tids.
-
-Definition Diff (t:tid) (t':tid) (i:Z) :=
-  exists p ph, Map_PHID.MapsTo p ph pm /\ ph_diff ph t t' i.
-
-Definition RespectDiff :=
-  forall t t' p ph pm i v v' n n',
-  Diff t t' i ->
-  Map_PHID.MapsTo p ph pm ->
-  Map_TID.MapsTo t v ph ->
-  Map_TID.MapsTo t' v' ph ->
-  WaitPhase v n ->
-  SignalPhase v' n' ->
-  (((Z_of_nat n) - (Z_of_nat n')) >= i) % Z.
-
-Variable get_diff:
-  forall t t',
-  In t tids ->
-  In t' tids ->
-  exists i, Diff t t' i.
-
-Variable respect: RespectDiff.
-*)
 
 (** XXX: add support for SO *)
 Variable OnlySW :
   forall (ph:phaser) (t:tid) (v:taskview),
   Map_TID.MapsTo t v ph ->
-  exists n, v = SW n true \/ v = WO n.
+  exists n, v = SW n true \/ v = WO n \/ exists w, (v = SO n w /\ w < n).
 
 Variable Smallest_to_WaitPhase :
   forall t t' v v' p ph n n',
@@ -330,17 +302,21 @@ Lemma smallest_to_sync:
   Sync ph t.
 Proof.
   intros.
-  destruct (wait_phase_inv v) as (n, [Hv|Hv]).
-  - apply sync_wait with (v:=v) (w:=n); repeat intuition.
+  destruct (wait_cap_or_sigonly v).
+  - destruct (get_wait_phase v) as (n, Hwp).
+    apply sync_wait with (v:=v) (w:=n); repeat intuition.
     unfold Await.
     intros t' v' n' Hmt' Hsp.
-    destruct (OnlySW ph _ _ Hmt') as (n'', [Heq|Heq]).
-    + subst.
+    destruct (OnlySW ph _ _ Hmt') as (n'', [Heq|[Heq|(w, (Heq, Hw))]]).
+    + (* v' is SW *)
+      subst.
       inversion Hsp.
       subst.
+      (* WP of v' *)
       assert (Hwait : WaitPhase (SW n'' true) n''). {
         apply wait_phase_sw.
       }
+      (* show that: n <= WP(v') *)
       assert (Hle : n <= n''). {
         apply Smallest_to_WaitPhase with
         (t:=t) (t':=t') (v:=v) (v':=(SW n'' true))
@@ -350,9 +326,21 @@ Proof.
     + (* v' is WO *)
       subst. (* absurd *)
       inversion Hsp.
-  - subst.
-    apply sync_so with (s:=n).
-    assumption.
+    + (* v' is SO *)
+      subst.
+      inversion Hsp.
+      subst.
+      assert (Hwait : WaitPhase (SO n' w) w). {
+        apply wait_phase_so.
+      }
+      (* show that: n <= WP(v') *)
+      assert (Hle : n <= w). {
+        apply Smallest_to_WaitPhase with
+        (t:=t) (t':=t') (v:=v) (v':=(SO n' w))
+        (p:=p) (ph:=ph); repeat auto.
+      }
+      intuition.
+  - apply sync_so with (v:=v); repeat auto.
 Qed.
 
 Lemma smallest_to_reduce:
