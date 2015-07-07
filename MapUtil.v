@@ -255,4 +255,14 @@ Module MapUtil (Import M:FMapInterface.WS).
     apply k_eq in Heq; subst.
     assumption.
   Qed.
+
+  Lemma empty_to_mapsto:
+    forall {elt:Type} k (e:elt) m,
+    Empty m ->
+    ~ MapsTo k e m.
+  Proof.
+    intros.
+    unfold Empty in *.
+    apply H.
+  Qed.
 End MapUtil.
