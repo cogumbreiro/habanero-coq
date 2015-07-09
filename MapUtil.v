@@ -237,7 +237,34 @@ Module MapUtil (Import M:FMapInterface.WS).
     rewrite k_eq.
     intuition.
   Qed.
+  
+  Lemma of_list_in_iff
+    {elt:Type}
+    (k_eq: forall k k', E.eq k k' <-> k = k'):
+    forall (k:E.t) (v:elt) (l:list (E.t * elt)),
+    NoDupA (eq_key (elt:=elt)) l ->
+    (MapsTo k v (of_list l) <-> List.In (k, v) l).
+  Proof.
+    intros.
+    split.
+    - intros.
+      apply of_list_1 in H0.
+      apply InA_alt in H0.
+      destruct H0 as (kv, (Heq, Hin)).
+      destruct kv.
+      unfold eq_key_elt in Heq.
+      destruct Heq.
+      simpl in *.
+      apply k_eq in H0.
+      subst.
+      assumption.
+      assumption.
+   - intros.
+     apply of_list_1; auto.
+     apply in_to_ina_eq_key_elt; repeat auto.
+ Qed.
     
+
   Lemma to_list_of_list
     {elt:Type}
     (k_eq: forall k k', E.eq k k' <-> k = k'):
@@ -264,5 +291,117 @@ Module MapUtil (Import M:FMapInterface.WS).
     intros.
     unfold Empty in *.
     apply H.
+  Qed.
+
+  (* *** filter for map  **** *)
+  Definition filter_elements {elt:Type} (f:(key * elt)%type -> bool) (m:t elt) := List.filter f (elements m).
+  Lemma filter_elements_spec
+      {elt:Type}
+      (k_eq: forall k k', E.eq k k' <-> k = k'):
+    forall (f:(key * elt)%type -> bool) (k:key) (e:elt) (m:t elt),
+    List.In (k, e) (filter_elements f m) <-> MapsTo k e m /\  f (k, e) = true.
+  Proof.
+    intros.
+    unfold filter_elements.
+    rewrite filter_In.
+    rewrite maps_to_iff_in_elements; repeat intuition.
+    apply k_eq; assumption.
+  Qed.
+
+  Lemma filter_preserves_ina {elt:Type}:
+    forall a f l,
+    InA (eq_key (elt:=elt)) a (List.filter f l) ->
+    InA (eq_key (elt:=elt)) a l.
+  Proof.
+    intros.
+    induction l.
+    - trivial.
+    - simpl in *.
+      remember (f a0).
+      destruct b.
+      + inversion H.
+        * subst.
+          apply InA_cons_hd; repeat auto.
+        * subst.
+          apply IHl in H1.
+          apply InA_cons_tl.
+          assumption.
+      + apply IHl in H; clear IHl.
+        apply InA_cons_tl.
+        assumption.
+  Qed.
+
+  Lemma filter_preserves_nodupa {elt:Type}:
+    forall l f,
+    NoDupA (eq_key (elt:=elt)) l ->
+    NoDupA (eq_key (elt:=elt)) (List.filter f l).
+  Proof.
+    intros.
+    induction l.
+    - trivial. (* base case *)
+    - inversion H.
+      subst.
+      apply IHl in H3.
+      simpl.
+      remember (f a).
+      destruct b.
+      + apply NoDupA_cons; repeat auto.
+        intuition.
+        apply H2.
+        apply filter_preserves_ina with (f0:=f).
+        assumption.
+      + assumption.
+  Qed.
+
+  Lemma filter_elements_nodupa:
+    forall {elt:Type} (f:(key * elt)%type -> bool) (k:key) (e:elt) (m:t elt),
+    NoDupA (eq_key (elt:=elt)) (filter_elements f m).
+  Proof.
+    intros.
+    unfold filter_elements.
+    apply filter_preserves_nodupa.
+    apply elements_3w.
+  Qed.
+
+  Definition filter {elt:Type} (f: key -> elt -> bool) (m:t elt) : t elt :=
+    of_list (filter_elements (fun p => let (k, e) := p in f k e) m).
+  
+  Lemma filter_spec
+      {elt:Type}
+      (k_eq: forall k k', E.eq k k' <-> k = k'):
+    forall (f:key -> elt -> bool) (k:key) (e:elt) (m:t elt),
+    MapsTo k e (filter f m) <-> MapsTo k e m /\ f k e = true.
+  Proof.
+    intros.
+    unfold filter.
+    rewrite of_list_in_iff.
+    - rewrite filter_elements_spec.
+      intuition.
+      auto.
+   - apply k_eq.
+   - apply filter_elements_nodupa; repeat auto.
+  Qed.
+  
+  Lemma in_choice:
+    forall {elt:Type} (m:t elt),
+    { exists k, In k m } + { ~ exists k, In k m }.
+  Proof.
+    intros elt.
+    apply map_induction with (elt:=elt).
+    - intuition.
+      right.
+      intros.
+      destruct H0 as (k, (e, Hmt)).
+      unfold Empty in *.
+      apply H in Hmt.
+      assumption.
+    - intros.
+      left.
+      exists x.
+      unfold In.
+      exists e.
+      apply add_mapsto_eq with (k:=x) in H1.
+      assumption.
+      auto.
   Qed.
 End MapUtil.
