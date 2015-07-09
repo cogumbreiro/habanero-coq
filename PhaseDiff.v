@@ -635,170 +635,59 @@ Section PM_DIFF.
 Variable t: tid.
 Variable t': tid.
 
-Definition ph_le_ok := { ph: phaser | ph_le ph t t' }.
+Definition is_ph_le (p:phid) (ph:phaser) := if ph_le_dec ph t t' then true else false.
 
-Definition ph_le_error := { ph: phaser | ~ ph_le ph t t' }.
+Definition pm_le := Map_PHID_Extra.filter is_ph_le pm.
 
-Inductive ph_le_result :=
-  | PH_LE_OK : ph_le_ok -> ph_le_result
-  | PH_LE_ERROR : ph_le_error -> ph_le_result.
-
-Let as_ph_le (ph:phaser):
-  ph_le_result.
+Lemma pm_le_spec:
+  forall p ph,
+  Map_PHID.MapsTo p ph pm /\ ph_le ph t t' <-> Map_PHID.MapsTo p ph pm_le.
 Proof.
-  destruct (ph_le_dec ph t t').
-  - refine (PH_LE_OK (Sig_yes ph)).
-    assumption.
-  - refine (PH_LE_ERROR (Sig_yes ph)).
-    assumption.
-Defined.
-  
-
-Let map_ph_le : list ph_le_result :=
-  map
-  (
-    fun e:(phid*phaser)%type => 
-    let (p, ph) := e in
-    as_ph_le ph
-  )
-  (Map_PHID.elements pm).
-
-Lemma not_exists_to_forall:
-  forall {A:Type} (P:A -> Prop),
-  ~ (exists a, P a) ->
-  forall a, ~ P a.
-Proof.
+  unfold pm_le.
   intros.
-  intuition.
-  apply H.
-  exists a.
-  assumption.
+  rewrite Map_PHID_Extra.filter_spec.
+  unfold is_ph_le.
+  - intuition.
+    + destruct (ph_le_dec ph t t').
+      auto.
+      contradiction H1.
+    + destruct (ph_le_dec ph t t').
+      assumption.
+      inversion H1.
+  - intuition.
 Qed.
-
-Lemma no_wp_le_inv:
-  ~ wp_le pm t t' <-> 
-  (forall p ph, Map_PHID.MapsTo p ph pm -> ~ ph_le ph t t').
-Proof.
-  intros.
-  split.
-  -
-    intuition.
-    assert (Hx : wp_le pm t t'). {
-      unfold wp_le.
-      exists p; exists ph.
-      intuition.
-    }
-    apply H; repeat auto.
-  - intros.
-    intuition.
-    unfold wp_le in *.
-    destruct H0 as (p, (ph, (Hmt, Hph))).
-    apply H with (p:=p) (ph:=ph); repeat auto.
-Qed.
-(*
-Let asd:
-  forall ph_ex,
-  In ph_ex map_ph_le ->
-  exists p, Map_PHID.MapsTo p (Sig_take ph_ex) pm.
-
-Let filter_ph_le : list ph_le_result := 
-  filter
-  (fun o:ph_le_result =>
-    match o with
-      | PH_LE_OK e => true
-      | _ => false
-    end
-  )
-  map_ph_le.
-
-Definition pm_le : option ph_le_ok :=
-  match filter_ph_le with
-    | cons (PH_LE_OK r) _ => Some r
-    | _ => None
-  end.
-
-Lemma pm_le_spec_1:
-  forall r,
-  pm_le = Some r ->
-  wp_le pm t t'.
-Proof.
-  intros.
-  destruct r.
-  unfold wp_le.
-  exists 
-
-End PM_DIFF.
-*)
 
 Lemma wp_le_dec:
-  forall t t',
-  {wp_le pm t t'} + {~ wp_le pm t t'}.
+  { wp_le pm t t' } + { ~ wp_le pm t t' }.
 Proof.
-  intros.
   unfold wp_le.
-  remember (Map_PHID.is_empty pm).
-  symmetry in Heqb.
-  destruct b.
-  + rewrite <- Map_PHID_Facts.is_empty_iff in Heqb.
-    right.
+  destruct (Map_PHID_Extra.in_choice pm_le).
+  - left.
+    destruct e as (p, H).
+    apply Map_PHID_Extra.in_to_mapsto in H.
+    destruct H as (ph, H).
+    exists p; exists ph.
+    apply pm_le_spec.
+    assumption.
+  - right.
     intuition.
-    destruct H as (p, (ph, (Hmt, Hle))).
-    apply Map_PHID_Extra.empty_to_mapsto in Hmt; repeat auto.
-  + 
+    destruct H as (p, (ph, H)).
+    apply pm_le_spec in H.
+    assert (absurd: exists k, Map_PHID.In (elt:=phaser) k pm_le). {
+      exists p.
+      apply Map_PHID_Extra.mapsto_to_in with (e:=ph).
+      assumption.
+    }
+    apply n in absurd.
+    assumption.
 Qed.
-*)
-
-Lemma LE_dec:
-  forall t t',
-  {LE pm t t'} + {~ LE pm t t'}.
-Proof.
-  intros.
-  
-  unfold LE.
-  destruct (edge_dec _ H t t'); repeat intuition.
-Qed.*)
 End PM_DIFF.
-End LE_DEC.
-
-
-Section LE_DEC.
-Variable pm:phasermap.
-
-Definition edge (T:Type) := (T * T) % type.
-
-Definition Edge (e:edge tid) := LE pm (fst e) (snd e).
-
-Definition fgraph (T:Type) := list (edge T).
-
-(** Predicate [PhaseDiff] holds when the following list represnts the LE relation. *)
-Definition PhaseDiff (g:fgraph tid) :=
-  forall e, In e g <-> Edge e.
-
-Lemma edge_dec:
-  forall g,
-  PhaseDiff g ->
-  forall t t',
-  {In (t, t') g } + { ~ In (t, t') g }.
-Proof.
-  intros.
-  apply in_dec.
-  apply pair_eq_dec.
-  apply TID.eq_dec.
-Qed.
-
+(*
 Lemma LE_dec:
-  forall g,
-  PhaseDiff g ->
   forall t t',
   {LE pm t t'} + {~ LE pm t t'}.
 Proof.
-  intros.
-  unfold PhaseDiff in *.
-  unfold Edge in *.
-  assert (Hy := H (t, t')).
-  simpl in Hy.
-  destruct (edge_dec _ H t t'); repeat intuition.
-Qed.
+Qed.*)
 End LE_DEC.
 
 Definition Fun (pm:phasermap) :=
