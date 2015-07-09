@@ -1,6 +1,7 @@
 Require Coq.FSets.FMapFacts.
 Require Coq.FSets.FMapInterface.
 Require Import Coq.Lists.SetoidList.
+Require ListUtil.
 
 Lemma ina_to_in:
   forall {A:Type} (x:A) l,
@@ -238,6 +239,22 @@ Module MapUtil (Import M:FMapInterface.WS).
     intuition.
   Qed.
   
+  Lemma in_elements_to_in:
+    forall {elt:Type} k e (m: t elt),
+    List.In (k, e) (elements m) ->
+    In k m.
+  Proof.
+    intros.
+    rewrite elements_in_iff.
+    exists e.
+    apply InA_altdef.
+    apply Exists_exists.
+    exists (k,e).
+    intuition.
+    unfold eq_key_elt.
+    intuition.
+  Qed.
+
   Lemma of_list_in_iff
     {elt:Type}
     (k_eq: forall k k', E.eq k k' <-> k = k'):
@@ -404,4 +421,50 @@ Module MapUtil (Import M:FMapInterface.WS).
       assumption.
       auto.
   Qed.
+  
+  Definition keys {elt:Type} (m:t elt) : list key :=  fst (split (elements m)).
+
+  Lemma keys_spec_1:
+    forall {elt:Type} (m:t elt) (k:key),
+    List.In k (keys m) -> In k m.
+  Proof.
+    intros.
+    unfold keys in *.
+    apply ListUtil.in_fst_split in H.
+    destruct H as (e, H).
+    apply in_elements_to_in with (e0:=e).
+    assumption.
+  Qed.
+
+  Lemma keys_spec_2:
+    forall {elt:Type} (m:t elt) (k:key),
+    In k m -> 
+    exists k', E.eq k k' /\ List.In k' (keys m).
+  Proof.
+    intros.
+    unfold keys in *.
+    destruct H as (e, H).
+    apply maps_to_impl_in_elements in H.
+    destruct H as (k', (Heq, Hin)).
+    apply in_split_l in Hin.
+    exists k'.
+    intuition.
+  Qed.
+
+  Lemma keys_spec (k_eq: forall k k', E.eq k k' <-> k = k'):
+    forall {elt:Type} (m:t elt) (k:key),
+    In k m <-> List.In k (keys m).
+  Proof.
+    intros.
+    split.
+    - intros.
+      apply keys_spec_2 in H.
+      destruct H as (k', (Heq, H)).
+      apply k_eq in Heq; subst.
+      assumption.
+    - apply keys_spec_1.
+  Qed.
+  
+  Definition values {elt:Type} (m:t elt) : list elt :=  snd (split (elements m)).
+  
 End MapUtil.

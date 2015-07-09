@@ -555,6 +555,49 @@ Proof.
     intuition.
 Qed.
 
+
+Fixpoint split_alt {A:Type} {B:Type} (l:list (A*B) %type) : (list A * list B) % type:=
+  match l with
+    | nil => (nil, nil)
+    | (x, y) :: l => (x :: (fst (split_alt l)), y :: (snd (split_alt l)))
+  end.
+
+Lemma split_alt_spec:
+  forall {A:Type} {B:Type} (l:list (A*B) %type),
+  split l = split_alt l.
+Proof.
+  intros.
+  induction l.
+  - auto.
+  - simpl. intuition.
+    rewrite IHl.
+    remember (split_alt l) as l'.
+    destruct l' as (lhs, rhs).
+    auto.
+Qed.
+
+Lemma in_fst_split:
+  forall {A:Type} {B:Type} (l:list (A*B)%type) (lhs:A),
+  List.In lhs (fst (split l)) ->
+  exists rhs, List.In (lhs, rhs) l.
+Proof.
+  intros.
+  induction l.
+  { inversion H. (* absurd *) }
+  destruct a.
+  rewrite split_alt_spec in H.
+  simpl in H.
+  destruct H.
+  + subst.
+    exists b.
+    apply in_eq.
+  + rewrite <- split_alt_spec in H.
+    apply IHl in H; clear IHl.
+    destruct H as (r, Hin).
+    exists r.
+    apply in_cons; assumption.
+Qed.
+
 Implicit Arguments filter_incl.
 Implicit Arguments feedback_filter.
 Implicit Arguments feedback_filter_equation.

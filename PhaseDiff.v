@@ -5,6 +5,7 @@ Require Import Vars.
 Require Import ListUtil.
 Require Import MapUtil.
 Require Import Lang.
+Require Import ListSetUtil.
 
 Definition ph_diff (ph:phaser) (t1:tid) (t2:tid) (z:Z)
   := exists v1, Map_TID.MapsTo t1 v1 ph /\
@@ -681,13 +682,21 @@ Proof.
     apply n in absurd.
     assumption.
 Qed.
+
+(* Tasks registered with a phaser *)
+Definition ph_tids (ph:phaser) := Map_TID_Extra.keys ph.
+
+Definition pm_tids :=
+  as_set PHID.eq_dec (flat_map ph_tids (Map_PHID_Extra.values pm)).
+
+Definition product (t:tid) := map (fun t' => (t, t')) pm_tids.
+
+Definition all_pairs : list (tid*tid)%type := flat_map (fun t => product t) pm_tids.
 End PM_DIFF.
-(*
-Lemma LE_dec:
-  forall t t',
-  {LE pm t t'} + {~ LE pm t t'}.
-Proof.
-Qed.*)
+
+Definition wp_le_rels (t:tid) :=
+  filter (fun (p:(tid*tid)%type) => let (t, t') := p in if wp_le_dec t t' then true else false) all_pairs.
+
 End LE_DEC.
 
 Definition Fun (pm:phasermap) :=
@@ -710,3 +719,43 @@ Definition Trans (pm:phasermap) :=
 
 Definition WF (pm:phasermap) := Fun pm /\ Trans pm.
 
+Section LE_DEC2.
+Variable pm:phasermap.
+
+Definition edge (T:Type) := (T * T) % type.
+
+Definition Edge (e:edge tid) := LE pm (fst e) (snd e).
+
+Definition fgraph (T:Type) := list (edge T).
+
+(** Predicate [PhaseDiff] holds when the following list represnts the LE relation. *)
+Definition PhaseDiff (g:fgraph tid) :=
+  forall e, In e g <-> Edge e.
+
+Lemma edge_dec:
+  forall g,
+  PhaseDiff g ->
+  forall t t',
+  {In (t, t') g } + { ~ In (t, t') g }.
+Proof.
+  intros.
+  apply in_dec.
+  apply pair_eq_dec.
+  apply TID.eq_dec.
+Qed.
+
+
+Lemma LE_dec:
+  forall g,
+  PhaseDiff g ->
+   forall t t',
+   {LE pm t t'} + {~ LE pm t t'}.
+ Proof.
+  intros.
+  unfold PhaseDiff in *.
+  unfold Edge in *.
+  assert (Hy := H (t, t')).
+  simpl in Hy.
+  destruct (edge_dec _ H t t'); repeat intuition.
+Qed.
+End LE_DEC2.
