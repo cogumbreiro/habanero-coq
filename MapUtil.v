@@ -398,7 +398,7 @@ Module MapUtil (Import M:FMapInterface.WS).
    - apply k_eq.
    - apply filter_elements_nodupa; repeat auto.
   Qed.
-  
+
   Lemma in_choice:
     forall {elt:Type} (m:t elt),
     { exists k, In k m } + { ~ exists k, In k m }.
@@ -465,6 +465,77 @@ Module MapUtil (Import M:FMapInterface.WS).
     - apply keys_spec_1.
   Qed.
   
+  Lemma ina_fst_split_alt:
+    forall {elt:Type} (k:key) (e:elt) (l:list (key*elt)%type),
+    InA E.eq k (fst (ListUtil.split_alt l)) ->
+    InA (eq_key (elt:=elt)) (k, e) l.
+  Proof.
+    intros.
+    induction l.
+    - inversion H. (* absurd *)
+    - inversion H.
+      + subst.
+        destruct a as (k', e').
+        simpl in *.
+        inversion H0.
+        subst.
+        clear H0.
+        apply InA_cons_hd.
+        unfold eq_key.
+        auto.
+      + 
+        destruct a as (k', e').
+        simpl in *.
+        inversion H0.
+        subst.
+        clear H0.
+        apply IHl in H1; clear IHl.
+        apply InA_cons_tl.
+        assumption.
+  Qed.
+
+  Lemma fst_split_nodupa:
+    forall {elt:Type} (l:list (key*elt)%type),
+    NoDupA (eq_key (elt:=elt)) l ->
+    NoDupA E.eq (fst (split l)).
+  Proof.
+    intros; induction l.
+    - simpl. apply NoDupA_nil.
+    - inversion H; clear H.
+      subst.
+      apply IHl in H3; clear IHl.
+      destruct a as (k,e).
+      rewrite ListUtil.split_alt_spec.
+      simpl.
+      apply NoDupA_cons.
+      + intuition.
+        apply ina_fst_split_alt with (e0:=e) in H.
+        contradiction H.
+      + rewrite ListUtil.split_alt_spec in H3.
+        assumption.
+  Qed.
+
+  Lemma keys_nodupa:
+    forall {elt:Type} (m:t elt),
+    NoDupA E.eq (keys m).
+  Proof.
+    intros.
+    unfold keys.
+    apply fst_split_nodupa.
+    apply elements_3w.
+  Qed.
+
+  Lemma keys_nodup (k_eq: forall k k', E.eq k k' <-> k = k'):
+    forall {elt:Type} (m:t elt),
+    NoDup (keys m).
+  Proof.
+    intros.
+    assert (Hx := keys_nodupa m).
+    apply ListUtil.nodupa_nodup_iff in Hx.
+    assumption.
+    apply k_eq.
+  Qed.
+    
   Definition values {elt:Type} (m:t elt) : list elt :=  snd (split (elements m)).
   
   Lemma values_spec_1:

@@ -620,6 +620,99 @@ Proof.
     apply in_cons; assumption.
 Qed.
 
+Require Import Coq.Lists.SetoidList.
+
+Section INA_IN.
+  Let ina_to_in:
+    forall {A:Type} (P: A -> A -> Prop) (P_eq: forall x y, P x y <-> x = y) (a:A) l,
+    InA P a l ->
+    List.In a l.
+  Proof.
+    intros. induction l.
+    + inversion H.
+    + inversion H; subst; clear H.
+      * apply P_eq in H1.
+        subst.
+        apply in_eq.
+      * apply in_cons.
+        apply IHl.
+        assumption.
+  Qed.
+
+  Let in_to_ina:
+    forall {A:Type} (P: A -> A -> Prop) (P_eq: forall x y, P x y <-> x = y) (a:A) l,
+    List.In a l ->
+    InA P a l.
+  Proof.
+    intros. induction l.
+    + inversion H.
+    + inversion H; subst; clear H.
+      * apply InA_cons_hd.
+        rewrite P_eq; auto.
+      * apply InA_cons_tl.
+        apply IHl.
+        assumption.
+  Qed.
+  
+  Lemma ina_in_iff:
+    forall {A:Type} (P: A -> A -> Prop) (P_eq: forall x y, P x y <-> x = y) (a:A) l,
+    InA P a l <-> List.In a l.
+  Proof.
+    intros.
+    split.
+    - apply ina_to_in. assumption.
+    - apply in_to_ina. assumption.
+  Qed.
+End INA_IN.
+
+Section NODUPA_NODUP.
+  Let nodupa_to_nodup:
+    forall {A:Type} (P: A -> A -> Prop) (P_eq: forall x y, P x y <-> x = y) l,
+    NoDupA P l ->
+    NoDup l.
+  Proof.
+    intros.
+    induction l.
+    - apply NoDup_nil.
+    - apply NoDup_cons.
+      + intuition.
+        inversion H; clear H; subst.
+        rewrite ina_in_iff in H3.
+        contradiction H0.
+        assumption.
+      + inversion H; clear H; subst.
+        apply IHl.
+        assumption.
+  Qed.
+
+  Let nodup_to_nodupa:
+    forall {A:Type} (P: A -> A -> Prop) (P_eq: forall x y, P x y <-> x = y) l,
+    NoDup l ->
+    NoDupA P l.
+  Proof.
+    intros.
+    induction l.
+    - apply NoDupA_nil.
+    - inversion H; clear H; subst.
+      apply IHl in H3; clear IHl.
+      apply NoDupA_cons.
+      intuition.
+      rewrite ina_in_iff in H.
+      contradiction H.
+      assumption.
+      assumption.
+  Qed.
+  
+  Lemma nodupa_nodup_iff:
+    forall {A:Type} (P: A -> A -> Prop) (P_eq: forall x y, P x y <-> x = y) l,
+    NoDupA P l <-> NoDup l.
+  Proof.
+    intros.
+    split.
+    - apply nodupa_to_nodup. assumption.
+    - apply nodup_to_nodupa. assumption.
+  Qed.
+End NODUPA_NODUP.
 Implicit Arguments filter_incl.
 Implicit Arguments feedback_filter.
 Implicit Arguments feedback_filter_equation.
