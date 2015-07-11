@@ -11,4 +11,6 @@ SetUtil.v
 SigUtil.v
 Lang.v
 TransClosure.v
+Progress.v
+LEDec.v
 
