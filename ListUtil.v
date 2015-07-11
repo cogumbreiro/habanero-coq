@@ -598,6 +598,28 @@ Proof.
     apply in_cons; assumption.
 Qed.
 
+Lemma in_snd_split:
+  forall {A:Type} {B:Type} (l:list (A*B)%type) (rhs:B),
+  List.In rhs (snd (split l)) ->
+  exists (lhs:A), List.In (lhs, rhs) l.
+Proof.
+  intros.
+  induction l.
+  { inversion H. (* absurd *) }
+  destruct a.
+  rewrite split_alt_spec in H.
+  simpl in H.
+  destruct H.
+  + subst.
+    exists a.
+    apply in_eq.
+  + rewrite <- split_alt_spec in H.
+    apply IHl in H; clear IHl.
+    destruct H as (r, Hin).
+    exists r.
+    apply in_cons; assumption.
+Qed.
+
 Implicit Arguments filter_incl.
 Implicit Arguments feedback_filter.
 Implicit Arguments feedback_filter_equation.

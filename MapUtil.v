@@ -467,4 +467,45 @@ Module MapUtil (Import M:FMapInterface.WS).
   
   Definition values {elt:Type} (m:t elt) : list elt :=  snd (split (elements m)).
   
+  Lemma values_spec_1:
+    forall {elt:Type} (m:t elt) (e:elt),
+    List.In e (values m) ->
+    exists k, MapsTo k e m.
+  Proof.
+    intros.
+    unfold values in *.
+    apply ListUtil.in_snd_split in H.
+    destruct H as (k, Hin).
+    apply in_elements_impl_maps_to in Hin.
+    exists k.
+    assumption.
+  Qed.
+  
+  Lemma values_spec_2:
+    forall {elt:Type} (m:t elt) (k:key) (e:elt),
+    MapsTo k e m ->
+    List.In e (values m).
+  Proof.
+    intros.
+    unfold values.
+    apply maps_to_impl_in_elements in H.
+    destruct H as (k', (Heq, Hin)).
+    apply in_split_r in Hin.
+    simpl in *.
+    assumption.
+  Qed.
+  
+  Lemma values_spec:
+    forall {elt:Type} (m:t elt) (e:elt),
+    List.In e (values m) <-> exists k, MapsTo k e m.
+  Proof.
+    intros.
+    split.
+    apply values_spec_1.
+    intros.
+    destruct H as (k, H).
+    apply values_spec_2 with (k0:=k).
+    assumption.
+  Qed.
+  
 End MapUtil.

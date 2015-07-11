@@ -106,6 +106,18 @@ Definition WTaskIn (t:tid) (ph:phaser) :=
   exists v, Map_TID.MapsTo t v ph /\
   exists n, WaitPhase v n.
 
+Lemma wtask_in_inv:
+  forall t ph,
+  WTaskIn t ph ->
+  Map_TID.In t ph.
+Proof.
+  intros.
+  unfold WTaskIn in *.
+  destruct H as (v, (Hmt, _)).
+  apply Map_TID_Extra.mapsto_to_in in Hmt.
+  assumption.
+Qed.
+
 Lemma wtask_in_def:
   forall t ph v n,
   Map_TID.MapsTo t v ph ->
@@ -169,6 +181,18 @@ Proof.
     intuition.
 Qed.
 
+Lemma ph_diff_inv_in:
+  forall ph t t' z,
+  ph_diff ph t t' z ->
+  Map_TID.In t ph /\ Map_TID.In t' ph.
+Proof.
+  intros.
+  destruct (ph_diff_inv _ _ _ _ H).
+  apply wtask_in_inv in H0.
+  apply wtask_in_inv in H1.
+  intuition.
+Qed.
+
 Lemma ph_diff_inv_left:
   forall ph t t' z,
   ph_diff ph t t' z ->
@@ -218,6 +242,38 @@ Proof.
   destruct H as (z, (H1, H2)).
   apply ph_diff_inv with (z:=z).
   assumption.
+Qed.
+
+Lemma ph_le_inv_in:
+  forall t t' ph,
+  ph_le ph t t' ->
+  Map_TID.In t ph /\ Map_TID.In t' ph.
+Proof.
+  intros.
+  unfold ph_le in *.
+  destruct H as (z, (H, Hdiff)).
+  apply ph_diff_inv_in in H.
+  intuition.
+Qed.
+
+Lemma ph_le_inv_in_left:
+  forall t t' ph,
+  ph_le ph t t' ->
+  Map_TID.In t ph.
+Proof.
+  intros.
+  apply ph_le_inv_in in H.
+  intuition.
+Qed.
+
+Lemma ph_le_inv_in_right:
+  forall t t' ph,
+  ph_le ph t t' ->
+  Map_TID.In t' ph.
+Proof.
+  intros.
+  apply ph_le_inv_in in H.
+  intuition.
 Qed.
 
 Section ENABLED.
@@ -437,36 +493,6 @@ Proof.
     apply sync_skip.
     assumption.
 Qed.
-(*
-Lemma smallest_to_reduce:
-  forall t p ph v,
-  Smallest t tids ->
-  Map_PHID.MapsTo p ph pm ->
-  Map_TID.MapsTo t v ph ->
-  exists ph', PhReduce ph t WAIT ph'.
-Proof.
-  intros.
-  exists (Map_TID.add t (wait v) ph).
-  apply ph_reduce_wait; repeat auto.
-Qed.
-
-Lemma smallest_to_call_wait:
-  forall t p ph v,
-  Smallest t tids ->
-  Map_PHID.MapsTo p ph pm ->
-  Map_TID.MapsTo t v ph ->
-  exists pm', Call pm t p WAIT pm'.
-Proof.
-  intros.
-  assert (Hx : exists ph', PhReduce ph t WAIT ph'). {
-    apply smallest_to_reduce with (p:=p) (v:=v); repeat auto.
-  }
-  destruct Hx as (ph', Hred).
-  exists (Map_PHID.add t ph' pm).
-  apply call_def with (ph:=ph).
-  assumption.
-  assumption.
-Qed.*)
 
 Theorem has_unblocked:
   tids <> nil ->
@@ -682,80 +708,163 @@ Proof.
     apply n in absurd.
     assumption.
 Qed.
+End PM_DIFF.
+
+Require TransClosure.
+
 
 (* Tasks registered with a phaser *)
 Definition ph_tids (ph:phaser) := Map_TID_Extra.keys ph.
 
+Lemma ph_tids_spec:
+  forall ph t,
+  In t (ph_tids ph) <->
+  Map_TID.In t ph.
+Proof.
+  intros.
+  unfold ph_tids in *.
+  rewrite Map_TID_Extra.keys_spec; 
+  repeat (intros; intuition).
+Qed.
+
 Definition pm_tids :=
-  as_set PHID.eq_dec (flat_map ph_tids (Map_PHID_Extra.values pm)).
+  flat_map ph_tids (Map_PHID_Extra.values pm).
+
+Lemma pm_tids_spec_1:
+  forall t,
+  In t pm_tids ->
+  exists (p : Map_PHID.key) (ph : phaser), Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
+Proof.
+  intros.
+  unfold pm_tids in *.
+  rewrite in_flat_map in H.
+  destruct H as (ph, (Hmt, Hin)).
+  rewrite ph_tids_spec in Hin.
+  apply Map_PHID_Extra.values_spec in Hmt.
+  destruct Hmt as (p, Hmt).
+  exists p; exists ph.
+  intuition.
+Qed.
+
+Lemma pm_tids_spec_2:
+  forall p ph t,
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.In t ph ->
+  In t pm_tids.
+Proof.
+  intros.
+  unfold pm_tids in *.
+  rewrite in_flat_map.
+  exists ph.
+  rewrite ph_tids_spec.
+  intuition.
+  apply Map_PHID_Extra.values_spec_2 with (k:=p).
+  assumption.
+Qed.
+
+Lemma ph_le_in_pm_tids:
+  forall p ph x y,
+  Map_PHID.MapsTo p ph pm ->
+  ph_le ph x y ->
+  In x pm_tids /\ In y pm_tids.
+Proof.
+  intros.
+  apply ph_le_inv_in in H0.
+  destruct H0.
+  split; repeat(
+    apply pm_tids_spec_2 with (p:=p) (ph:=ph);
+    assumption
+  ).
+Qed.
+
+Lemma wp_le_in_pm_tids:
+  forall x y,
+  wp_le pm x y ->
+  In x pm_tids /\ In y pm_tids.
+Proof.
+  intros.
+  unfold wp_le in *.
+  destruct H as (p, (ph, (Hmt, Hle))).
+  apply ph_le_in_pm_tids with (p:=p) (ph:=ph); repeat auto.
+Qed.
 
 Definition product (t:tid) := map (fun t' => (t, t')) pm_tids.
 
-Definition all_pairs : list (tid*tid)%type := flat_map (fun t => product t) pm_tids.
-End PM_DIFF.
-
-Definition wp_le_rels (t:tid) :=
-  filter (fun (p:(tid*tid)%type) => let (t, t') := p in if wp_le_dec t t' then true else false) all_pairs.
-
-End LE_DEC.
-
-Definition Fun (pm:phasermap) :=
-  forall t1 t2 p p' ph ph' i i',
-  Map_PHID.MapsTo p ph pm ->
-  Map_PHID.MapsTo p' ph' pm ->
-  ph_diff ph t1 t2 i ->
-  ph_diff ph' t1 t2 i' ->
-  i = i'.
-
-Definition Trans (pm:phasermap) :=
-  forall t1 t2 t3 p p' p'' ph ph' ph'' i i' i'',
-  Map_PHID.MapsTo p ph pm ->
-  Map_PHID.MapsTo p' ph' pm ->
-  Map_PHID.MapsTo p'' ph'' pm ->
-  ph_diff ph t1 t2 i ->
-  ph_diff ph' t2 t3 i' ->
-  ph_diff ph'' t1 t3 i'' ->
-  (i + i')%Z = i''.
-
-Definition WF (pm:phasermap) := Fun pm /\ Trans pm.
-
-Section LE_DEC2.
-Variable pm:phasermap.
-
-Definition edge (T:Type) := (T * T) % type.
-
-Definition Edge (e:edge tid) := LE pm (fst e) (snd e).
-
-Definition fgraph (T:Type) := list (edge T).
-
-(** Predicate [PhaseDiff] holds when the following list represnts the LE relation. *)
-Definition PhaseDiff (g:fgraph tid) :=
-  forall e, In e g <-> Edge e.
-
-Lemma edge_dec:
-  forall g,
-  PhaseDiff g ->
-  forall t t',
-  {In (t, t') g } + { ~ In (t, t') g }.
+Lemma wp_le_in_product:
+  forall x y,
+  wp_le pm x y ->
+  In (x, y) (product x).
 Proof.
   intros.
-  apply in_dec.
-  apply pair_eq_dec.
-  apply TID.eq_dec.
+  unfold product.
+  apply in_map.
+  apply wp_le_in_pm_tids in H.
+  intuition.
 Qed.
 
+Lemma in_product_inv_eq:
+  forall x y z,
+  In (x, y) (product z) ->
+  x = z.
+Proof.
+  intros.
+  unfold product in *.
+  remember (fun t' : Map_TID.key => (z, t')) as f.
+  rewrite in_map_iff in H.
+  destruct H as (w, (Heq, Hin)).
+  subst.
+  inversion Heq.
+  auto.
+Qed.
+
+Definition all_pairs : list (tid*tid)%type :=
+  flat_map (fun t => product t) pm_tids.
+
+Lemma all_pairs_spec_1:
+  forall x y : tid,
+  wp_le pm x y -> In (x, y) all_pairs.
+Proof.
+  intros.
+  unfold all_pairs.
+  rewrite in_flat_map.
+  exists x.
+  split.
+  + apply wp_le_in_pm_tids with (y:=y); assumption.
+  + apply wp_le_in_product; assumption.
+Qed.
+
+Definition wp_le_rel :=
+  filter (fun (p:(tid*tid)%type) => let (t, t') := p in if wp_le_dec t t' then true else false) all_pairs.
+
+Lemma wp_rels_spec:
+  forall x y : tid,
+  wp_le pm x y <-> In (x, y) wp_le_rel.
+Proof.
+  intros.
+  unfold wp_le_rel.
+  rewrite filter_In.
+  split.
+  - intros.
+    destruct (wp_le_dec x y).
+    + intuition.
+      apply all_pairs_spec_1.
+      assumption.
+    + contradiction H.
+  - intros.
+    destruct H.
+    destruct (wp_le_dec x y).
+    + assumption.
+    + inversion H0.
+Qed.
 
 Lemma LE_dec:
-  forall g,
-  PhaseDiff g ->
-   forall t t',
-   {LE pm t t'} + {~ LE pm t t'}.
- Proof.
+  forall t t',
+  {LE pm t t'} + {~ LE pm t t'}.
+Proof.
+  unfold LE.
   intros.
-  unfold PhaseDiff in *.
-  unfold Edge in *.
-  assert (Hy := H (t, t')).
-  simpl in Hy.
-  destruct (edge_dec _ H t t'); repeat intuition.
+  apply TransClosure.clos_trans_dec with (pairs:=wp_le_rel).
+  apply wp_rels_spec.
 Qed.
-End LE_DEC2.
+
+End LE_DEC.
