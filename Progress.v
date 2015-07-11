@@ -48,10 +48,6 @@ Proof.
   auto.
 Qed.
 
-Variable get_registered:
-  forall (t:tid),
-  exists ps, Registered pm t ps.
-
 Let tids := pm_tids pm.
 
 Let tids_def:
@@ -75,12 +71,13 @@ Proof.
   intuition.
 Qed.
 
-(** XXX: add support for SO *)
+(* XXX: move this into a proposition *)
 Variable OnlySW :
   forall (ph:phaser) (t:tid) (v:taskview),
   Map_TID.MapsTo t v ph ->
   exists n, v = SW n true \/ v = WO n \/ exists w, (v = SO n w /\ w < n).
 
+(* TODO: prove this *)
 Variable Smallest_to_WaitPhase :
   forall t t' v v' p ph n n',
   Smallest t tids ->
@@ -169,4 +166,4 @@ Proof.
 Qed.
 End HAS_SMALLEST.
 
-Check has_unblocked.
+
