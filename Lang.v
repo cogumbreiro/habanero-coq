@@ -315,3 +315,64 @@ Inductive Reduce : phasermap -> tid -> op -> phasermap -> Prop :=
     (forall p ph, Map_PHID.MapsTo p ph m -> Sync ph t) ->
     (* --------------- *)
     Reduce m t WAIT_ALL (mapi t wait m).
+
+Section REGISTERED.
+Variable pm:phasermap.
+
+Definition registered_pm t :=
+  Map_PHID_Extra.filter
+  (fun (p:phid) (ph:phaser) =>
+    if Map_TID_Facts.In_dec ph t then true else false)
+  pm.
+
+Definition get_registered t := Map_PHID_Extra.keys (registered_pm t).
+
+Lemma get_registered_spec :
+  forall (t:tid),
+  Registered pm t (get_registered t).
+Proof.
+  intros.
+  unfold get_registered.
+  unfold registered_pm.
+  apply registered_def.
+  - apply Map_PHID_Extra.keys_nodup. intuition.
+  - unfold TaskInMany.
+    apply Forall_forall.
+    intros.
+    rewrite <- Map_PHID_Extra.keys_spec in H. {
+      apply Map_PHID_Extra.in_to_mapsto in H.
+      destruct H as (ph, H).
+      rewrite Map_PHID_Extra.filter_spec in H. {
+        destruct H.
+        destruct (Map_TID_Facts.In_dec ph t).
+        + apply task_in_def with (ph:=ph); repeat auto.
+        + inversion H0. (* absurd *)
+      }
+      intuition.
+    }
+    intuition.
+  - intros.
+    rewrite <- Map_PHID_Extra.keys_spec. {
+      unfold TaskIn in *.
+      destruct H as (ph, (Hmt, Hin)).
+      apply Map_PHID_Extra.mapsto_to_in with (e:=ph).
+      rewrite Map_PHID_Extra.filter_spec. {
+        intuition.
+        destruct (Map_TID_Facts.In_dec ph t).
+        - auto.
+        - intuition.
+      }
+      intuition.
+    }
+    intuition.
+Qed.
+
+Lemma get_registered_spec_alt :
+  forall (t:tid),
+  exists ps, Registered pm t ps.
+Proof.
+  intros.
+  exists (get_registered t).
+  apply get_registered_spec.
+Qed.
+End REGISTERED.
