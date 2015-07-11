@@ -248,6 +248,19 @@ Proof.
   assumption.
 Qed.
 
+Lemma pm_tids_spec:
+  forall t,
+  In t pm_tids <->
+  exists p ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
+Proof.
+  intros.
+  split.
+  - apply pm_tids_spec_1.
+  - intros.
+    destruct H as (p, (ph, (?, ?))).
+    apply pm_tids_spec_2 with (p:=p) (ph:=ph); repeat auto.
+Qed.
+
 Lemma ph_le_in_pm_tids:
   forall p ph x y,
   Map_PHID.MapsTo p ph pm ->

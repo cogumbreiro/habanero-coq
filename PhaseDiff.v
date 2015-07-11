@@ -102,34 +102,25 @@ Proof.
   trivial.
 Qed.
 
-Definition WTaskIn (t:tid) (ph:phaser) :=
-  exists v, Map_TID.MapsTo t v ph /\
-  exists n, WaitPhase v n.
+Definition WTaskIn (t:tid) (ph:phaser) := Map_TID.In t ph.
 
-Lemma wtask_in_inv:
+Lemma wtaskin_spec:
   forall t ph,
-  WTaskIn t ph ->
-  Map_TID.In t ph.
+  WTaskIn t ph <-> Map_TID.In t ph.
 Proof.
   intros.
   unfold WTaskIn in *.
-  destruct H as (v, (Hmt, _)).
-  apply Map_TID_Extra.mapsto_to_in in Hmt.
-  assumption.
+  intuition.
 Qed.
 
 Lemma wtask_in_def:
-  forall t ph v n,
-  Map_TID.MapsTo t v ph ->
-  WaitPhase v n ->
+  forall t ph,
+  Map_TID.In t ph ->
   WTaskIn t ph.
 Proof.
   intros.
   unfold WTaskIn.
-  exists v.
   intuition.
-  exists n.
-  assumption.
 Qed.
 
 Lemma ph_diff_refl:
@@ -139,9 +130,14 @@ Lemma ph_diff_refl:
 Proof.
   intros.
   unfold ph_diff.
-  unfold WTaskIn in H.
-  destruct H as (v, (Hmt, (n, Hw))).
-  repeat (exists v; intuition).
+  rewrite wtaskin_spec in H.
+  apply Map_TID_Extra.in_to_mapsto in H.
+  destruct H as (v, H).
+  exists v.
+  intuition.
+  exists v.
+  intuition.
+  destruct (get_wait_phase v) as (n,?).
   repeat (exists n; intuition).
 Qed.
 
@@ -173,11 +169,7 @@ Proof.
   split.
   - exists v1.
     intuition.
-    exists n1.
-    intuition.
   - exists v2.
-    intuition.
-    exists n2.
     intuition.
 Qed.
 
@@ -188,8 +180,8 @@ Lemma ph_diff_inv_in:
 Proof.
   intros.
   destruct (ph_diff_inv _ _ _ _ H).
-  apply wtask_in_inv in H0.
-  apply wtask_in_inv in H1.
+  apply wtaskin_spec in H0.
+  apply wtaskin_spec in H1.
   intuition.
 Qed.
 

@@ -52,10 +52,18 @@ Variable get_registered:
   forall (t:tid),
   exists ps, Registered pm t ps.
 
-Variable tids: list tid.
+Let tids := pm_tids pm.
 
-Variable tids_def:
+Let tids_def:
   forall t, In t tids <-> IsA t.
+Proof.
+  unfold tids.
+  intros.
+  rewrite pm_tids_spec.
+  unfold IsA.
+  unfold tid_In.
+  intuition.
+Qed.
 
 Let smallest_inv:
   forall t,
@@ -160,3 +168,5 @@ Proof.
   apply smallest_to_sync with (p:=p) ; repeat auto.
 Qed.
 End HAS_SMALLEST.
+
+Check has_unblocked.
