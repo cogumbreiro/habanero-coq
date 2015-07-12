@@ -82,7 +82,7 @@ Variable ph: phaser.
 Variable t1: tid.
 Variable t2: tid.
 
-Definition get_diff_nil := { _:unit | diff ph t1 t2 = None }.
+Definition get_diff_nil := { _:unit | get_ph_diff ph t1 t2 = None }.
 
 Definition get_diff_pos := { z | ph_diff ph t1 t2 z /\ ~ (z <= 0) % Z }.
 
@@ -96,17 +96,17 @@ Inductive get_diff_result : Type :=
 Lemma get_diff:
   get_diff_result.
 Proof.
-  remember (diff ph t1 t2).
+  remember (get_ph_diff ph t1 t2).
   symmetry in Heqo.
   destruct o.
   - destruct (ZArith_dec.Z_le_dec z 0).
     + refine (GET_DIFF_OK (Sig_yes z)).
       intuition.
-      apply diff_spec_1.
+      apply get_ph_diff_spec_1.
       assumption.
     + refine (GET_DIFF_POS (Sig_yes z)).
       intuition.
-      apply diff_spec_1.
+      apply get_ph_diff_spec_1.
       assumption.
   - refine (GET_DIFF_NIL (Sig_yes tt)).
     assumption.
@@ -127,7 +127,7 @@ Proof.
     intuition.
     destruct H as (?, (Hdiff, _)).
     assert (Hx := e).
-    apply diff_none with (z:=x0) in Hx.
+    apply get_diff_none with (z:=x0) in Hx.
     contradiction Hx.
   - destruct g.
     right.

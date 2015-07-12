@@ -14,7 +14,7 @@ Definition ph_diff (ph:phaser) (t1:tid) (t2:tid) (z:Z)
      exists n2, WaitPhase v2 n2 /\
      ((Z_of_nat n1) - (Z_of_nat n2))%Z = z.
 
-Definition diff (ph:phaser) (t1:tid) (t2:tid) : option Z := 
+Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z := 
   match Map_TID.find t1 ph with
     | Some v1 => 
       match Map_TID.find t2 ph with
@@ -25,13 +25,13 @@ Definition diff (ph:phaser) (t1:tid) (t2:tid) : option Z :=
     | _ => None
   end.
 
-Lemma diff_spec_1:
+Lemma get_ph_diff_spec_1:
   forall ph t1 t2 z,
-  diff ph t1 t2 = Some z ->
+  get_ph_diff ph t1 t2 = Some z ->
   ph_diff ph t1 t2 z.
 Proof.
   intros.
-  unfold diff in *.
+  unfold get_ph_diff in *.
   unfold ph_diff.
   remember (Map_TID.find t1 ph).
   symmetry in Heqo.
@@ -57,14 +57,14 @@ Proof.
   - inversion H.
 Qed.
 
-Lemma diff_spec_2:
+Lemma get_ph_diff_spec_2:
   forall ph t1 t2 z,
   ph_diff ph t1 t2 z ->
-  diff ph t1 t2 = Some z.
+  get_ph_diff ph t1 t2 = Some z.
 Proof.
   intros.
   unfold ph_diff in H.
-  unfold diff.
+  unfold get_ph_diff.
   destruct H as (v1, (Hmt1, (v2, (Hmt2, (n1, (Hw1, (n2, (Hw2, Hdiff)))))))).
   apply Map_TID_Facts.find_mapsto_iff in Hmt1.
   apply Map_TID_Facts.find_mapsto_iff in Hmt2.
@@ -76,14 +76,65 @@ Proof.
   trivial.
 Qed.
 
-Lemma diff_none:
+Lemma get_ph_diff_spec:
+  forall ph t1 t2 z,
+  get_ph_diff ph t1 t2 = Some z <-> ph_diff ph t1 t2 z.
+Proof.
+  intros.
+  split.
+  - apply get_ph_diff_spec_1.
+  - apply get_ph_diff_spec_2.
+Qed.
+
+Lemma get_ph_diff_spec_none:
+  forall ph t1 t2,
+  get_ph_diff ph t1 t2 = None <-> (~ Map_TID.In t1 ph \/ ~ Map_TID.In t2 ph).
+Proof.
+  intros.
+  unfold get_ph_diff.
+  remember (Map_TID.find (elt:=taskview) t1 ph) as o1.
+  symmetry in Heqo1.
+  remember (Map_TID.find (elt:=taskview) t2 ph) as o2.
+  symmetry in Heqo2.
+  destruct o1.
+  - destruct o2.
+    + split.
+      intros.
+      * inversion H.
+      * intros.
+        destruct H.
+        {
+          apply Map_TID_Facts.find_mapsto_iff in Heqo1.
+          apply Map_TID_Extra.mapsto_to_in in Heqo1.
+          contradiction H.
+        }
+        {
+          apply Map_TID_Facts.find_mapsto_iff in Heqo2.
+          apply Map_TID_Extra.mapsto_to_in in Heqo2.
+          contradiction H.
+        }
+    + split.
+      * intros.
+        right.
+        apply Map_TID_Facts.not_find_in_iff.
+        assumption.
+      * trivial.
+  - split.
+    + intros.
+      left.
+      apply Map_TID_Facts.not_find_in_iff.
+      assumption.
+    + trivial.
+Qed.
+        
+Lemma get_diff_none:
   forall ph t t',
-  diff ph t t' = None ->
+  get_ph_diff ph t t' = None ->
   forall z, ~ ph_diff ph t t' z.
 Proof.
   intros.
   intuition.
-  apply diff_spec_2 in H0.
+  apply get_ph_diff_spec_2 in H0.
   rewrite H in H0.
   inversion H0.
 Qed.
@@ -95,8 +146,8 @@ Lemma ph_diff_fun:
   z = z'.
 Proof.
   intros.
-  apply diff_spec_2 in H.
-  apply diff_spec_2 in H0.
+  apply get_ph_diff_spec_2 in H.
+  apply get_ph_diff_spec_2 in H0.
   rewrite H in H0.
   inversion H0.
   trivial.
@@ -205,11 +256,79 @@ Proof.
   intuition.
 Qed.
 
+Lemma ph_diff_total:
+  forall ph t t',
+  WTaskIn t ph ->
+  WTaskIn t' ph ->
+  exists z, ph_diff ph t t' z.
+Proof.
+  intros.
+  unfold ph_diff.
+  rewrite wtaskin_spec in *.
+  apply Map_TID_Extra.in_to_mapsto in H.
+  apply Map_TID_Extra.in_to_mapsto in H0.
+  destruct H as (v, Hmt).
+  destruct H0 as (v', Hmt').
+  destruct (get_wait_phase v) as (n1, Hw1).
+  destruct (get_wait_phase v') as (n2, Hw2).
+  exists (Z.of_nat n1 - Z.of_nat n2)%Z .
+  exists v.
+  intuition.
+  exists v'.
+  intuition.
+  exists n1.
+  intuition.
+  exists n2.
+  intuition.
+Qed.
+
 Definition tid_In (t:tid) (pm:phasermap) :=
   exists p ph, Map_PHID.MapsTo p ph pm /\ WTaskIn t ph.
 
 Definition ph_le (ph:phaser) (t1:tid) (t2:tid) :=
   exists (z:Z), ph_diff ph t1 t2 z /\ (z <= 0)%Z.
+
+Section GET_PH_LE.
+Variable ph:phaser.
+Variable t1:tid.
+Variable t2:tid.
+
+Inductive ph_le_result :=
+  | ph_le_result_ok_l : {z:Z | ph_diff ph t1 t2 z /\ (z <= 0) % Z } -> ph_le_result
+  | ph_le_result_ok_r : {z:Z | ph_diff ph t2 t1 z /\ (z <= 0) % Z } -> ph_le_result
+  | ph_le_fail : {_:unit | ~ Map_TID.In t1 ph \/ ~ Map_TID.In t2 ph } -> ph_le_result.
+
+Program Definition get_ph_le : ph_le_result := 
+  match get_ph_diff ph t1 t2 with
+    | Some z =>
+      if ZArith_dec.Z_le_dec z 0%Z then
+        ph_le_result_ok_l z
+      else ph_le_result_ok_r (-z)%Z
+    | _ => ph_le_fail tt
+  end.
+Next Obligation.
+  intuition.
+  symmetry in Heq_anonymous.
+  rewrite get_ph_diff_spec in Heq_anonymous.
+  assumption.
+Defined.
+Next Obligation.
+  symmetry in Heq_anonymous.
+  rewrite get_ph_diff_spec in Heq_anonymous.
+  apply ph_diff_symm in Heq_anonymous.
+  intuition.
+Qed.
+Next Obligation.
+  remember (get_ph_diff ph t1 t2).
+  destruct o.
+  - assert (Hx := H z).
+    contradiction Hx.
+    trivial.
+  - symmetry in Heqo.
+    apply get_ph_diff_spec_none.
+    assumption.
+Qed.
+End GET_PH_LE.
 
 Lemma ph_le_refl:
   forall t ph,
@@ -268,6 +387,33 @@ Proof.
   intuition.
 Qed.
 
+Lemma ph_le_total:
+  forall ph t t',
+  WTaskIn t ph ->
+  WTaskIn t' ph ->
+  { ph_le ph t t' } + { ph_le ph t' t }.
+Proof.
+  intros.
+  unfold ph_le.
+  remember (get_ph_le ph t t').
+  destruct p.
+  - left.
+    destruct s as (z, (Hdiff, Hle)).
+    exists z.
+    intuition.
+  - right.
+    destruct s as (z, (Hdiff, Hle)).
+    exists z.
+    intuition.
+  - destruct s.
+    assert (False). {
+      unfold WTaskIn in *.
+      destruct o.
+      + contradiction H.
+      + contradiction H0.
+    }
+    inversion H1.
+Qed.
 Section LE.
 Variable pm:phasermap.
 
@@ -303,11 +449,28 @@ Proof.
   split; repeat (exists p; exists ph; intuition).
 Qed.
 
-Definition LE := clos_trans tid wp_le.
+Lemma wp_le_total:
+  forall p ph t t',
+  Map_PHID.MapsTo p ph pm ->
+  WTaskIn t ph ->
+  WTaskIn t' ph ->
+  { wp_le t t' } + { wp_le t' t }.
+Proof.
+  intros.
+  destruct (ph_le_total _ _ _ H0 H1).
+  + left.
+    unfold wp_le.
+    exists p.
+    exists ph.
+    intuition.
+  + right.
+    unfold wp_le.
+    exists p.
+    exists ph.
+    intuition.
+Qed.
 
-Variable LE_dec:
-  forall t t',
-  {LE t t'} + {~ LE t t'}.
+Definition LE := clos_trans tid wp_le.
 
 Lemma LE_refl:
   forall t,
@@ -344,6 +507,24 @@ Proof.
   apply t_trans with (y:=t2).
   auto.
   auto.
+Qed.
+
+Lemma LE_total:
+  forall p ph t t',
+  Map_PHID.MapsTo p ph pm ->
+  WTaskIn t ph ->
+  WTaskIn t' ph ->
+  { LE t t' } + { LE t' t }.
+Proof.
+  intros.
+  unfold LE.
+  destruct (wp_le_total _ _ _ _ H H0 H1).
+  - left.
+    apply t_step.
+    assumption.
+  - right.
+    apply t_step.
+    assumption.
 Qed.
 
 End LE.
