@@ -71,14 +71,43 @@ Proof.
   intuition.
 Qed.
 
-(* XXX: move this into a proposition *)
-Variable OnlySW :
-  forall (ph:phaser) (t:tid) (v:taskview),
-  Map_TID.MapsTo t v ph ->
-  exists n, v = SW n true \/ v = WO n \/ exists w, (v = SO n w /\ w < n).
+Lemma in_tids:
+  forall p ph t,
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.In t ph ->
+  In t tids.
+Proof.
+  intros.
+  rewrite tids_def.
+  unfold IsA.
+  unfold tid_In.
+  exists p; exists ph.
+  intuition.
+Qed.
+
+Lemma Smallest_to_LE :
+  forall t t' p ph,
+  Smallest t tids ->
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.In t ph ->
+  Map_TID.In t' ph ->
+  LE pm t t'.
+Proof.
+  intros.
+  unfold Smallest in *.
+  destruct H as (Hin, H).
+  assert (Hx := H t'); clear H.
+  assert (Hin' : In t' tids). {
+    apply in_tids with (p:=p) (ph:=ph); repeat auto.
+  }
+  apply Hx in Hin'; clear Hx.
+  destruct Hin' as [(?,?)|?].
+  - destruct (LE_total _ _ _ _ _ H0 H1 H2); repeat contradiction. (* absurd *)
+  - assumption. 
+Qed.
 
 (* TODO: prove this *)
-Variable Smallest_to_WaitPhase :
+Lemma Smallest_to_WaitPhase :
   forall t t' v v' p ph n n',
   Smallest t tids ->
   Map_PHID.MapsTo p ph pm ->
@@ -87,6 +116,27 @@ Variable Smallest_to_WaitPhase :
   WaitPhase v n ->
   WaitPhase v' n' ->
   n <= n'.
+Proof.
+  intros.
+  assert (Hin :  Map_TID.In t ph). {
+    apply Map_TID_Extra.mapsto_to_in with (e:=v).
+    assumption.
+  }
+  assert (Hin' :  Map_TID.In t' ph). {
+    apply Map_TID_Extra.mapsto_to_in with (e:=v').
+    assumption.
+  }
+  assert (Hle : LE pm t t'). {
+    apply Smallest_to_LE with (p:=p) (ph:=ph); repeat auto.
+  }
+  assert (Hdiff : ph_diff ph t t' ((Z.of_nat n) - (Z.of_nat n'))%Z).
+Qed.
+
+(* XXX: move this into a proposition *)
+Variable OnlySW :
+  forall (ph:phaser) (t:tid) (v:taskview),
+  Map_TID.MapsTo t v ph ->
+  exists n, v = SW n true \/ v = WO n \/ exists w, (v = SO n w /\ w < n).
 
 Lemma smallest_to_sync:
   forall t p ph,
