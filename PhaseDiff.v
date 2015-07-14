@@ -14,6 +14,26 @@ Definition ph_diff (ph:phaser) (t1:tid) (t2:tid) (z:Z)
      exists n2, WaitPhase v2 n2 /\
      ((Z_of_nat n1) - (Z_of_nat n2))%Z = z.
 
+Lemma ph_diff_def:
+  forall (ph:phaser) (t1 t2:tid) (v1 v2:taskview) (n1 n2:nat),
+  Map_TID.MapsTo t1 v1 ph ->
+  Map_TID.MapsTo t2 v2 ph ->
+  WaitPhase v1 n1 ->
+  WaitPhase v2 n2 ->
+  ph_diff ph t1 t2 ((Z_of_nat n1) - (Z_of_nat n2))%Z.
+Proof.
+  intros.
+  unfold ph_diff.
+  exists v1.
+  intuition.
+  exists v2.
+  intuition.
+  exists n1.
+  intuition.
+  exists n2.
+  intuition.
+Qed.
+
 Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z := 
   match Map_TID.find t1 ph with
     | Some v1 => 
@@ -285,8 +305,12 @@ Qed.
 Definition tid_In (t:tid) (pm:phasermap) :=
   exists p ph, Map_PHID.MapsTo p ph pm /\ WTaskIn t ph.
 
-Definition ph_le (ph:phaser) (t1:tid) (t2:tid) :=
-  exists (z:Z), ph_diff ph t1 t2 z /\ (z <= 0)%Z.
+Inductive ph_le : phaser -> tid -> tid -> Prop :=
+  ph_le_def :
+    forall ph t1 t2 z,
+    ph_diff ph t1 t2 z ->
+    (z <= 0)%Z ->
+    ph_le ph t1 t2.
 
 Section GET_PH_LE.
 Variable ph:phaser.
@@ -336,11 +360,10 @@ Lemma ph_le_refl:
   ph_le ph t t.
 Proof.
   intros.
-  unfold ph_le.
-  exists 0%Z.
-  intuition.
+  apply ph_le_def with (z:=0%Z).
   apply ph_diff_refl.
   assumption.
+  intuition.
 Qed.
 
 Lemma ph_le_inv:
@@ -349,8 +372,7 @@ Lemma ph_le_inv:
   WTaskIn t ph /\ WTaskIn t' ph.
 Proof.
   intros.
-  unfold ph_le in *.
-  destruct H as (z, (H1, H2)).
+  inversion H; subst.
   apply ph_diff_inv with (z:=z).
   assumption.
 Qed.
@@ -361,9 +383,8 @@ Lemma ph_le_inv_in:
   Map_TID.In t ph /\ Map_TID.In t' ph.
 Proof.
   intros.
-  unfold ph_le in *.
-  destruct H as (z, (H, Hdiff)).
-  apply ph_diff_inv_in in H.
+  inversion H; subst.
+  apply ph_diff_inv_in in H0.
   intuition.
 Qed.
 
@@ -394,17 +415,14 @@ Lemma ph_le_total:
   { ph_le ph t t' } + { ph_le ph t' t }.
 Proof.
   intros.
-  unfold ph_le.
   remember (get_ph_le ph t t').
   destruct p.
   - left.
     destruct s as (z, (Hdiff, Hle)).
-    exists z.
-    intuition.
+    apply ph_le_def with (z:=z); repeat auto.
   - right.
     destruct s as (z, (Hdiff, Hle)).
-    exists z.
-    intuition.
+    apply ph_le_def with (z:=z); repeat auto.
   - destruct s.
     assert (False). {
       unfold WTaskIn in *.
@@ -417,9 +435,53 @@ Qed.
 Section LE.
 Variable pm:phasermap.
 
+Inductive pm_diff : tid -> tid -> Z -> Prop :=
+  pm_diff_def :
+    forall p ph t t' z,
+    Map_PHID.MapsTo p ph pm ->
+    ph_diff ph t t' z ->
+    pm_diff t t' z.
+
 (** Less-than-equals *)
-Definition wp_le (t:tid) (t':tid) :=
+Inductive wp_le : tid -> tid -> Prop :=
+  wp_le_def :
+    forall t t' z,
+    pm_diff t t' z ->
+    (z <= 0 ) % Z ->
+    wp_le t t'.
+
+Lemma wp_le_def_2:
+  forall p ph t t',
+  Map_PHID.MapsTo p ph pm ->
+  ph_le ph t t' ->
+  wp_le t t'.
+Proof.
+  intros.
+  inversion H0; subst.
+  apply wp_le_def with (z:=z); auto.
+  apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+Qed.
+
+Lemma wp_le_alt :
+  forall t t',
+  wp_le t t' <->
   exists p ph, Map_PHID.MapsTo p ph pm /\ ph_le ph t t'.
+Proof.
+  split.
+  - intros.
+    inversion H.
+    subst.
+    inversion H0.
+    subst.
+    exists p; exists ph.
+    intuition.
+    apply ph_le_def with (z:=z); repeat auto.
+  - intros.
+    destruct H as (p, (ph, (Hmt, Hle))).
+    inversion Hle; subst.
+    apply wp_le_def with (z:=z); repeat auto.
+    apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+Qed.
 
 Lemma wp_le_refl:
   forall t,
@@ -427,13 +489,12 @@ Lemma wp_le_refl:
   wp_le t t.
 Proof.
   intros.
-  unfold wp_le.
-  unfold tid_In in H.
-  destruct H as (p, (ph, (Hmt, Hin))).
-  exists p; exists ph.
-  intuition.
-  apply ph_le_refl.
-  assumption.
+  apply wp_le_def with (z:=0%Z).
+  - unfold tid_In in H.
+    destruct H as (p, (ph, (Hmt, Hin))).
+    apply pm_diff_def with (p:=p) (ph:=ph); auto.
+    apply ph_diff_refl; auto.
+  - intuition.
 Qed.
 
 Lemma wp_le_inv:
@@ -442,7 +503,7 @@ Lemma wp_le_inv:
   tid_In t pm /\ tid_In t' pm.
 Proof.
   intros.
-  unfold wp_le in *.
+  apply wp_le_alt in H.
   destruct H as (p, (ph, (Hmt, Hin))).
   apply ph_le_inv in Hin.
   unfold tid_In.
@@ -459,12 +520,12 @@ Proof.
   intros.
   destruct (ph_le_total _ _ _ H0 H1).
   + left.
-    unfold wp_le.
+    apply wp_le_alt.
     exists p.
     exists ph.
     intuition.
   + right.
-    unfold wp_le.
+    apply wp_le_alt.
     exists p.
     exists ph.
     intuition.

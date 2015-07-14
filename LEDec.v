@@ -118,33 +118,31 @@ Lemma ph_le_dec:
   { ph_le ph t t' } + { ~ ph_le ph t t' }.
 Proof.
   intros.
-  unfold ph_le.
   remember (get_diff ph t t').
   symmetry in Heqg.
   destruct g.
   - destruct g.
     right.
     intuition.
-    destruct H as (?, (Hdiff, _)).
+    inversion H; subst.
     assert (Hx := e).
-    apply get_diff_none with (z:=x0) in Hx.
+    apply get_diff_none with (z:=z) in Hx.
     contradiction Hx.
   - destruct g.
     right.
     intuition.
-    destruct H as (z', (?, Hle)).
+    inversion H; subst.
     destruct a as (?, Hle').
-    assert (z' = x). {
+    assert (z = x). {
       apply ph_diff_fun with (ph:=ph) (t:=t) (t':=t'); repeat assumption.
     }
     subst.
-    apply Hle' in Hle.
+    apply Hle' in H1.
     assumption.
   - destruct g.
     left.
-    exists x.
     destruct a.
-    intuition.
+    apply ph_le_def with (z:=x); repeat auto.
 Qed.
 
 Section PM_DIFF.
@@ -176,19 +174,23 @@ Qed.
 Lemma wp_le_dec:
   { wp_le pm t t' } + { ~ wp_le pm t t' }.
 Proof.
-  unfold wp_le.
   destruct (Map_PHID_Extra.in_choice pm_le).
   - left.
     destruct e as (p, H).
     apply Map_PHID_Extra.in_to_mapsto in H.
     destruct H as (ph, H).
-    exists p; exists ph.
-    apply pm_le_spec.
-    assumption.
+    rewrite <- pm_le_spec in H.
+    destruct H.
+    apply wp_le_def_2 with (p:=p) (ph:=ph); repeat auto.
   - right.
     intuition.
-    destruct H as (p, (ph, H)).
-    apply pm_le_spec in H.
+    inversion H; subst; clear H.
+    inversion H0; subst; clear H0.
+    assert (Hx : Map_PHID.MapsTo p ph pm_le). {
+      apply pm_le_spec.
+      intuition.
+      apply ph_le_def with (z:=z); auto.
+    }
     assert (absurd: exists k, Map_PHID.In (elt:=phaser) k pm_le). {
       exists p.
       apply Map_PHID_Extra.mapsto_to_in with (e:=ph).
@@ -282,7 +284,7 @@ Lemma wp_le_in_pm_tids:
   In x pm_tids /\ In y pm_tids.
 Proof.
   intros.
-  unfold wp_le in *.
+  rewrite wp_le_alt in *.
   destruct H as (p, (ph, (Hmt, Hle))).
   apply ph_le_in_pm_tids with (p:=p) (ph:=ph); repeat auto.
 Qed.
