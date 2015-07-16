@@ -107,42 +107,12 @@ Proof.
   - assumption. 
 Qed.
 
-Variable pm_diff_fun:
-  forall t t' z z',
-  pm_diff pm t t' z ->
-  pm_diff pm t t' z' ->
-  z = z'.
-
 Variable pm_diff_trans:
   forall t1 t2 t3 z12 z23 z13,
   pm_diff pm t1 t2 z12 ->
   pm_diff pm t2 t3 z23 ->
   pm_diff pm t1 t3 z13 ->
   (z12 + z23 = z13) % Z.
-
-Lemma LE_to_pm_diff:
-  forall t1 t2,
-  LE pm t1 t2 ->
-  forall z,
-  pm_diff pm t1 t2 z ->
-  (z <= 0) %Z.
-Proof.
-  intros ? ? H.
-  induction H.
-  - intros.
-    inversion H; subst.
-    apply pm_diff_fun with (z:=z) in H1; repeat (auto;intuition).
-  - intros z' ?.
-    destruct (pm_diff_dec pm x y), (pm_diff_dec pm y z).
-    + destruct e as (z1, ?); destruct e0 as (z2, ?).
-      assert ((z1 + z2) % Z = z'). {
-        apply pm_diff_trans with (t1:=x) (t2:=y) (t3:=z); repeat auto.
-      }
-      apply IHclos_trans1 in H2.
-      apply IHclos_trans2 in H3.
-      intuition.
-    +
-Admitted.
 
 (* TODO: prove this *)
 Lemma Smallest_to_WaitPhase :
@@ -182,7 +152,7 @@ Proof.
     assert (Hd: pm_diff pm t t' z). {
       apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
     }
-    assert (Hel := LE_to_pm_diff _ _ Hle _ Hd).
+    assert (Hel := LE_to_pm_diff _ _ _ Hle _ Hd).
     intuition.
 Qed.
 
