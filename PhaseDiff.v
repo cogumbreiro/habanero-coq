@@ -442,6 +442,18 @@ Inductive pm_diff : tid -> tid -> Z -> Prop :=
     ph_diff ph t t' z ->
     pm_diff t t' z.
 
+Lemma pm_diff_symm:
+  forall t t' z,
+  pm_diff t t' z ->
+  pm_diff t' t (-z)%Z.
+Proof.
+  intros.
+  inversion H; subst; clear H.
+  apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+  apply ph_diff_symm.
+  assumption.
+Qed.
+
 (** Less-than-equals *)
 Inductive wp_le : tid -> tid -> Prop :=
   wp_le_def :

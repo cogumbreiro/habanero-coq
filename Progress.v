@@ -1,4 +1,5 @@
 Require Import Coq.Lists.List.
+Require Import Coq.ZArith.BinInt.
 
 Require Import Vars.
 Require Import Lang.
@@ -106,6 +107,43 @@ Proof.
   - assumption. 
 Qed.
 
+Variable pm_diff_fun:
+  forall t t' z z',
+  pm_diff pm t t' z ->
+  pm_diff pm t t' z' ->
+  z = z'.
+
+Variable pm_diff_trans:
+  forall t1 t2 t3 z12 z23 z13,
+  pm_diff pm t1 t2 z12 ->
+  pm_diff pm t2 t3 z23 ->
+  pm_diff pm t1 t3 z13 ->
+  (z12 + z23 = z13) % Z.
+
+Lemma LE_to_pm_diff:
+  forall t1 t2,
+  LE pm t1 t2 ->
+  forall z,
+  pm_diff pm t1 t2 z ->
+  (z <= 0) %Z.
+Proof.
+  intros ? ? H.
+  induction H.
+  - intros.
+    inversion H; subst.
+    apply pm_diff_fun with (z:=z) in H1; repeat (auto;intuition).
+  - intros z' ?.
+    destruct (pm_diff_dec pm x y), (pm_diff_dec pm y z).
+    + destruct e as (z1, ?); destruct e0 as (z2, ?).
+      assert ((z1 + z2) % Z = z'). {
+        apply pm_diff_trans with (t1:=x) (t2:=y) (t3:=z); repeat auto.
+      }
+      apply IHclos_trans1 in H2.
+      apply IHclos_trans2 in H3.
+      intuition.
+    +
+Admitted.
+
 (* TODO: prove this *)
 Lemma Smallest_to_WaitPhase :
   forall t t' v v' p ph n n',
@@ -129,7 +167,23 @@ Proof.
   assert (Hle : LE pm t t'). {
     apply Smallest_to_LE with (p:=p) (ph:=ph); repeat auto.
   }
-  assert (Hdiff : ph_diff ph t t' ((Z.of_nat n) - (Z.of_nat n'))%Z).
+  remember ((Z.of_nat n) - (Z.of_nat n'))%Z as z.
+  assert (Hdiff : ph_diff ph t t' z). {
+    subst.
+    apply ph_diff_def with (v1:=v) (v2:=v'); repeat auto.
+  }
+  assert (Hz: (z <= 0 \/ -z <= 0) % Z). {
+    omega.
+  }
+  destruct Hz.
+  - omega.
+  - subst.
+    remember (Z.of_nat n - Z.of_nat n')%Z as z.
+    assert (Hd: pm_diff pm t t' z). {
+      apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+    }
+    assert (Hel := LE_to_pm_diff _ _ Hle _ Hd).
+    intuition.
 Qed.
 
 (* XXX: move this into a proposition *)
