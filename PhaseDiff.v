@@ -432,7 +432,8 @@ Proof.
     }
     inversion H1.
 Qed.
-Section LE.
+
+Section PM_DIFF.
 Variable pm:phasermap.
 
 Inductive pm_diff : tid -> tid -> Z -> Prop :=
@@ -453,6 +454,126 @@ Proof.
   apply ph_diff_symm.
   assumption.
 Qed.
+
+Variable t1: tid.
+Variable t2: tid.
+
+Definition all_ph_diffs : phasermap :=
+  Map_PHID_Extra.filter
+    (fun (p:phid) (ph:phaser) =>
+      match (get_ph_diff ph t1 t2) with
+        | Some _ => true
+        | _ => false
+      end)
+  pm.
+
+Definition get_pm_diff : option Z :=
+  match Map_PHID.elements all_ph_diffs with
+    | (p, ph) :: _ => get_ph_diff ph t1 t2
+    | _ => None
+  end.
+
+Lemma get_pm_diff_eq:
+  forall p ph l,
+  (p, ph) :: l = Map_PHID.elements (elt:=phaser) all_ph_diffs ->
+  Map_PHID.MapsTo p ph pm /\ exists z, ph_diff ph t1 t2 z.
+Proof.
+  intros.
+  assert (Hmt: Map_PHID.MapsTo p ph all_ph_diffs). {
+    apply Map_PHID_Extra.in_elements_impl_maps_to.
+    rewrite <- H.
+    apply in_eq.
+  }
+  unfold all_ph_diffs in *.
+  rewrite Map_PHID_Extra.filter_spec in Hmt. {
+    destruct Hmt.
+    intuition.
+    remember (get_ph_diff ph t1 t2).
+    destruct o.
+    - symmetry in Heqo.
+      rewrite get_ph_diff_spec in *.
+      exists z.
+      trivial.
+    - inversion H1.
+  }
+  intuition.
+Qed.
+
+Lemma get_pm_diff_spec_1:
+  forall z,
+  get_pm_diff = Some z ->
+  pm_diff t1 t2 z.
+Proof.
+  intros.
+  unfold get_pm_diff in *.
+  remember (Map_PHID.elements all_ph_diffs).
+  destruct l.
+  { inversion H. }
+  destruct p as (p, ph).
+  apply get_pm_diff_eq in Heql.
+  destruct Heql as (?, _).
+  apply get_ph_diff_spec in H.
+  apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+Qed.
+
+Variable pm_diff_fun:
+  forall t t' z z',
+  pm_diff t t' z ->
+  pm_diff t t' z' ->
+  z = z'.
+
+Lemma get_pm_diff_spec_2:
+  forall z,
+  pm_diff t1 t2 z ->
+  get_pm_diff = Some z.
+Proof.
+  intros.
+  unfold get_pm_diff.
+  remember (Map_PHID.elements all_ph_diffs).
+  destruct l.
+  - (* absurd case *)
+    symmetry in Heql.
+    apply Map_PHID_Props.elements_Empty in Heql.
+    inversion H; subst; clear H.
+    apply Map_PHID_Extra.empty_to_mapsto with (k:=p) (e:=ph) in Heql.
+    unfold all_ph_diffs in *.
+    rewrite Map_PHID_Extra.filter_spec in Heql. {
+      remember (get_ph_diff ph t1 t2).
+      destruct o.
+      intuition.
+      intuition.
+      symmetry in Heqo.
+      apply get_diff_none with (z:=z) in Heqo.
+      contradiction H1.
+    }
+    intuition.
+  - destruct p as (p, ph).
+    apply get_pm_diff_eq in Heql.
+    destruct Heql as (?, (z', ?)).
+    assert (pm_diff t1 t2 z'). {
+      apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+    }
+    assert (z = z'). {
+      apply pm_diff_fun with (t:=t1) (t':=t2); repeat auto.
+    }
+    subst.
+    apply get_ph_diff_spec.
+    trivial.
+Qed.
+
+Lemma get_pm_diff_spec:
+  forall z,
+  get_pm_diff = Some z <-> pm_diff t1 t2 z.
+Proof.
+  intros.
+  split.
+  - apply get_pm_diff_spec_1.
+  - apply get_pm_diff_spec_2.
+Qed.
+End PM_DIFF.
+
+Section LE.
+Variable pm:phasermap.
 
 (** Less-than-equals *)
 Inductive wp_le : tid -> tid -> Prop :=
