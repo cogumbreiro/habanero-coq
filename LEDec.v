@@ -377,73 +377,6 @@ Lemma pm_diff_dec:
 Proof.
 Admitted.
 End PM_DIFF_FUNC.
-(*
-Program Definition get_pm_diff :
-  sum {z | pm_diff pm t1 t2 z}
-      {_:unit | forall z, ~ pm_diff pm t1 t2 z} :=
-      
-  match (Map_PHID.elements all_ph_diffs) with
-    | (p, ph) :: _ =>
-      match (get_ph_diff ph t1 t2) with
-        | Some z => inl z
-        | _ => inr tt
-      end
-    | _ => inr tt
-  end.
-Next Obligation.
-  assert (Hin : In (p,ph) (Map_PHID.elements all_ph_diffs)). {
-    rewrite <- Heq_anonymous.
-    apply in_eq.
-  }
-  apply Map_PHID_Extra.in_elements_impl_maps_to in Hin.
-  apply pm_diff_def with (p:=p) (ph:=ph).
-  - unfold all_ph_diffs in *.
-    apply Map_PHID_Extra.filter_spec in Hin.
-    intuition.
-    intuition.
-  - apply get_ph_diff_spec_1.
-    auto.
-Qed.
-Next Obligation.
-  assert (Hin : In (p,ph) (Map_PHID.elements all_ph_diffs)). {
-    rewrite <- Heq_anonymous.
-    apply in_eq.
-  }
-  apply Map_PHID_Extra.in_elements_impl_maps_to in Hin.
-  assert (H' : get_ph_diff ph t1 t2 = None). {
-    remember (get_ph_diff ph t1 t2) as o.
-    destruct o.
-    - assert (Hx := H z0).
-      intuition.
-    - trivial.
-  } 
-  clear H.
-  assert (Hd := get_diff_none _ _ _ H'); clear H'.
-  intuition.
-  inversion H; subst; clear H.
-  assert (Hx := Hd z).
-  apply Hd with (z:=z).
-  apply get_diff_none in H'.
-  apply pm_diff_def with (p:=p) (ph:=ph).
-  - unfold all_ph_diffs in *.
-    apply Map_PHID_Extra.filter_spec in Hin.
-    intuition.
-    intuition.
-  - apply get_ph_diff_spec_1.
-    auto.
-  intuition; intros.
-  inversion H0; subst; clear H0.
-  apply H with (z:=z).
-  apply get_ph_diff_spec_2 in H.
-
-Lemma pm_diff_dec:
-  forall t t',
-  sum {z | pm_diff pm t t' z} {_:unit | forall z, ~ pm_diff pm t t' z}.
-Proof.
-  intros.
-  destruct (wp_le_dec t t').
-  + left.
-  *)  
 
 Lemma LE_dec:
   forall t t',
@@ -479,21 +412,5 @@ Lemma LE_to_pm_diff:
   forall z,
   pm_diff pm t1 t2 z ->
   (z <= 0) %Z.
-Proof.
-  intros ? ? H.
-  induction H.
-  - intros.
-    inversion H; subst.
-    apply pm_diff_fun with (z:=z) in H1; repeat (auto;intuition).
-  - intros z' ?.
-    destruct (pm_diff_dec pm x y), (pm_diff_dec pm y z).
-    + destruct e as (z1, ?); destruct e0 as (z2, ?).
-      assert ((z1 + z2) % Z = z'). {
-        apply pm_diff_trans with (t1:=x) (t2:=y) (t3:=z); repeat auto.
-      }
-      apply IHclos_trans1 in H2.
-      apply IHclos_trans2 in H3.
-      intuition.
-    +
 Admitted.
 End LE_PM_DIFF.
