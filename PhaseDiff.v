@@ -579,7 +579,7 @@ Variable pm:phasermap.
 Inductive wp_le : tid -> tid -> Prop :=
   wp_le_def :
     forall t t' z,
-    pm_diff t t' z ->
+    pm_diff pm t t' z ->
     (z <= 0 ) % Z ->
     wp_le t t'.
 
