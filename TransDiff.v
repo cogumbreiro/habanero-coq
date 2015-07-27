@@ -17,6 +17,19 @@ Variable get_diff_spec:
   forall e z,
   get_diff e = Some z <-> diff e z.
 
+Lemma diff_fun:
+  forall e z z',
+  diff e z ->
+  diff e z' ->
+  z = z'.
+Proof.
+  intros.
+  rewrite <- get_diff_spec in *.
+  rewrite H in H0.
+  inversion H0.
+  trivial.
+Qed.
+
 Inductive DiffSum : list edge -> Z -> Prop :=
   | diff_sum_nil:
     DiffSum nil 0
@@ -29,6 +42,16 @@ Inductive DiffSum : list edge -> Z -> Prop :=
     DiffSum ((t2, t3) :: w) s ->
     diff (t1, t2) z ->
     DiffSum ((t1, t2) :: (t2, t3) :: w) (z + s).
+
+Lemma diff_sum_nil_z:
+  forall z,
+  DiffSum nil z ->
+  z = 0.
+Proof.
+  intros.
+  inversion H.
+  reflexivity.
+Qed.
 
 Definition as_z (o:option Z) :=
   match o with
@@ -128,4 +151,48 @@ Proof.
       auto.
 Qed.
 
+Definition NegDiff (e:edge) := exists z, diff e z /\ z <= 0.
+
+Lemma diff_sum_le_0:
+  forall w z,
+  Forall NegDiff w ->
+  DiffSum w z ->
+  z <= 0.
+Proof.
+  intros w.
+  induction w.
+  - intros.
+    apply diff_sum_nil_z in H0.
+    intuition.
+  - intros.
+    inversion H0.
+    + subst.
+      intuition.
+      assert (Hin : In (t1, t2) ((t1, t2) :: nil)). {
+        apply in_eq.
+      }
+      rewrite Forall_forall in H.
+      destruct (H _ Hin) as (z', (?, ?)).
+      assert (z' = z). {
+        apply diff_fun with (t1, t2); repeat auto.
+      }
+      intuition.
+   + subst. clear H0.
+     assert (s <= 0). {
+       inversion H; subst.
+       apply IHw; repeat auto.
+     }
+     assert (z0 <= 0). {
+       rewrite Forall_forall in H.
+       assert (Hin : In (t1, t2) ((t1, t2) :: (t2, t3) :: w0)). {
+         apply in_eq.
+       }
+       destruct (H _ Hin) as (z, (?,?)).
+       assert (z0 = z). {
+         apply diff_fun with (e:=(t1,t2)); repeat auto.
+       }
+       intuition.
+    }
+    intuition.
+Qed.
 End DIFF_SUM.
