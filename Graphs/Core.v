@@ -604,6 +604,42 @@ Qed.
 
 End Walk.
 
+Lemma starts_with_def:
+  forall {A:Type} (v v':A) w,
+  StartsWith ((v, v')::w) v.
+Proof.
+  intros.
+  unfold StartsWith.
+  exists (v, v').
+  exists w.
+  intuition.
+Qed.
+
+Lemma ends_with_def:
+  forall {A:Type} (v v':A) w,
+  End w (v', v) ->
+  EndsWith w v.
+Proof.
+  intros.
+  unfold EndsWith.
+  exists (v', v).
+  intuition.
+Qed.
+
+Lemma walk2_nil:
+  forall {A:Type} (v1 v2:A) (Edge: (A * A) %type -> Prop),
+  Edge (v1, v2) ->
+  Walk2 Edge v1 v2 ((v1, v2)::nil).
+Proof.
+  intros.
+  apply walk2_def.
+  - apply starts_with_def.
+  - apply ends_with_def with (v':=v1).
+    apply end_nil.
+  - apply edge_to_walk; repeat auto.
+Qed.
+
+
 Implicit Arguments Cycle.
 Implicit Arguments Walk.
 Implicit Arguments Linked.
