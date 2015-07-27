@@ -20,4 +20,5 @@ Graphs/Bipartite/Main.v
 Graphs/Bipartite/Cycle.v
 Graphs/FGraphs.v
 TacticsUtil.v
+TransDiff.v
 
