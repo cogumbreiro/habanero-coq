@@ -9,7 +9,6 @@ Set Implicit Arguments.
 Section Walk.
 Variable Implicit A:Type.
 Notation edge := (A*A)%type.
-Variable Edge : edge -> Prop.
 Notation walk := (list edge).
 
 Definition head (e:edge) : A := fst e.
@@ -17,16 +16,6 @@ Definition tail (e:edge) : A := snd e.
 Definition walk_head (default:A) (w:walk) : A := head (List.hd (default, default) w).
 
 Definition Linked e w := tail e = walk_head (tail e) w.
-
-Inductive Walk : walk -> Prop :=
-  | walk_cons:
-    forall e w,
-    Walk w ->
-    Edge e ->
-    Linked e w ->
-    Walk (e :: w)
-  | walk_nil:
-    Walk nil.
 
 Inductive Connected : walk -> Prop :=
   | connected_cons:
@@ -47,6 +36,240 @@ Proof.
   subst.
   assumption.
 Qed.
+
+
+Inductive End : walk -> edge -> Prop :=
+  | end_nil:
+    forall e,
+    End (e :: nil) e
+  | end_cons:
+    forall e e' w,
+    End w e ->
+    End (e'::w) e.
+
+Lemma end_inv:
+  forall e1 e2,
+  End (e1 :: nil) e2 ->
+  e1 = e2.
+Proof.
+  intros.
+  inversion H.
+  - reflexivity.
+  - subst.
+    inversion H3.
+Qed.
+
+Lemma end_inv_cons:
+  forall e1 e2 e3 w,
+  End (e1 :: e2 :: w) e3 ->
+  End (e2 :: w) e3.
+Proof.
+  intros.
+  inversion H.
+  subst.
+  assumption.
+Qed.
+
+Lemma end_total:
+  forall e w,
+  exists e', End (e :: w) e'.
+Proof.
+  intros.
+  induction w.
+  - exists e.
+    apply end_nil.
+  - destruct IHw as (e', H).
+    inversion H; subst.
+    + exists a.
+      apply end_cons.
+      apply end_nil.
+    + exists e'.
+      apply end_cons.
+      apply end_cons.
+      assumption.
+Qed.
+
+Lemma end_inv2:
+  forall v1 v2 v1' v2',
+  End ((v1,v2) :: nil) (v1', v2') ->
+  v1 = v1' /\ v2 = v2'.
+Proof.
+  intros.
+  apply end_inv in H.
+  inversion H.
+  intuition.
+Qed.
+
+Lemma end_det:
+  forall w e e',
+  End w e ->
+  End w e' ->
+  e = e'.
+Proof.
+  intros.
+  induction w.
+  - inversion H.
+  - inversion H; inversion H0; subst.
+    + assumption.
+    + inversion H7. (* absurd *)
+    + inversion H4. (* absurd *)
+    + apply IHw.
+      assumption.
+      assumption.
+Qed.
+
+Lemma end_cons_eq:
+  forall w e e' e'',
+  End w e ->
+  End (e' :: w) e'' ->
+  e = e''.
+Proof.
+  intros.
+  assert (H1 := end_cons e' H).
+  apply end_det with (w:=(e'::w)).
+  assumption.
+  assumption.
+Qed.
+
+Lemma end_in:
+  forall w e,
+  End w e ->
+  In e w.
+Proof.
+  intros.
+  induction w.
+  - inversion H.
+  - destruct w.
+    + apply end_inv in H.
+      subst.
+      apply in_eq.
+    + apply end_inv_cons in H.
+      apply IHw in H; clear IHw.
+      apply in_cons.
+      assumption.
+Qed.
+
+Definition StartsWith (w:walk) (v:A) :=
+  exists e' w', w = e' :: w' /\ fst e' = v.
+
+Definition EndsWith w (v:A) :=
+  exists e, End w e /\ snd e = v.
+
+Lemma ends_with_cons:
+  forall w v e,
+  EndsWith w v ->
+  EndsWith (e :: w) v.
+Proof.
+  intros.
+  unfold EndsWith in *.
+  destruct H as (e', (H,H1)).
+  exists e'.
+  intuition.
+  apply end_cons.
+  assumption.
+Qed.
+
+Lemma ends_with_nil_inv:
+  forall v,
+  EndsWith nil v ->
+  False.
+Proof.
+  intros.
+  unfold EndsWith in H.
+  destruct H as (e, (H, ?)).
+  inversion H.
+Qed.
+
+Lemma starts_with_def:
+  forall v v' w,
+  StartsWith ((v, v')::w) v.
+Proof.
+  intros.
+  unfold StartsWith.
+  exists (v, v').
+  exists w.
+  intuition.
+Qed.
+
+Lemma ends_with_def:
+  forall v v' w,
+  End w (v', v) ->
+  EndsWith w v.
+Proof.
+  intros.
+  unfold EndsWith.
+  exists (v', v).
+  intuition.
+Qed.
+
+
+Lemma starts_with_eq:
+  forall v1 v1' v2 w,
+  StartsWith ((v1', v2) :: w) v1 ->
+  v1' = v1.
+Proof.
+  intros.
+  inversion H.
+  destruct H0 as (?, (?, ?)).
+  destruct x.
+  inversion H0.
+  auto.
+Qed.
+
+Lemma ends_with_eq:
+  forall (v1 v2 v2':A),
+  EndsWith ((v1, v2') :: nil) v2 ->
+  v2' = v2.
+Proof.
+  intros.
+  unfold EndsWith in *.
+  destruct H as ((v1', v2''), (?, ?)).
+  apply end_inv2 in H; repeat auto.
+  destruct H.
+  simpl in *.
+  subst.
+  trivial.
+Qed.
+
+Lemma linked_inv:
+  forall (v1 v2 v2' v3:A) w,
+  Linked (v1, v2) ((v2', v3) :: w) ->
+  v2' = v2.
+Proof.
+  intros.
+  unfold Linked in *.
+  unfold walk_head in *.
+  auto.
+Qed.
+
+Lemma ends_with_inv:
+  forall e1 e2 w (v:A),
+  EndsWith (e1 :: e2 :: w) v ->
+  EndsWith (e2 :: w) v.
+Proof.
+  intros.
+  unfold EndsWith in *.
+  destruct H as (e, (?, ?)).
+  exists e.
+  intuition.
+  inversion H.
+  auto.
+Qed.
+
+(* * * * * * * * * * * * * * * *)
+Section EDGE.
+
+Variable Edge : edge -> Prop.
+
+Inductive Walk : walk -> Prop :=
+  | walk_cons:
+    forall e w,
+    Walk w ->
+    Edge e ->
+    Linked e w ->
+    Walk (e :: w)
+  | walk_nil:
+    Walk nil.
 
 Lemma walk_to_connected:
   forall w,
@@ -170,67 +393,6 @@ Proof.
   assumption.
 Qed.
 
-Inductive End : walk -> edge -> Prop :=
-  | end_nil:
-    forall e,
-    End (e :: nil) e
-  | end_cons:
-    forall e e' w,
-    End w e ->
-    End (e'::w) e.
-
-Lemma end_inv:
-  forall e1 e2,
-  End (e1 :: nil) e2 ->
-  e1 = e2.
-Proof.
-  intros.
-  inversion H.
-  - reflexivity.
-  - subst.
-    inversion H3.
-Qed.
-
-Lemma end_inv_cons:
-  forall e1 e2 e3 w,
-  End (e1 :: e2 :: w) e3 ->
-  End (e2 :: w) e3.
-Proof.
-  intros.
-  inversion H.
-  subst.
-  assumption.
-Qed.
-
-Lemma end_total:
-  forall e w,
-  exists e', End (e :: w) e'.
-Proof.
-  intros.
-  induction w.
-  - exists e.
-    apply end_nil.
-  - destruct IHw as (e', H).
-    inversion H; subst.
-    + exists a.
-      apply end_cons.
-      apply end_nil.
-    + exists e'.
-      apply end_cons.
-      apply end_cons.
-      assumption.
-Qed.
-
-Lemma end_inv2:
-  forall v1 v2 v1' v2',
-  End ((v1,v2) :: nil) (v1', v2') ->
-  v1 = v1' /\ v2 = v2'.
-Proof.
-  intros.
-  apply end_inv in H.
-  inversion H.
-  intuition.
-Qed.
 
 Lemma end_to_edge:
   forall w e,
@@ -253,75 +415,6 @@ Proof.
       assumption.
 Qed.
 
-Lemma end_det:
-  forall w e e',
-  End w e ->
-  End w e' ->
-  e = e'.
-Proof.
-  intros.
-  induction w.
-  - inversion H.
-  - inversion H; inversion H0; subst.
-    + assumption.
-    + inversion H7. (* absurd *)
-    + inversion H4. (* absurd *)
-    + apply IHw.
-      assumption.
-      assumption.
-Qed.
-
-Lemma end_cons_eq:
-  forall w e e' e'',
-  End w e ->
-  End (e' :: w) e'' ->
-  e = e''.
-Proof.
-  intros.
-  assert (H1 := end_cons e' H).
-  apply end_det with (w:=(e'::w)).
-  assumption.
-  assumption.
-Qed.
-
-Lemma end_in:
-  forall w e,
-  End w e ->
-  In e w.
-Proof.
-  intros.
-  induction w.
-  - inversion H.
-  - destruct w.
-    + apply end_inv in H.
-      subst.
-      apply in_eq.
-    + apply end_inv_cons in H.
-      apply IHw in H; clear IHw.
-      apply in_cons.
-      assumption.
-Qed.
-
-Definition StartsWith (w:walk) (v:A) :=
-  exists e' w', w = e' :: w' /\ fst e' = v.
-
-Definition EndsWith w (v:A) :=
-  exists e, End w e /\ snd e = v.
-
-Lemma ends_with_cons:
-  forall w v e,
-  EndsWith w v ->
-  EndsWith (e :: w) v.
-Proof.
-  intros.
-  unfold EndsWith in *.
-  destruct H as (e', (H,H1)).
-  exists e'.
-  intuition.
-  apply end_cons.
-  assumption.
-Qed.
-
 Inductive Walk2: A -> A -> list edge -> Prop :=
   walk2_def:
     forall v1 v2 w,
@@ -329,6 +422,17 @@ Inductive Walk2: A -> A -> list edge -> Prop :=
     EndsWith w v2 ->
     Walk w ->
     Walk2 v1 v2 w.
+
+Lemma walk2_nil_inv:
+  forall v1 v2,
+  Walk2 v1 v2 nil ->
+  False.
+Proof.
+  intros.
+  inversion H; subst; clear H.
+  apply ends_with_nil_inv with (v:=v2).
+  assumption.
+Qed.
 
 Inductive Cycle: walk -> Prop :=
   cycle_def:
@@ -467,7 +571,6 @@ Proof.
   - inversion H0.
 Qed.
 
-
 Lemma succ_in_walk:
   forall w v1 v2,
   Walk w ->
@@ -602,34 +705,10 @@ Proof.
   apply pair_in_right.
 Qed.
 
-End Walk.
-
-Lemma starts_with_def:
-  forall {A:Type} (v v':A) w,
-  StartsWith ((v, v')::w) v.
-Proof.
-  intros.
-  unfold StartsWith.
-  exists (v, v').
-  exists w.
-  intuition.
-Qed.
-
-Lemma ends_with_def:
-  forall {A:Type} (v v':A) w,
-  End w (v', v) ->
-  EndsWith w v.
-Proof.
-  intros.
-  unfold EndsWith.
-  exists (v', v).
-  intuition.
-Qed.
-
 Lemma walk2_nil:
-  forall {A:Type} (v1 v2:A) (Edge: (A * A) %type -> Prop),
+  forall v1 v2,
   Edge (v1, v2) ->
-  Walk2 Edge v1 v2 ((v1, v2)::nil).
+  Walk2 v1 v2 ((v1, v2)::nil).
 Proof.
   intros.
   apply walk2_def.
@@ -639,6 +718,81 @@ Proof.
   - apply edge_to_walk; repeat auto.
 Qed.
 
+Lemma walk2_inv_cons:
+  forall (v1 vn:A) e w,
+  Walk2 v1 vn (e :: w) ->
+  exists v2, e = (v1, v2) /\ Edge (v1, v2).
+Proof.
+  intros.
+  destruct e as (v1', v2).
+  inversion H.
+  subst.
+  exists v2.
+  apply starts_with_eq in H0.
+  inversion H2.
+  subst.
+  intuition.  
+Qed.
+
+Lemma walk2_inv:
+  forall (v1 vn:A) e e' w,
+  Walk2 v1 vn (e :: e' :: w) ->
+  exists v2, e = (v1, v2) /\ Edge (v1, v2) /\ Walk2 v2 vn (e' :: w).
+Proof.
+  intros.
+  assert (Hx : exists v2 : A, e = (v1, v2) /\ Edge (v1, v2)). {
+    apply walk2_inv_cons with (vn:=vn) (w:=e' :: w); repeat auto.
+  }
+  destruct Hx as (v2', (?, ?)).
+  exists v2'; intuition.
+  destruct e' as (v2, v3).
+  inversion H; subst; clear H.
+  inversion H4.
+  apply linked_inv in H7.
+  subst.
+  apply walk2_def.
+  - apply starts_with_def.
+  - apply ends_with_inv with (e1:=(v1,v2')); assumption.
+  - assumption.
+Qed.
+
+Lemma walk2_inv_pair:
+  forall (v1 v2:A) e,
+  Walk2 v1 v2 (e :: nil) ->
+  e = (v1, v2) /\ Edge (v1, v2).
+Proof.
+  intros.
+  inversion H; subst.
+  destruct e as (v1', v2').
+  apply starts_with_eq in H0.
+  apply ends_with_eq in H1.
+  subst.
+  apply walk2_inv_cons in H.
+  destruct H as (v, (?, ?)).
+  inversion H; subst.
+  intuition.
+Qed.
+
+End EDGE.
+
+End Walk.
+
+
+
+Lemma walk_impl:
+  forall {A:Type} (E: (A * A) %type -> Prop) (F: (A * A) %type -> Prop),
+  (forall e, E e -> F e) ->
+  forall w,
+  Walk E w ->
+  Walk F w.
+Proof.
+  intros.
+  apply walk_inv in H0.
+  destruct H0.
+  apply walk_def; repeat auto.
+  rewrite Forall_forall in *.
+  auto.
+Qed.
 
 Implicit Arguments Cycle.
 Implicit Arguments Walk.
@@ -782,3 +936,37 @@ End SUBGRAPH.
 Implicit Arguments Forall.
 Implicit Arguments subgraph.
 
+Section CLOS_TRANS.
+
+Require Import Coq.Relations.Relations.
+
+Lemma walk2_to_clos_trans:
+  forall {A:Type} Edge w (v1 vn:A),
+  Walk2 Edge v1 vn w ->
+  clos_trans A (fun (a b:A) => Edge (a, b)) v1 vn.
+Proof.
+  intros ? ? w.
+  induction w.
+  - intros.
+    apply walk2_nil_inv in H.
+    inversion H.
+  - intros.
+    destruct w.
+    + apply walk2_inv_pair in H.
+      destruct H.
+      apply t_step; auto.
+    + apply walk2_inv in H.
+      destruct H as (v2, (Heq, (He,Hw))).
+      apply t_trans with (y:=v2).
+      * apply t_step; repeat auto.
+      * apply IHw; assumption.
+Qed.
+(*
+Lemma clos_trans_to_walk2:
+  forall {A:Type} Edge (v1 vn:A),
+  clos_trans A (fun (a b:A) => Edge (a, b)) v1 vn ->
+  exists w, Walk2 Edge v1 vn w.
+Proof.
+  intros.
+  induction H.
+  - *)
