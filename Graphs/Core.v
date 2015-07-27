@@ -773,6 +773,13 @@ Proof.
   intuition.
 Qed.
 
+Lemma walk2_concat:
+  forall x y z w1 w2,
+  Walk2 x y w1 ->
+  Walk2 y z w2 ->
+  Walk2 x z (w1 ++ w2).
+Proof.
+Admitted.
 End EDGE.
 
 End Walk.
@@ -961,7 +968,7 @@ Proof.
       * apply t_step; repeat auto.
       * apply IHw; assumption.
 Qed.
-(*
+
 Lemma clos_trans_to_walk2:
   forall {A:Type} Edge (v1 vn:A),
   clos_trans A (fun (a b:A) => Edge (a, b)) v1 vn ->
@@ -969,4 +976,25 @@ Lemma clos_trans_to_walk2:
 Proof.
   intros.
   induction H.
-  - *)
+  - exists ((x, y) :: nil).
+    apply walk2_nil.
+    assumption.
+  - destruct IHclos_trans1 as (w1, Hw1).
+    destruct IHclos_trans2 as (w2, Hw2).
+    exists (w1 ++ w2).
+    apply walk2_concat with (y:=y); repeat auto.
+Qed.
+
+Lemma clos_trans_iff_walk2:
+  forall {A:Type} Edge (v1 vn:A),
+  clos_trans A (fun (a b:A) => Edge (a, b)) v1 vn <->
+  exists w, Walk2 Edge v1 vn w.
+Proof.
+  intros.
+  split.
+  - apply clos_trans_to_walk2.
+  - intros; destruct H.
+    apply walk2_to_clos_trans with (w:=x).
+    assumption.
+Qed.
+End CLOS_TRANS.
