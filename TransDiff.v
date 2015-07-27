@@ -16,9 +16,6 @@ Variable get_diff: edge -> option Z.
 Variable get_diff_spec:
   forall e z,
   get_diff e = Some z <-> diff e z.
-(*
- (t1, t2) :: (t2, t3) :: nil
- *)
 
 Inductive DiffSum : list edge -> Z -> Prop :=
   | diff_sum_nil:
@@ -51,8 +48,6 @@ Proof.
   intuition.
 Qed.
 
-Hint Immediate diff_sum_accum_0.
-
 Definition diff_sum (l:list edge) : Z :=
   fold_left diff_sum_accum l 0.
 
@@ -61,8 +56,6 @@ Proof.
   unfold diff_sum.
   auto.
 Qed.
-
-Hint Immediate diff_sum_0.
 
 Let fold_left_diff_sum_accum:
   forall w z,
@@ -100,12 +93,10 @@ Proof.
     intuition.
   }
   rewrite H in *.
-  apply fold_left_diff_sum_accum.
+  auto.
 Qed.
 
-Hint Immediate diff_sum_unfold.
-
-Lemma diff_sum_spec_1:
+Theorem diff_sum_spec:
   forall l z,
   DiffSum l z ->
   z = diff_sum l.
@@ -136,3 +127,5 @@ Proof.
       rewrite H4.
       auto.
 Qed.
+
+End DIFF_SUM.
