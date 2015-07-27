@@ -256,6 +256,24 @@ Proof.
   auto.
 Qed.
 
+Lemma starts_with_to_linked:
+  forall w v,
+  StartsWith w v ->
+  forall v',
+  Linked (v', v) w.
+Proof.
+  intros.
+  unfold Linked.
+  unfold walk_head.
+  simpl.
+  destruct w.
+  + auto.
+  + destruct p.
+    apply starts_with_eq in H.
+    subst.
+    auto.
+Qed.
+
 (* * * * * * * * * * * * * * * *)
 Section EDGE.
 
@@ -773,18 +791,61 @@ Proof.
   intuition.
 Qed.
 
+
+Lemma walk2_cons:
+  forall x y z w,
+  Walk2 y z w ->
+  Edge (x, y) ->
+  Walk2 x z ((x, y) :: w).
+Proof.
+  intros.
+  inversion H; subst.
+  apply walk2_def.
+  - apply starts_with_def.
+  - apply ends_with_cons.
+    assumption.
+  - apply walk_cons; repeat auto.
+    apply starts_with_to_linked; assumption.
+Qed.
+
 Lemma walk2_concat:
-  forall x y z w1 w2,
+  forall w1 x y z w2,
   Walk2 x y w1 ->
   Walk2 y z w2 ->
   Walk2 x z (w1 ++ w2).
 Proof.
-Admitted.
+  intros w1.
+  induction w1.
+  - intros.
+    apply walk2_nil_inv in H.
+    inversion H.
+  - intros.
+    simpl.
+    destruct a.
+    assert (a = x). {
+      apply walk2_inv_cons in H.
+      destruct H as (?, (?, ?)).
+      inversion H.
+      trivial.
+    }
+    subst.
+    destruct w1.
+    + apply walk2_inv_pair in H.
+      destruct H.
+      inversion H.
+      subst.
+      simpl.
+      apply walk2_cons; repeat auto.
+    + apply walk2_inv in H.
+      destruct H as (v, (Heq, (He, Hw))).
+      inversion Heq; subst; clear Heq.
+      apply walk2_cons; repeat auto.
+      apply IHw1 with (y:=y); repeat auto.
+Qed.
+
 End EDGE.
 
 End Walk.
-
-
 
 Lemma walk_impl:
   forall {A:Type} (E: (A * A) %type -> Prop) (F: (A * A) %type -> Prop),
