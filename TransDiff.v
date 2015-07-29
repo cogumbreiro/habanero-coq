@@ -1,9 +1,6 @@
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
 
-Require Graphs.Core.
-Module G := Graphs.Core.
-
 Require Import Vars.
 Require Import Lang.
 Require Import PhaseDiff.
@@ -201,25 +198,27 @@ Qed.
 
 Definition HasDiff e := exists z, diff e z.
 
+Require Import Graphs.Core.
+
 Variable diff_sum_det:
   forall t1 t2 w1 z1 w2 z2,
   DiffSum w1 z1 ->
   DiffSum w2 z2 ->
-  G.Walk2 HasDiff t1 t2 w1 ->
-  G.Walk2 HasDiff t1 t2 w2 ->
+  Walk2 HasDiff t1 t2 w1 ->
+  Walk2 HasDiff t1 t2 w2 ->
   z1 = z2.
 
 Corollary diff_sum_det_alt:
   forall t1 t2 w z,
-  G.Walk2 HasDiff t1 t2 w ->
+  Walk2 HasDiff t1 t2 w ->
   DiffSum w z ->
   forall z',
   diff (t1, t2) z' ->
   z = z'.
 Proof.
   intros.
-  assert (Hw : G.Walk2 HasDiff t1 t2 ((t1,t2) :: nil)). {
-    apply G.walk2_nil; repeat auto.
+  assert (Hw : Walk2 HasDiff t1 t2 ((t1,t2) :: nil)). {
+    apply walk2_nil; repeat auto.
     unfold HasDiff; exists z'; auto.
   }
   assert (Hd : DiffSum ((t1, t2)::nil) z'). {
@@ -230,3 +229,7 @@ Proof.
 Qed.
 
 End DIFF_SUM.
+
+Implicit Arguments DiffSum.
+Implicit Arguments HasDiff.
+Implicit Arguments NegDiff.

@@ -391,20 +391,47 @@ Qed.
 End LE_DEC.
 
 Section LE_PM_DIFF.
+Require Import TransDiff.
+Require Import Graphs.Core.
 Variable pm:phasermap.
+Notation t_edge := (tid * tid) % type.
+Let diff (e:t_edge) : Z -> Prop := pm_diff pm (fst e) (snd e).
+Let get_diff (e:t_edge) : option Z := get_pm_diff pm (fst e) (snd e).
+
+Variable diff_sum_det:
+  forall t1 t2 w1 z1 w2 z2,
+  DiffSum diff w1 z1 ->
+  DiffSum diff w2 z2 ->
+  Walk2 (HasDiff diff) t1 t2 w1 ->
+  Walk2 (HasDiff diff) t1 t2 w2 ->
+  z1 = z2.
 
 Variable pm_diff_fun:
-  forall t t' z z',
-  pm_diff pm t t' z ->
-  pm_diff pm t t' z' ->
+  forall pm t1 t2 z z',
+  pm_diff pm t1 t2 z ->
+  pm_diff pm t1 t2 z' ->
   z = z'.
 
-Variable pm_diff_trans:
-  forall t1 t2 t3 z12 z23 z13,
-  pm_diff pm t1 t2 z12 ->
-  pm_diff pm t2 t3 z23 ->
-  pm_diff pm t1 t3 z13 ->
-  (z12 + z23 = z13) % Z.
+Let get_diff_spec :
+  forall e z,
+  get_diff e = Some z <-> diff e z.
+Proof.
+  intros.
+  unfold diff, get_diff.
+  destruct e.
+  simpl.
+  rewrite (get_pm_diff_spec pm t t0 (pm_diff_fun pm)).
+  intuition.
+Qed.
+
+Lemma LE_to_walk:
+  forall t1 t2,
+  LE pm t1 t2 ->
+  exists w z,
+  DiffSum diff w z /\ Walk2 (HasDiff diff) t1 t2 w /\ List.Forall (NegDiff diff) w.
+Admitted.
+
+Let pm_diff_sum_det := diff_sum_det_alt tid diff diff_sum_det.
 
 Lemma LE_to_pm_diff:
   forall t1 t2,
@@ -412,5 +439,14 @@ Lemma LE_to_pm_diff:
   forall z,
   pm_diff pm t1 t2 z ->
   (z <= 0) %Z.
-Admitted.
+Proof.
+  intros.
+  apply LE_to_walk in H.
+  destruct H as (w, (z', (Hd, (Hw, Hn)))).
+  assert (z' = z). {
+    apply pm_diff_sum_det with (t1:=t1) (t2:=t2) (w:=w); repeat auto.
+  }
+  subst.
+  apply diff_sum_le_0 with (A:=tid) (diff:=diff) (get_diff:=get_diff) (w:=w); repeat auto.
+Qed.
 End LE_PM_DIFF.
