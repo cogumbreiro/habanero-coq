@@ -862,6 +862,19 @@ Proof.
   auto.
 Qed.
 
+Lemma walk2_impl:
+  forall {A:Type} (E: (A * A) %type -> Prop) (F: (A * A) %type -> Prop),
+  (forall e, E e -> F e) ->
+  forall x y w,
+  Walk2 E x y w ->
+  Walk2 F x y w.
+Proof.
+  intros.
+  inversion H0; subst; clear H0.
+  apply walk2_def; repeat auto.
+  apply walk_impl with (E0:=E); repeat auto.
+Qed.
+
 Implicit Arguments Cycle.
 Implicit Arguments Walk.
 Implicit Arguments Linked.
@@ -1058,4 +1071,5 @@ Proof.
     apply walk2_to_clos_trans with (w:=x).
     assumption.
 Qed.
+
 End CLOS_TRANS.
