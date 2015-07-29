@@ -260,7 +260,7 @@ Proof.
   apply neg_diff_to_has_diff.
 Qed.
 
-Variable diff_sum_det:
+Definition DiffSumDet :=
   forall t1 t2 w1 z1 w2 z2,
   DiffSum w1 z1 ->
   DiffSum w2 z2 ->
@@ -268,7 +268,7 @@ Variable diff_sum_det:
   Walk2 HasDiff t1 t2 w2 ->
   z1 = z2.
 
-Corollary diff_sum_det_alt:
+Corollary diff_sum_det_alt (Hdet : DiffSumDet):
   forall t1 t2 w z,
   Walk2 HasDiff t1 t2 w ->
   DiffSum w z ->
@@ -285,7 +285,7 @@ Proof.
     apply diff_sum_pair.
     assumption.
   }
-  apply diff_sum_det with (t1:=t1) (t2:=t2) (w1:=w) (w2:=(t1,t2) :: nil); repeat auto.
+  apply Hdet with (t1:=t1) (t2:=t2) (w1:=w) (w2:=(t1,t2) :: nil); repeat auto.
 Qed.
 
 End DIFF_SUM.
