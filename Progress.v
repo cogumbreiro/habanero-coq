@@ -118,14 +118,6 @@ Variable diff_fun :
   pm_diff pm t1 t2 z' ->
   z = z'.
 
-(*
-Variable pm_diff_trans:
-  forall t1 t2 t3 z12 z23 z13,
-  pm_diff pm t1 t2 z12 ->
-  pm_diff pm t2 t3 z23 ->
-  pm_diff pm t1 t3 z13 ->
-  (z12 + z23 = z13) % Z.
-*)
 (* TODO: prove this *)
 Lemma Smallest_to_WaitPhase :
   forall t t' v v' p ph n n',

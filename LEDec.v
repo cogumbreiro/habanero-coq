@@ -358,26 +358,6 @@ Proof.
     + inversion H0.
 Qed.
 
-Section PM_DIFF_FUNC.
-
-Variable t1:tid.
-Variable t2:tid.
-
-Definition all_ph_diffs : phasermap :=
-  Map_PHID_Extra.filter
-    (fun (p:phid) (ph:phaser) =>
-      match (get_ph_diff ph t1 t2) with
-        | Some _ => true
-        | _ => false
-      end)
-  pm.
-
-Lemma pm_diff_dec:
-  { exists z, pm_diff pm t1 t2 z} + {~  exists z, pm_diff pm t1 t2 z}.
-Proof.
-Admitted.
-End PM_DIFF_FUNC.
-
 Lemma LE_dec:
   forall t t',
   {LE pm t t'} + {~ LE pm t t'}.
