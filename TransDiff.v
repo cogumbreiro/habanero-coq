@@ -200,6 +200,66 @@ Definition HasDiff e := exists z, diff e z.
 
 Require Import Graphs.Core.
 
+Lemma has_diff_to_diff_sum:
+  forall w x y,
+  Walk2 HasDiff x y w ->
+  exists z : Z, DiffSum w z.
+Proof.
+  intros w.
+  induction w.
+  - intros. apply walk2_nil_inv in H.
+    intuition.
+  - intros.
+    destruct w.
+    + apply walk2_inv_pair in H.
+      destruct H as (?, Hd).
+      subst.
+      unfold HasDiff in *.
+      destruct Hd as (z, Hd).
+      exists z.
+      apply diff_sum_pair.
+      auto.
+    + apply walk2_inv in H.
+      destruct H as (v1, (?, (?, ?))).
+      destruct p as (v1', v2).
+      assert (v1' = v1). {
+        apply walk2_inv_cons in H1.
+        destruct H1 as (?, (Heq, ?)).
+        inversion Heq.
+        reflexivity.
+      }
+      subst.
+      apply IHw in H1.
+      subst.
+      destruct H1 as (s, Hs).
+      unfold HasDiff in *.
+      destruct H0 as (z, Hd).
+      exists (z + s).
+      apply diff_sum_cons; repeat auto.
+Qed.
+
+Lemma neg_diff_to_has_diff:
+  forall e,
+  NegDiff e ->
+  HasDiff e.
+Proof.
+  intros.
+  unfold NegDiff in *.
+  unfold HasDiff in *.
+  destruct H as (z, (H,_)).
+  exists z; auto.
+Qed.
+
+Lemma walk2_neg_diff_to_has_diff:
+  forall t1 t2 w,
+  Walk2 NegDiff t1 t2 w ->
+  Walk2 HasDiff t1 t2 w.
+Proof.
+  intros.
+  apply walk2_impl with (E:=NegDiff); repeat auto.
+  apply neg_diff_to_has_diff.
+Qed.
+
 Variable diff_sum_det:
   forall t1 t2 w1 z1 w2 z2,
   DiffSum w1 z1 ->
