@@ -407,7 +407,7 @@ Variable diff_sum_det:
   z1 = z2.
 
 Variable pm_diff_fun:
-  forall pm t1 t2 z z',
+  forall t1 t2 z z',
   pm_diff pm t1 t2 z ->
   pm_diff pm t1 t2 z' ->
   z = z'.
@@ -420,16 +420,33 @@ Proof.
   unfold diff, get_diff.
   destruct e.
   simpl.
-  rewrite (get_pm_diff_spec pm t t0 (pm_diff_fun pm)).
+  rewrite (get_pm_diff_spec pm t t0 pm_diff_fun).
   intuition.
 Qed.
 
 Lemma LE_to_walk:
   forall t1 t2,
   LE pm t1 t2 ->
-  exists w z,
-  DiffSum diff w z /\ Walk2 (HasDiff diff) t1 t2 w /\ List.Forall (NegDiff diff) w.
-Admitted.
+  exists w,
+  Walk2 (HasDiff diff) t1 t2 w /\ List.Forall (NegDiff diff) w /\
+  exists z, DiffSum diff w z.
+Proof.
+  intros.
+  unfold LE in *.
+  rewrite clos_trans_iff_walk2 with (Edge:=NegDiff diff) in H.
+  - destruct H as (w, H).
+    exists w.
+    intuition.
+    + apply walk2_neg_diff_to_has_diff; auto.
+    + apply walk2_to_forall with (x:=t1) (y:=t2); repeat auto.
+    + apply walk2_neg_diff_to_has_diff in H; auto.
+      apply has_diff_to_diff_sum with (x:=t1) (y:=t2); repeat auto.
+  - intros.
+    unfold NegDiff.
+    unfold diff.
+    simpl.
+    apply wp_le_spec.
+Qed.
 
 Let pm_diff_sum_det := diff_sum_det_alt tid diff diff_sum_det.
 
@@ -442,7 +459,7 @@ Lemma LE_to_pm_diff:
 Proof.
   intros.
   apply LE_to_walk in H.
-  destruct H as (w, (z', (Hd, (Hw, Hn)))).
+  destruct H as (w, (Hd, (Hw, (z', Hn)))).
   assert (z' = z). {
     apply pm_diff_sum_det with (t1:=t1) (t2:=t2) (w:=w); repeat auto.
   }
