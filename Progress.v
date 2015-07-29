@@ -107,13 +107,25 @@ Proof.
   - assumption. 
 Qed.
 
+Require Import TransDiff.
+
+Let diff (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).
+
+Variable diff_det : DiffSumDet tid diff.
+Variable diff_fun : 
+  forall t1 t2 z z',
+  pm_diff pm t1 t2 z ->
+  pm_diff pm t1 t2 z' ->
+  z = z'.
+
+(*
 Variable pm_diff_trans:
   forall t1 t2 t3 z12 z23 z13,
   pm_diff pm t1 t2 z12 ->
   pm_diff pm t2 t3 z23 ->
   pm_diff pm t1 t3 z13 ->
   (z12 + z23 = z13) % Z.
-
+*)
 (* TODO: prove this *)
 Lemma Smallest_to_WaitPhase :
   forall t t' v v' p ph n n',
@@ -152,7 +164,9 @@ Proof.
     assert (Hd: pm_diff pm t t' z). {
       apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
     }
-    assert (Hel := LE_to_pm_diff _ _ _ Hle _ Hd).
+    assert ((z <= 0) % Z). {
+      apply LE_to_pm_diff with (pm:=pm) (t1:=t) (t2:=t'); repeat auto.
+    }
     intuition.
 Qed.
 
