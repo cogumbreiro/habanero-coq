@@ -7,6 +7,18 @@ Require Import PhaseDiff.
 
 Open Local Scope Z.
 
+(**
+
+The wait-phase difference [z] is defined for a pair of tasks t1 t2 such
+that there exists a phaser ph for which its wait phase difference is [z], [WP(ph,t1) - WP(ph,t2) = z].
+
+A well-formed phaser map respects a few properties:
+ * for any task [t] registered in at least a phaser, we have that [t - t = 0]
+ * for any two tasks [t1] and [t2], the wait-phase difference for any phaser is the same
+   (so the wait-phase difference is a function).
+
+*)
+
 Section DIFF_SUM.
 
 Variable A : Type.
@@ -30,6 +42,14 @@ Proof.
   trivial.
 Qed.
 
+(**
+We say that the sequence of tasks [t1 t2 ... tn] has a sum of [s].
+
+such that there exists a wait phase difference between any task [t_i] and
+task [t_{i + 1}], where [1 <= i <= n] and the sum of all wait-phase
+differences is [s].
+
+*)
 Inductive DiffSum : list edge -> Z -> Prop :=
   | diff_sum_nil:
     DiffSum nil 0

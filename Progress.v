@@ -118,7 +118,6 @@ Variable diff_fun :
   pm_diff pm t1 t2 z' ->
   z = z'.
 
-(* TODO: prove this *)
 Lemma Smallest_to_WaitPhase :
   forall t t' v v' p ph n n',
   Smallest t tids ->
@@ -223,6 +222,14 @@ Proof.
     assumption.
 Qed.
 
+(**
+The phaser map must be well-formed, that is:
+  1) the transitive phase difference must be deterministic: any two sums of phase differences that start
+     and end in the same tasks, must yield the same result. 
+  2) wait-phase <= signal-phase
+
+Since, a Tasks register with SW have signalled (signal-phase = wait-phase + 1)
+*)
 Theorem has_unblocked:
   tids <> nil ->
   exists t, In t tids /\
@@ -245,5 +252,4 @@ Proof.
   apply smallest_to_sync with (p:=p) ; repeat auto.
 Qed.
 End HAS_SMALLEST.
-
 
