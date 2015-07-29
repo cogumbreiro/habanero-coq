@@ -583,6 +583,22 @@ Inductive wp_le : tid -> tid -> Prop :=
     (z <= 0 ) % Z ->
     wp_le t t'.
 
+Lemma wp_le_spec:
+  forall t t',
+  wp_le t t' <-> (exists z : Z, pm_diff pm t t' z /\ (z <= 0)%Z).
+Proof.
+  intros.
+  split.
+  + intros.
+    inversion H.
+    subst.
+    exists z.
+    intuition.
+  + intros.
+    destruct H as (z, (Hd, Hle)).
+    apply wp_le_def with (z:=z); repeat auto.
+Qed.
+
 Lemma wp_le_def_2:
   forall p ph t t',
   Map_PHID.MapsTo p ph pm ->
