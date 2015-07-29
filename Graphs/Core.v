@@ -1021,12 +1021,19 @@ Section CLOS_TRANS.
 
 Require Import Coq.Relations.Relations.
 
+Variable A:Type.
+Variable Edge: (A * A) % type -> Prop.
+Variable R: A -> A -> Prop.
+Variable R_to_Edge:
+  forall x y,
+  R x y <-> Edge (x, y).
+
 Lemma walk2_to_clos_trans:
-  forall {A:Type} Edge w (v1 vn:A),
+  forall w v1 vn,
   Walk2 Edge v1 vn w ->
-  clos_trans A (fun (a b:A) => Edge (a, b)) v1 vn.
+  clos_trans A R v1 vn.
 Proof.
-  intros ? ? w.
+  intros w.
   induction w.
   - intros.
     apply walk2_nil_inv in H.
@@ -1035,22 +1042,25 @@ Proof.
     destruct w.
     + apply walk2_inv_pair in H.
       destruct H.
+      rewrite <- R_to_Edge in *.
       apply t_step; auto.
     + apply walk2_inv in H.
       destruct H as (v2, (Heq, (He,Hw))).
+      rewrite <- R_to_Edge in *.
       apply t_trans with (y:=v2).
       * apply t_step; repeat auto.
       * apply IHw; assumption.
 Qed.
 
 Lemma clos_trans_to_walk2:
-  forall {A:Type} Edge (v1 vn:A),
-  clos_trans A (fun (a b:A) => Edge (a, b)) v1 vn ->
+  forall v1 vn,
+  clos_trans A R v1 vn ->
   exists w, Walk2 Edge v1 vn w.
 Proof.
   intros.
   induction H.
   - exists ((x, y) :: nil).
+    rewrite R_to_Edge in *.
     apply walk2_nil.
     assumption.
   - destruct IHclos_trans1 as (w1, Hw1).
@@ -1060,9 +1070,8 @@ Proof.
 Qed.
 
 Lemma clos_trans_iff_walk2:
-  forall {A:Type} Edge (v1 vn:A),
-  clos_trans A (fun (a b:A) => Edge (a, b)) v1 vn <->
-  exists w, Walk2 Edge v1 vn w.
+  forall v1 vn,
+  clos_trans A R v1 vn <-> exists w, Walk2 Edge v1 vn w.
 Proof.
   intros.
   split.
