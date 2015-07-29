@@ -843,6 +843,17 @@ Proof.
       apply IHw1 with (y:=y); repeat auto.
 Qed.
 
+Lemma walk2_to_forall:
+  forall x y w,
+  Walk2 x y w ->
+  List.Forall Edge w.
+Proof.
+  intros.
+  inversion H.
+  apply walk_to_forall; 
+  auto.
+Qed.
+
 End EDGE.
 
 End Walk.
