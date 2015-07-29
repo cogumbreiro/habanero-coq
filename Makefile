@@ -13,6 +13,7 @@ gen-tex:
 	$(MAKE) -f Makefile.coq latex
 
 clean:
+	rm -f *.vo *.v.d *.glob
 	rm -f */*.vo */*.v.d */*.glob */*~ */.#* Makefile.coq
 	rm -f */*/*.vo */*/*.v.d */*/*.glob
 
