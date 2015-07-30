@@ -1,9 +1,9 @@
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
 
-Require Import Vars.
-Require Import Lang.
-Require Import PhaseDiff.
+Require Import HJ.Vars.
+Require Import HJ.Lang.
+Require Import HJ.PhaseDiff.
 
 Open Local Scope Z.
 
@@ -218,7 +218,7 @@ Qed.
 
 Definition HasDiff e := exists z, diff e z.
 
-Require Import Graphs.Core.
+Require Import Aniceto.Graphs.Core.
 
 Lemma has_diff_to_diff_sum:
   forall w x y,

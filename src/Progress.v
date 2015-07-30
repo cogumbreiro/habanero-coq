@@ -1,11 +1,11 @@
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
 
-Require Import Vars.
-Require Import Lang.
-Require Import PhaseDiff.
-Require Import LEDec.
-Require Rel.
+Require Import HJ.Vars.
+Require Import HJ.Lang.
+Require Import HJ.PhaseDiff.
+Require Import HJ.LEDec.
+Require HJ.Rel.
 
 Section HAS_SMALLEST.
 Variable pm: phasermap.
@@ -104,7 +104,7 @@ Proof.
   apply Hx in Hin'; clear Hx.
   destruct Hin' as [(?,?)|?].
   - destruct (LE_total _ _ _ _ _ H0 H1 H2); repeat contradiction. (* absurd *)
-  - assumption. 
+  - assumption.
 Qed.
 
 Require Import TransDiff.
@@ -112,7 +112,7 @@ Require Import TransDiff.
 Let diff (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).
 
 Variable diff_det : DiffSumDet tid diff.
-Variable diff_fun : 
+Variable diff_fun :
   forall t1 t2 z z',
   pm_diff pm t1 t2 z ->
   pm_diff pm t1 t2 z' ->
@@ -175,7 +175,7 @@ Lemma smallest_to_sync:
 Proof.
   intros.
   remember (Map_TID.find t ph).
-  symmetry in Heqo. 
+  symmetry in Heqo.
   destruct o as [v|].
   * rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo.
     destruct (wait_cap_or_sigonly v).
@@ -225,7 +225,7 @@ Qed.
 (**
 The phaser map must be well-formed, that is:
   1) the transitive phase difference must be deterministic: any two sums of phase differences that start
-     and end in the same tasks, must yield the same result. 
+     and end in the same tasks, must yield the same result.
   2) wait-phase <= signal-phase
 
 Since, a Tasks register with SW have signalled (signal-phase = wait-phase + 1)
@@ -252,4 +252,3 @@ Proof.
   apply smallest_to_sync with (p:=p) ; repeat auto.
 Qed.
 End HAS_SMALLEST.
-

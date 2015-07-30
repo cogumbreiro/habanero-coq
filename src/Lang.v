@@ -1,6 +1,6 @@
-Require Import Vars.
 Require Import Coq.Arith.Peano_dec.
 Require Import Coq.Lists.List.
+Require Import HJ.Vars.
 
 Inductive taskview : Set:=
   | SW : nat -> bool -> taskview
@@ -97,16 +97,16 @@ Proof.
     inversion H.
 Qed.
 
-Definition signal (v:taskview) := 
+Definition signal (v:taskview) :=
   match v with
     | SW s w => SW s true
     | SO s w => SO (S s) w
     | WO w => WO w
   end.
 
-Definition wait (v:taskview) := 
+Definition wait (v:taskview) :=
   match v with
-    | SW w b => 
+    | SW w b =>
       match b with
         | true => SW (S w) false
         | false => SW w b

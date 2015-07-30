@@ -1,12 +1,12 @@
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Lists.List.
 
-Require Import Vars.
-Require Import Lang.
-Require Import PhaseDiff.
-Require Import PairUtil.
+Require Import Aniceto.Pair.
 
-Require TransClosure.
+Require Import HJ.Vars.
+Require Import HJ.Lang.
+Require Import HJ.PhaseDiff.
+Require HJ.TransClosure.
 
 Section LE_DEC.
 Variable pm:phasermap.
@@ -75,9 +75,8 @@ Proof.
     contradiction Hmt.
 Qed.
 
-Require Import SigUtil.
-
 Section GET_DIFF.
+Require Import Aniceto.Sig.
 Variable ph: phaser.
 Variable t1: tid.
 Variable t2: tid.
@@ -114,7 +113,7 @@ Defined.
 End GET_DIFF.
 
 Lemma ph_le_dec:
-  forall ph t t', 
+  forall ph t t',
   { ph_le ph t t' } + { ~ ph_le ph t t' }.
 Proof.
   intros.
@@ -211,7 +210,7 @@ Lemma ph_tids_spec:
 Proof.
   intros.
   unfold ph_tids in *.
-  rewrite Map_TID_Extra.keys_spec; 
+  rewrite Map_TID_Extra.keys_spec;
   repeat (intros; intuition).
 Qed.
 
@@ -371,8 +370,9 @@ Qed.
 End LE_DEC.
 
 Section LE_PM_DIFF.
-Require Import TransDiff.
-Require Import Graphs.Core.
+Require Import Aniceto.Graphs.Core.
+Require Import HJ.TransDiff.
+
 Variable pm:phasermap.
 Notation t_edge := (tid * tid) % type.
 Let diff (e:t_edge) : Z -> Prop := pm_diff pm (fst e) (snd e).

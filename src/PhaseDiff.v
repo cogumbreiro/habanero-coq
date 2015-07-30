@@ -1,11 +1,11 @@
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Relations.Relations.
 Require Import Coq.Lists.List.
-Require Import Vars.
-Require Import ListUtil.
-Require Import MapUtil.
-Require Import Lang.
-Require Import ListSetUtil.
+Require Import Aniceto.List.
+Require Import Aniceto.Map.
+Require Import Aniceto.ListSet.
+Require Import HJ.Vars.
+Require Import HJ.Lang.
 
 Definition ph_diff (ph:phaser) (t1:tid) (t2:tid) (z:Z)
   := exists v1, Map_TID.MapsTo t1 v1 ph /\
@@ -34,9 +34,9 @@ Proof.
   intuition.
 Qed.
 
-Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z := 
+Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z :=
   match Map_TID.find t1 ph with
-    | Some v1 => 
+    | Some v1 =>
       match Map_TID.find t2 ph with
         | Some v2 =>
           Some ((Z_of_nat (wait_phase v1)) - (Z_of_nat (wait_phase v2)))%Z
@@ -146,7 +146,7 @@ Proof.
       assumption.
     + trivial.
 Qed.
-        
+
 Lemma get_diff_none:
   forall ph t t',
   get_ph_diff ph t t' = None ->
@@ -322,7 +322,7 @@ Inductive ph_le_result :=
   | ph_le_result_ok_r : {z:Z | ph_diff ph t2 t1 z /\ (z <= 0) % Z } -> ph_le_result
   | ph_le_fail : {_:unit | ~ Map_TID.In t1 ph \/ ~ Map_TID.In t2 ph } -> ph_le_result.
 
-Program Definition get_ph_le : ph_le_result := 
+Program Definition get_ph_le : ph_le_result :=
   match get_ph_diff ph t1 t2 with
     | Some z =>
       if ZArith_dec.Z_le_dec z 0%Z then
