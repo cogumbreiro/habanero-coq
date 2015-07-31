@@ -161,11 +161,27 @@ Proof.
     intuition.
 Qed.
 
-(* XXX: move this into a proposition *)
-Variable OnlySW :
-  forall (ph:phaser) (t:tid) (v:taskview),
+
+
+Definition Valid (v:taskview) :=
+  match v.(mode) with
+    | SIGNAL_ONLY => v.(wait_phase) <= v.(signal_phase)
+    | _ => v.(wait_phase) = v.(signal_phase) \/ v.(wait_phase) = v.(signal_phase) + 1
+  end.
+
+Variable AllValid :
+  forall p ph,
+  Map_PHID.MapsTo p ph pm ->
+  forall t v,
   Map_TID.MapsTo t v ph ->
-  exists n, v = SW n true \/ v = WO n \/ exists w, (v = SO n w /\ w < n).
+  Valid v.
+
+Variable AllSignalled :
+  forall p ph,
+  Map_PHID.MapsTo p ph pm ->
+  forall t v,
+  Map_TID.MapsTo t v ph ->
+  WaitCap v -> v.(wait_phase) = v.(signal_phase) + 1.
 
 Lemma smallest_to_sync:
   forall t p ph,

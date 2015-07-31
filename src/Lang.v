@@ -2,61 +2,45 @@ Require Import Coq.Arith.Peano_dec.
 Require Import Coq.Lists.List.
 Require Import HJ.Vars.
 
-Inductive taskview : Set:=
-  | SW : nat -> bool -> taskview
-  | SO : nat -> nat -> taskview
-  | WO : nat -> taskview.
+Inductive regmode : Set:=
+  | SIGNAL_ONLY : regmode
+  | WAIT_ONLY : regmode
+  | SIGNAL_WAIT : regmode.
+
+
+Inductive r_le : regmode -> regmode -> Prop :=
+  | r_le_so:
+    r_le SIGNAL_ONLY SIGNAL_ONLY
+  | r_le_wo:
+    r_le WAIT_ONLY WAIT_ONLY
+  | r_le_sw:
+    forall m,
+    r_le m SIGNAL_WAIT.
+
+Record taskview := TV {
+  signal_phase: nat;
+  wait_phase: nat;
+  mode: regmode
+}.
 
 Inductive SignalPhase: taskview -> nat -> Prop :=
-  | signal_phase_sw_on:
-    forall w,
-    SignalPhase (SW w true) (S w)
-  | signal_phase_sw_off:
-    forall w,
-    SignalPhase (SW w false) w
-  | signal_phase_so:
-    forall s w,
-    SignalPhase (SO s w) s.
+  | signal_phase_tv:
+    forall v,
+    SignalPhase v (signal_phase v).
 
 Inductive WaitPhase : taskview -> nat -> Prop :=
-  | wait_phase_sw:
-    forall w b,
-    WaitPhase (SW w b) w
-  | wait_phase_wo:
-    forall w,
-    WaitPhase (WO w) w
-  | wait_phase_so:
-    forall s w,
-    WaitPhase (SO s w) w.
+  | wait_phase_tv:
+    forall v,
+    WaitPhase v (wait_phase v).
 
-Definition signal_phase (v:taskview) :=
-  match v with
-    | SW w b => if b then (Some (S w)) else (Some w)
-    | WO w => None
-    | SO s _ => Some s
-  end.
-
-Definition wait_phase (v:taskview) :=
-  match v with
-    | SW w _ => w
-    | WO w => w
-    | SO _ w => w
-  end.
 
 Lemma get_wait_phase:
   forall (v:taskview),
   exists n, (WaitPhase v n).
 Proof.
   intros.
-  destruct v.
-  - (* SW *)
-    exists n.
-    apply wait_phase_sw.
-  - (* SO *)
-    exists n0; apply wait_phase_so.
-  - (* WO *)
-    exists n.
-    apply wait_phase_wo.
+  exists (v.(wait_phase)).
+  apply wait_phase_tv.
 Qed.
 
 Lemma wait_phase_spec_1:
@@ -64,10 +48,7 @@ Lemma wait_phase_spec_1:
   WaitPhase v (wait_phase v).
 Proof.
   intros.
-  destruct v.
-  - apply wait_phase_sw.
-  - apply wait_phase_so.
-  - apply wait_phase_wo.
+  apply wait_phase_tv.
 Qed.
 
 Lemma wait_phase_spec_2:
@@ -76,56 +57,33 @@ Lemma wait_phase_spec_2:
   n = wait_phase v.
 Proof.
   intros.
-  destruct v;
-  repeat (simpl; inversion H; auto).
+  inversion H.
+  auto.
 Qed.
 
 Lemma signal_phase_spec_1:
   forall v s,
-  signal_phase v = Some s ->
+  signal_phase v = s ->
   SignalPhase v s.
 Proof.
   intros.
-  destruct v.
-  - simpl in *.
-    destruct b.
-    + inversion H; apply signal_phase_sw_on.
-    + inversion H; apply signal_phase_sw_off.
-  - simpl in *.
-    inversion H; apply signal_phase_so.
-  - simpl in H.
-    inversion H.
+  subst.
+  apply signal_phase_tv.
 Qed.
 
+Let inc_signal (v:taskview) := TV (v.(signal_phase) + 1) v.(wait_phase) v.(mode).
+
+Let inc_wait (v:taskview) := TV v.(signal_phase) (v.(wait_phase) + 1) v.(mode).
+
+Let set_mode (v:taskview) (m:regmode) := TV v.(signal_phase) v.(wait_phase) m.
+
 Definition signal (v:taskview) :=
-  match v with
-    | SW s w => SW s true
-    | SO s w => SO (S s) w
-    | WO w => WO w
+  match v.(mode) with
+    | SIGNAL_ONLY => v
+    | _ => if eq_nat_dec v.(signal_phase) v.(wait_phase) then (inc_signal v) else v
   end.
 
-Definition wait (v:taskview) :=
-  match v with
-    | SW w b =>
-      match b with
-        | true => SW (S w) false
-        | false => SW w b
-      end
-    | SO s w => SO s (S w)
-    | WO w => WO (S w)
-  end.
-
-Inductive regmode : Set:=
-  | SIGNAL_ONLY : regmode
-  | WAIT_ONLY : regmode
-  | SIGNAL_WAIT : regmode.
-
-Definition mode (v:taskview) : regmode :=
-  match v with
-    | SW _ _ => SIGNAL_WAIT
-    | SO _ _ => SIGNAL_ONLY
-    | WO _ => WAIT_ONLY
-  end.
+Definition wait (v:taskview) := inc_wait v.
 
 Definition WaitCap (v:taskview) :=
   mode v = SIGNAL_WAIT \/ mode v = WAIT_ONLY.
@@ -151,29 +109,23 @@ Proof.
   intros.
   destruct (wait_cap_dec v).
   - intuition.
-  - right.
+  - destruct v.
+    right.
+    simpl in *.
     unfold WaitCap in *.
     intuition.
-    remember (mode v).
-    destruct v; repeat intuition.
+    simpl in *.
+    destruct mode0; repeat (intuition).
 Qed.
 
 Definition SignalCap (v:taskview) :=
   mode v = SIGNAL_WAIT \/ mode v = SIGNAL_ONLY.
 
 Inductive Copy : taskview -> regmode -> taskview -> Prop :=
-  | copy_sw:
-    forall s b,
-    Copy (SW s b) SIGNAL_WAIT (SW s b)
-  | copy_so:
-    forall v s w,
-    SignalPhase v s ->
-    WaitPhase v w ->
-    Copy v SIGNAL_ONLY (SO s w)
-  | copy_wo:
-    forall v w,
-    WaitPhase v w ->
-    Copy v WAIT_ONLY (WO w).
+  | copy_def:
+    forall v m,
+    r_le m v.(mode) -> (* m <= v.(mode) *)
+    Copy v m (set_mode v m).
 
 Lemma copy_correct:
   forall v r v',
@@ -187,10 +139,9 @@ Qed.
 Definition phaser := Map_TID.t taskview.
 
 Definition Await (ph:phaser) (n:nat) :=
-  forall t v s,
+  forall t v,
   Map_TID.MapsTo t v ph ->
-  SignalPhase v s ->
-  s >= n.
+  v.(signal_phase) >= n.
 
 Inductive Sync : phaser -> nat -> Prop :=
   | sync_so:
@@ -199,11 +150,10 @@ Inductive Sync : phaser -> nat -> Prop :=
     mode v = SIGNAL_ONLY ->
     Sync ph t
   | sync_wait:
-    forall ph t v w,
+    forall ph t v,
     Map_TID.MapsTo t v ph ->
-    WaitPhase v w ->
     WaitCap v ->
-    Await ph (S w) ->
+    Await ph (v.(wait_phase) + 1) ->
     Sync ph t
   | sync_skip:
     forall t ph,
@@ -245,7 +195,7 @@ Inductive Async : phasermap -> tid -> list phased -> tid -> phasermap -> Prop :=
     forall m t t',
     Async m t nil t' m.
 
-Definition newPhaser (t:tid) := Map_TID.add t (SW 0 false) (Map_TID.empty taskview).
+Definition newPhaser (t:tid) := Map_TID.add t (TV 0 0 SIGNAL_WAIT) (Map_TID.empty taskview).
 
 Definition TaskIn (t:tid) (p:phid) (pm:phasermap) :=
   exists ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
