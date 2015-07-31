@@ -7,32 +7,14 @@ Require Import Aniceto.ListSet.
 Require Import HJ.Vars.
 Require Import HJ.Lang.
 
-Definition ph_diff (ph:phaser) (t1:tid) (t2:tid) (z:Z)
-  := exists v1, Map_TID.MapsTo t1 v1 ph /\
-     exists v2, Map_TID.MapsTo t2 v2 ph /\
-     exists n1, WaitPhase v1 n1 /\
-     exists n2, WaitPhase v2 n2 /\
-     ((Z_of_nat n1) - (Z_of_nat n2))%Z = z.
+Open Local Scope Z.
 
-Lemma ph_diff_def:
-  forall (ph:phaser) (t1 t2:tid) (v1 v2:taskview) (n1 n2:nat),
-  Map_TID.MapsTo t1 v1 ph ->
-  Map_TID.MapsTo t2 v2 ph ->
-  WaitPhase v1 n1 ->
-  WaitPhase v2 n2 ->
-  ph_diff ph t1 t2 ((Z_of_nat n1) - (Z_of_nat n2))%Z.
-Proof.
-  intros.
-  unfold ph_diff.
-  exists v1.
-  intuition.
-  exists v2.
-  intuition.
-  exists n1.
-  intuition.
-  exists n2.
-  intuition.
-Qed.
+Inductive ph_diff : phaser -> tid -> tid -> Z -> Prop :=
+  ph_diff_def:
+    forall t1 t2 v1 v2 ph,
+    Map_TID.MapsTo t1 v1 ph ->
+    Map_TID.MapsTo t2 v2 ph ->
+    ph_diff ph t1 t2 ((Z_of_nat (wait_phase v1)) - (Z_of_nat (wait_phase v2)))%Z.
 
 Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z :=
   match Map_TID.find t1 ph with
@@ -52,27 +34,16 @@ Lemma get_ph_diff_spec_1:
 Proof.
   intros.
   unfold get_ph_diff in *.
-  unfold ph_diff.
   remember (Map_TID.find t1 ph).
   symmetry in Heqo.
   destruct o.
   - rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo.
-    exists t.
-    intuition.
     remember (Map_TID.find t2 ph).
     symmetry in Heqo0.
     destruct o.
     + rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo0.
-      exists t0.
-      intuition.
-      exists (wait_phase t).
-      split.
-      { apply wait_phase_spec_1. }
-      exists (wait_phase t0).
-      split.
-      { apply wait_phase_spec_1. }
       inversion H.
-      auto.
+      auto using ph_diff_def.
     + inversion H.
   - inversion H.
 Qed.
@@ -83,17 +54,13 @@ Lemma get_ph_diff_spec_2:
   get_ph_diff ph t1 t2 = Some z.
 Proof.
   intros.
-  unfold ph_diff in H.
+  inversion H; subst; clear H.
   unfold get_ph_diff.
-  destruct H as (v1, (Hmt1, (v2, (Hmt2, (n1, (Hw1, (n2, (Hw2, Hdiff)))))))).
-  apply Map_TID_Facts.find_mapsto_iff in Hmt1.
-  apply Map_TID_Facts.find_mapsto_iff in Hmt2.
-  rewrite Hmt1.
-  rewrite Hmt2.
-  apply wait_phase_spec_2 in Hw1.
-  apply wait_phase_spec_2 in Hw2.
-  subst.
-  trivial.
+  apply Map_TID_Facts.find_mapsto_iff in H0.
+  apply Map_TID_Facts.find_mapsto_iff in H1.
+  rewrite H0.
+  rewrite H1.
+  auto.
 Qed.
 
 Lemma get_ph_diff_spec:
@@ -200,16 +167,15 @@ Lemma ph_diff_refl:
   ph_diff ph t t 0.
 Proof.
   intros.
-  unfold ph_diff.
   rewrite wtaskin_spec in H.
   apply Map_TID_Extra.in_to_mapsto in H.
   destruct H as (v, H).
-  exists v.
-  intuition.
-  exists v.
-  intuition.
-  destruct (get_wait_phase v) as (n,?).
-  repeat (exists n; intuition).
+  assert (ph_diff ph t t (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v))). {
+    auto using ph_diff_def.
+  }
+  assert ((Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v)) = 0). { intuition. }
+  rewrite H1 in *.
+  assumption.
 Qed.
 
 Lemma ph_diff_symm:
@@ -218,13 +184,13 @@ Lemma ph_diff_symm:
   ph_diff ph t' t (-z).
 Proof.
   intros.
-  unfold ph_diff in *.
-  destruct H as (v1, (Hmt1, (v2, (Hmt2,
-    (n1, (Hw1, (n2, (Hw2, Hdiff)))))))).
-  exists v2; intuition.
-  exists v1; intuition.
-  exists n2; intuition.
-  exists n1; intuition.
+  inversion H; subst; clear H.
+  remember (Z.of_nat (wait_phase v1)) as z1.
+  remember (Z.of_nat (wait_phase v2)) as z2.
+  assert (- (z1 - z2) = z2 - z1). { intuition. }
+  rewrite H.
+  subst.
+  auto using ph_diff_def.
 Qed.
 
 Lemma ph_diff_inv:
@@ -233,9 +199,7 @@ Lemma ph_diff_inv:
   WTaskIn t ph /\ WTaskIn t' ph.
 Proof.
   intros.
-  unfold ph_diff in H.
-  destruct H as (v1, (Hmt1, (v2, (Hmt2,
-    (n1, (Hw1, (n2, (Hw2, Hdiff)))))))).
+  inversion H; subst; clear H.
   unfold WTaskIn in *.
   split.
   - exists v1.
@@ -283,23 +247,13 @@ Lemma ph_diff_total:
   exists z, ph_diff ph t t' z.
 Proof.
   intros.
-  unfold ph_diff.
   rewrite wtaskin_spec in *.
   apply Map_TID_Extra.in_to_mapsto in H.
   apply Map_TID_Extra.in_to_mapsto in H0.
   destruct H as (v, Hmt).
   destruct H0 as (v', Hmt').
-  destruct (get_wait_phase v) as (n1, Hw1).
-  destruct (get_wait_phase v') as (n2, Hw2).
-  exists (Z.of_nat n1 - Z.of_nat n2)%Z .
-  exists v.
-  intuition.
-  exists v'.
-  intuition.
-  exists n1.
-  intuition.
-  exists n2.
-  intuition.
+  exists (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v')).
+  auto using ph_diff_def.
 Qed.
 
 Definition tid_In (t:tid) (pm:phasermap) :=
@@ -361,8 +315,7 @@ Lemma ph_le_refl:
 Proof.
   intros.
   apply ph_le_def with (z:=0%Z).
-  apply ph_diff_refl.
-  assumption.
+  auto using ph_diff_refl.
   intuition.
 Qed.
 
@@ -373,8 +326,7 @@ Lemma ph_le_inv:
 Proof.
   intros.
   inversion H; subst.
-  apply ph_diff_inv with (z:=z).
-  assumption.
+  eauto using ph_diff_inv.
 Qed.
 
 Lemma ph_le_inv_in:
@@ -419,10 +371,10 @@ Proof.
   destruct p.
   - left.
     destruct s as (z, (Hdiff, Hle)).
-    apply ph_le_def with (z:=z); repeat auto.
+    eauto using ph_le_def.
   - right.
     destruct s as (z, (Hdiff, Hle)).
-    apply ph_le_def with (z:=z); repeat auto.
+    eauto using ph_le_def.
   - destruct s.
     assert (False). {
       unfold WTaskIn in *.
@@ -450,9 +402,7 @@ Lemma pm_diff_symm:
 Proof.
   intros.
   inversion H; subst; clear H.
-  apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
-  apply ph_diff_symm.
-  assumption.
+  eauto using pm_diff_def, ph_diff_symm.
 Qed.
 
 Variable t1: tid.
@@ -513,7 +463,7 @@ Proof.
   apply get_pm_diff_eq in Heql.
   destruct Heql as (?, _).
   apply get_ph_diff_spec in H.
-  apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+  eauto using pm_diff_def.
 Qed.
 
 Variable pm_diff_fun:
@@ -701,10 +651,7 @@ Lemma LE_inv:
 Proof.
   intros.
   unfold LE in H.
-  induction H.
-  - apply wp_le_inv in H.
-    intuition.
-  - intuition.
+  induction H; repeat (eauto using wp_le_inv; intuition).
 Qed.
 
 Lemma LE_trans:
@@ -714,9 +661,7 @@ Lemma LE_trans:
   LE t1 t3.
 Proof.
   intros.
-  apply t_trans with (y:=t2).
-  auto.
-  auto.
+  apply t_trans with (y:=t2); repeat auto.
 Qed.
 
 Lemma LE_total:
@@ -728,13 +673,7 @@ Lemma LE_total:
 Proof.
   intros.
   unfold LE.
-  destruct (wp_le_total _ _ _ _ H H0 H1).
-  - left.
-    apply t_step.
-    assumption.
-  - right.
-    apply t_step.
-    assumption.
+  destruct (wp_le_total _ _ _ _ H H0 H1); repeat (auto using t_step).
 Qed.
 
 End LE.

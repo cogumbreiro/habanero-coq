@@ -7,6 +7,8 @@ Require Import HJ.PhaseDiff.
 Require Import HJ.LEDec.
 Require HJ.Rel.
 
+Open Local Scope Z.
+
 Section HAS_SMALLEST.
 Variable pm: phasermap.
 Let IsA t := tid_In t pm.
@@ -119,14 +121,12 @@ Variable diff_fun :
   z = z'.
 
 Lemma Smallest_to_WaitPhase :
-  forall t t' v v' p ph n n',
+  forall t t' v v' p ph,
   Smallest t tids ->
   Map_PHID.MapsTo p ph pm ->
   Map_TID.MapsTo t v ph ->
   Map_TID.MapsTo t' v' ph ->
-  WaitPhase v n ->
-  WaitPhase v' n' ->
-  n <= n'.
+  (wait_phase v <= wait_phase v') % nat.
 Proof.
   intros.
   assert (Hin :  Map_TID.In t ph). {
@@ -140,10 +140,10 @@ Proof.
   assert (Hle : LE pm t t'). {
     apply Smallest_to_LE with (p:=p) (ph:=ph); repeat auto.
   }
-  remember ((Z.of_nat n) - (Z.of_nat n'))%Z as z.
+  remember ((Z.of_nat (wait_phase v)) - (Z.of_nat (wait_phase v'))) as z.
   assert (Hdiff : ph_diff ph t t' z). {
     subst.
-    apply ph_diff_def with (v1:=v) (v2:=v'); repeat auto.
+    auto using ph_diff_def.
   }
   assert (Hz: (z <= 0 \/ -z <= 0) % Z). {
     omega.
@@ -151,23 +151,17 @@ Proof.
   destruct Hz.
   - omega.
   - subst.
-    remember (Z.of_nat n - Z.of_nat n')%Z as z.
-    assert (Hd: pm_diff pm t t' z). {
-      apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
-    }
-    assert ((z <= 0) % Z). {
-      apply LE_to_pm_diff with (pm:=pm) (t1:=t) (t2:=t'); repeat auto.
-    }
+    remember (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v')) as z.
+    assert (Hd: pm_diff pm t t' z). { eauto using pm_diff_def. }
+    assert ((z <= 0) % Z). { eauto using LE_to_pm_diff. }
     intuition.
 Qed.
 
-
-
 Definition Valid (v:taskview) :=
   match v.(mode) with
-    | SIGNAL_ONLY => v.(wait_phase) <= v.(signal_phase)
+    | SIGNAL_ONLY => (wait_phase v) <= (signal_phase v)
     | _ => v.(wait_phase) = v.(signal_phase) \/ v.(wait_phase) + 1 = v.(signal_phase)
-  end.
+  end % nat.
 
 Variable AllValid :
   forall p ph,
@@ -175,6 +169,8 @@ Variable AllValid :
   forall t v,
   Map_TID.MapsTo t v ph ->
   Valid v.
+
+Open Local Scope nat.
 
 Lemma is_valid_inv:
   forall p ph t v,
@@ -207,30 +203,20 @@ Proof.
   destruct o as [v|].
   * rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo.
     destruct (wait_cap_or_sigonly v).
-    - destruct (get_wait_phase v) as (n, Hwp).
-      apply sync_wait with (v:=v); repeat intuition.
+    - apply sync_wait with (v:=v); repeat intuition.
       unfold Await.
       intros t' v' Hmt'.
-      assert (Hwp' : WaitPhase v' (wait_phase v')). {
-        apply wait_phase_spec_1.
-      }
       (* show that: n <= WP(v') *)
-      assert (Hle : n <= wait_phase v'). {
-        apply Smallest_to_WaitPhase with
-        (t:=t) (t':=t') (v:=v) (v':=v')
-        (p:=p) (ph:=ph); repeat auto.
+      assert (Hle : wait_phase v <= wait_phase v'). {
+        eauto using Smallest_to_WaitPhase.
       }
       assert (wait_phase v' < signal_phase v'). {
-        apply AllSignalled with (p:=p) (ph:=ph) (t:=t'); repeat auto.
-      }
-      assert (n = wait_phase v). {
-        apply wait_phase_spec_2; auto.
+        eauto using AllSignalled.
       }
       intuition.
-    - apply sync_so with (v:=v); repeat auto.
+    - eauto using sync_so.
   * rewrite <- Map_TID_Facts.not_find_in_iff in Heqo.
-    apply sync_skip.
-    assumption.
+    auto using sync_skip.
 Qed.
 
 (**
@@ -260,6 +246,6 @@ Proof.
   exists (mapi t wait pm).
   apply reduce_wait_all.
   intros.
-  apply smallest_to_sync with (p:=p) ; repeat auto.
+  eauto using smallest_to_sync.
 Qed.
 End HAS_SMALLEST.

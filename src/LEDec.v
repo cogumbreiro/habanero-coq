@@ -8,6 +8,8 @@ Require Import HJ.Lang.
 Require Import HJ.PhaseDiff.
 Require HJ.TransClosure.
 
+Open Local Scope Z.
+
 Section LE_DEC.
 Variable pm:phasermap.
 
@@ -44,7 +46,6 @@ Lemma ph_diff_dec:
   { exists z, ph_diff ph t t' z } + { ~ exists z, ph_diff ph t t' z }.
 Proof.
   intros.
-  unfold ph_diff.
   destruct (map_tid_in t ph).
   - destruct (map_tid_in t' ph).
     + apply Map_TID_Extra.in_to_mapsto in i.
@@ -52,27 +53,20 @@ Proof.
       left.
       destruct i as (v, Hmt).
       destruct i0 as (v', Hmt').
-      destruct (get_wait_phase v) as (w, Hw).
-      destruct (get_wait_phase v') as (w', Hw').
-      exists (Z.of_nat w - Z.of_nat w')%Z.
-      exists v.
-      intuition.
-      exists v'.
-      intuition.
-      exists w.
-      intuition.
-      exists w'.
-      intuition.
+      exists (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v')).
+      auto using ph_diff_def.
     + right.
       intuition.
-      destruct H as (z, (?, (?, (?, (Hmt, _))))).
-      apply Map_TID_Extra.mapsto_to_in in Hmt.
-      contradiction Hmt.
+      destruct H as (z, H).
+      inversion H.
+      apply Map_TID_Extra.mapsto_to_in in H1.
+      contradiction H1.
   - right.
     intuition.
-    destruct H as (?, (?, (Hmt, _))).
-    apply Map_TID_Extra.mapsto_to_in in Hmt.
-    contradiction Hmt.
+    destruct H as (?, H).
+    inversion H.
+    apply Map_TID_Extra.mapsto_to_in in H0.
+    contradiction H0.
 Qed.
 
 Section GET_DIFF.

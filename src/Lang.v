@@ -7,6 +7,7 @@ Inductive regmode : Set:=
   | WAIT_ONLY : regmode
   | SIGNAL_WAIT : regmode.
 
+(** Defines a <= relation between registration modes. *)
 
 Inductive r_le : regmode -> regmode -> Prop :=
   | r_le_so:
@@ -22,39 +23,6 @@ Record taskview := TV {
   wait_phase: nat;
   mode: regmode
 }.
-
-Inductive WaitPhase : taskview -> nat -> Prop :=
-  | wait_phase_tv:
-    forall v,
-    WaitPhase v (wait_phase v).
-
-
-Lemma get_wait_phase:
-  forall (v:taskview),
-  exists n, (WaitPhase v n).
-Proof.
-  intros.
-  exists (v.(wait_phase)).
-  apply wait_phase_tv.
-Qed.
-
-Lemma wait_phase_spec_1:
-  forall v,
-  WaitPhase v (wait_phase v).
-Proof.
-  intros.
-  apply wait_phase_tv.
-Qed.
-
-Lemma wait_phase_spec_2:
-  forall v n,
-  WaitPhase v n ->
-  n = wait_phase v.
-Proof.
-  intros.
-  inversion H.
-  auto.
-Qed.
 
 Let inc_signal (v:taskview) := TV (v.(signal_phase) + 1) v.(wait_phase) v.(mode).
 
