@@ -6,8 +6,19 @@ Require Import HJ.Lang.
 Require Import HJ.PhaseDiff.
 Require Import HJ.LEDec.
 Require HJ.Rel.
+Require Import TransDiff.
 
 Open Local Scope Z.
+
+Let diff (pm:phasermap) (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).
+
+(**
+  Our notion of a valid phaser map is such that
+  the transitive difference is a function, which means that
+  any [t1 - ... - t2] yields the the same difference [z].
+*)
+
+Definition Valid (pm:phasermap) := TransDiffFun tid (diff pm).
 
 Section HAS_SMALLEST.
 Variable pm: phasermap.
@@ -109,11 +120,15 @@ Proof.
   - assumption.
 Qed.
 
-Require Import TransDiff.
+Let diff := diff pm.
 
-Let diff (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).
+Variable check : Valid pm.
 
-Variable diff_det : TransDiffFun tid diff.
+Let diff_det : TransDiffFun tid diff.
+Proof.
+  unfold Valid in *.
+  intuition.
+Qed.
 
 Lemma Smallest_to_WaitPhase :
   forall t t' v v' p ph,
@@ -152,32 +167,13 @@ Proof.
     intuition.
 Qed.
 
-Definition Valid (v:taskview) :=
-  match v.(mode) with
-    | SIGNAL_ONLY => (wait_phase v) <= (signal_phase v)
-    | _ => v.(wait_phase) = v.(signal_phase) \/ v.(wait_phase) + 1 = v.(signal_phase)
-  end % nat.
-
-Variable AllValid :
-  forall p ph,
-  Map_PHID.MapsTo p ph pm ->
-  forall t v,
-  Map_TID.MapsTo t v ph ->
-  Valid v.
 
 Open Local Scope nat.
 
-Lemma is_valid_inv:
-  forall p ph t v,
-  Map_PHID.MapsTo p ph pm ->
-  Map_TID.MapsTo t v ph ->
-  Valid v ->
-  wait_phase v <= signal_phase v.
-Proof.
-  intros.
-  unfold Valid in *.
-  destruct (mode v); repeat intuition.
-Qed.
+(**
+  A crucial precondition to the wait-all working is that all tasks must have
+  performed a signal prior to waiting.
+*)
 
 Variable AllSignalled :
   forall p ph,
@@ -214,14 +210,6 @@ Proof.
     auto using sync_skip.
 Qed.
 
-(**
-The phaser map must be well-formed, that is:
-  1) the transitive phase difference must be deterministic: any two sums of phase differences that start
-     and end in the same tasks, must yield the same result.
-  2) wait-phase <= signal-phase
-
-Since, a Tasks register with SW have signalled (signal-phase = wait-phase + 1)
-*)
 Theorem has_unblocked:
   tids <> nil ->
   exists t, In t tids /\
