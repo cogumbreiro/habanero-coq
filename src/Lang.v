@@ -23,11 +23,6 @@ Record taskview := TV {
   mode: regmode
 }.
 
-Inductive SignalPhase: taskview -> nat -> Prop :=
-  | signal_phase_tv:
-    forall v,
-    SignalPhase v (signal_phase v).
-
 Inductive WaitPhase : taskview -> nat -> Prop :=
   | wait_phase_tv:
     forall v,
@@ -59,16 +54,6 @@ Proof.
   intros.
   inversion H.
   auto.
-Qed.
-
-Lemma signal_phase_spec_1:
-  forall v s,
-  signal_phase v = s ->
-  SignalPhase v s.
-Proof.
-  intros.
-  subst.
-  apply signal_phase_tv.
 Qed.
 
 Let inc_signal (v:taskview) := TV (v.(signal_phase) + 1) v.(wait_phase) v.(mode).
