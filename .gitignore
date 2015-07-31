@@ -2,4 +2,4 @@
 *.vo
 *.v.d
 *~
-/Makefile.coq
+/Makefile
