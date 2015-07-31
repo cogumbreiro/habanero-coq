@@ -275,29 +275,53 @@ Proof.
   eauto using walk2_impl, neg_diff_to_has_diff.
 Qed.
 
-Definition DiffSumDet :=
-  forall t1 t2 w1 z1 w2 z2,
-  DiffSum w1 z1 ->
-  DiffSum w2 z2 ->
-  Walk2 HasDiff t1 t2 w1 ->
-  Walk2 HasDiff t1 t2 w2 ->
-  z1 = z2.
+Inductive TransDiff: A -> A -> Z -> Prop :=
+  trans_diff_def:
+    forall t1 t2 w z,
+    DiffSum w z ->
+    Walk2 HasDiff t1 t2 w ->
+    TransDiff t1 t2 z.
 
-Corollary diff_sum_det_alt (Hdet : DiffSumDet):
-  forall t1 t2 w z,
-  Walk2 HasDiff t1 t2 w ->
-  DiffSum w z ->
-  forall z',
-  diff (t1, t2) z' ->
-  z = z'.
+Lemma diff_to_trans_diff:
+  forall t1 t2 z,
+  diff (t1, t2) z ->
+  TransDiff t1 t2 z.
 Proof.
   intros.
   assert (Hw : Walk2 HasDiff t1 t2 ((t1,t2) :: nil)). {
     apply walk2_nil; repeat auto.
-    unfold HasDiff; exists z'; auto.
+    unfold HasDiff; exists z; auto.
   }
-  assert (Hd : DiffSum ((t1, t2)::nil) z'). { auto using diff_sum_pair. }
+  assert (Hd : DiffSum ((t1, t2)::nil) z). { auto using diff_sum_pair. }
+  eauto using trans_diff_def.
+Qed.
+
+Definition TransDiffFun :=
+  forall t1 t2 z z',
+  TransDiff t1 t2 z ->
+  TransDiff t1 t2 z' ->
+  z' = z.
+
+Corollary trans_diff_fun_1 (Hdet : TransDiffFun):
+  forall t1 t2 z z',
+  TransDiff t1 t2 z ->
+  diff (t1, t2) z' ->
+  z' = z.
+Proof.
+  intros.
+  apply diff_to_trans_diff in H0.
   eauto using Hdet.
+Qed.
+
+Corollary trans_diff_fun_2 (Hdet : TransDiffFun):
+  forall t1 t2 z z',
+  diff (t1, t2) z ->
+  diff (t1, t2) z' ->
+  z' = z.
+Proof.
+  intros.
+  apply diff_to_trans_diff in H.
+  eauto using trans_diff_fun_1.
 Qed.
 
 End DIFF_SUM.

@@ -363,19 +363,18 @@ Notation t_edge := (tid * tid) % type.
 Let diff (e:t_edge) : Z -> Prop := pm_diff pm (fst e) (snd e).
 Let get_diff (e:t_edge) : option Z := get_pm_diff pm (fst e) (snd e).
 
-Variable diff_sum_det:
-  forall t1 t2 w1 z1 w2 z2,
-  DiffSum diff w1 z1 ->
-  DiffSum diff w2 z2 ->
-  Walk2 (HasDiff diff) t1 t2 w1 ->
-  Walk2 (HasDiff diff) t1 t2 w2 ->
-  z1 = z2.
+Variable trans_diff_fun:
+  TransDiffFun tid diff.
 
-Variable pm_diff_fun:
+Let pm_diff_fun:
   forall t1 t2 z z',
   pm_diff pm t1 t2 z ->
   pm_diff pm t1 t2 z' ->
   z = z'.
+Proof.
+  intros.
+  eauto using trans_diff_fun_2.
+Qed.
 
 Let get_diff_spec :
   forall e z,
@@ -413,8 +412,6 @@ Proof.
     apply wp_le_spec.
 Qed.
 
-Let pm_diff_sum_det := diff_sum_det_alt tid diff diff_sum_det.
-
 Lemma LE_to_pm_diff:
   forall t1 t2,
   LE pm t1 t2 ->
@@ -425,10 +422,14 @@ Proof.
   intros.
   apply LE_to_walk in H.
   destruct H as (w, (Hd, (Hw, (z', Hn)))).
+  assert (TransDiff tid diff t1 t2 z'). {
+    eauto using trans_diff_def.
+  }
   assert (z' = z). {
-    apply pm_diff_sum_det with (t1:=t1) (t2:=t2) (w:=w); repeat auto.
+    symmetry.
+    eauto using trans_diff_fun_1.
   }
   subst.
-  apply diff_sum_le_0 with (A:=tid) (diff:=diff) (get_diff:=get_diff) (w:=w); repeat auto.
+  eauto using diff_sum_le_0.
 Qed.
 End LE_PM_DIFF.

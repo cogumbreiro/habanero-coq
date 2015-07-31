@@ -113,12 +113,7 @@ Require Import TransDiff.
 
 Let diff (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).
 
-Variable diff_det : DiffSumDet tid diff.
-Variable diff_fun :
-  forall t1 t2 z z',
-  pm_diff pm t1 t2 z ->
-  pm_diff pm t1 t2 z' ->
-  z = z'.
+Variable diff_det : TransDiffFun tid diff.
 
 Lemma Smallest_to_WaitPhase :
   forall t t' v v' p ph,
