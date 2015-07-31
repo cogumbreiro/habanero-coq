@@ -193,14 +193,12 @@ Proof.
       }
       rewrite Forall_forall in H.
       destruct (H _ Hin) as (z', (?, ?)).
-      assert (z' = z). {
-        apply diff_fun with (t1, t2); repeat auto.
-      }
+      assert (z' = z). { eauto using diff_fun. }
       intuition.
    + subst. clear H0.
      assert (s <= 0). {
        inversion H; subst.
-       apply IHw; repeat auto.
+       auto using IHw.
      }
      assert (z0 <= 0). {
        rewrite Forall_forall in H.
@@ -208,9 +206,7 @@ Proof.
          apply in_eq.
        }
        destruct (H _ Hin) as (z, (?,?)).
-       assert (z0 = z). {
-         apply diff_fun with (e:=(t1,t2)); repeat auto.
-       }
+       assert (z0 = z). { eauto using diff_fun. }
        intuition.
     }
     intuition.
@@ -255,7 +251,7 @@ Proof.
       unfold HasDiff in *.
       destruct H0 as (z, Hd).
       exists (z + s).
-      apply diff_sum_cons; repeat auto.
+      auto using diff_sum_cons.
 Qed.
 
 Lemma neg_diff_to_has_diff:
@@ -276,8 +272,7 @@ Lemma walk2_neg_diff_to_has_diff:
   Walk2 HasDiff t1 t2 w.
 Proof.
   intros.
-  apply walk2_impl with (E:=NegDiff); repeat auto.
-  apply neg_diff_to_has_diff.
+  eauto using walk2_impl, neg_diff_to_has_diff.
 Qed.
 
 Definition DiffSumDet :=
@@ -301,11 +296,8 @@ Proof.
     apply walk2_nil; repeat auto.
     unfold HasDiff; exists z'; auto.
   }
-  assert (Hd : DiffSum ((t1, t2)::nil) z'). {
-    apply diff_sum_pair.
-    assumption.
-  }
-  apply Hdet with (t1:=t1) (t2:=t2) (w1:=w) (w2:=(t1,t2) :: nil); repeat auto.
+  assert (Hd : DiffSum ((t1, t2)::nil) z'). { auto using diff_sum_pair. }
+  eauto using Hdet.
 Qed.
 
 End DIFF_SUM.

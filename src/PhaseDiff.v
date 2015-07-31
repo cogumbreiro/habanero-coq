@@ -500,12 +500,8 @@ Proof.
   - destruct p as (p, ph).
     apply get_pm_diff_eq in Heql.
     destruct Heql as (?, (z', ?)).
-    assert (pm_diff t1 t2 z'). {
-      apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
-    }
-    assert (z = z'). {
-      apply pm_diff_fun with (t:=t1) (t':=t2); repeat auto.
-    }
+    assert (pm_diff t1 t2 z'). { eauto using pm_diff_def. }
+    assert (z = z'). { eauto using pm_diff_fun. }
     subst.
     apply get_ph_diff_spec.
     trivial.
@@ -546,7 +542,7 @@ Proof.
     intuition.
   + intros.
     destruct H as (z, (Hd, Hle)).
-    apply wp_le_def with (z:=z); repeat auto.
+    eauto using wp_le_def.
 Qed.
 
 Lemma wp_le_def_2:
@@ -574,12 +570,11 @@ Proof.
     subst.
     exists p; exists ph.
     intuition.
-    apply ph_le_def with (z:=z); repeat auto.
+    eauto using ph_le_def.
   - intros.
     destruct H as (p, (ph, (Hmt, Hle))).
     inversion Hle; subst.
-    apply wp_le_def with (z:=z); repeat auto.
-    apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+    eauto using wp_le_def, pm_diff_def.
 Qed.
 
 Lemma wp_le_refl:
@@ -591,8 +586,7 @@ Proof.
   apply wp_le_def with (z:=0%Z).
   - unfold tid_In in H.
     destruct H as (p, (ph, (Hmt, Hin))).
-    apply pm_diff_def with (p:=p) (ph:=ph); auto.
-    apply ph_diff_refl; auto.
+    eauto using pm_diff_def, ph_diff_refl.
   - intuition.
 Qed.
 

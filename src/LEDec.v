@@ -93,16 +93,9 @@ Proof.
   symmetry in Heqo.
   destruct o.
   - destruct (ZArith_dec.Z_le_dec z 0).
-    + refine (GET_DIFF_OK (Sig_yes z)).
-      intuition.
-      apply get_ph_diff_spec_1.
-      assumption.
-    + refine (GET_DIFF_POS (Sig_yes z)).
-      intuition.
-      apply get_ph_diff_spec_1.
-      assumption.
-  - refine (GET_DIFF_NIL (Sig_yes tt)).
-    assumption.
+    + refine (GET_DIFF_OK (Sig_yes z)); auto using get_ph_diff_spec_1.
+    + refine (GET_DIFF_POS (Sig_yes z)); auto using get_ph_diff_spec_1.
+  - refine (GET_DIFF_NIL (Sig_yes tt)); assumption.
 Defined.
 End GET_DIFF.
 
@@ -126,16 +119,14 @@ Proof.
     intuition.
     inversion H; subst.
     destruct a as (?, Hle').
-    assert (z = x). {
-      apply ph_diff_fun with (ph:=ph) (t:=t) (t':=t'); repeat assumption.
-    }
+    assert (z = x). { eauto using ph_diff_fun. }
     subst.
     apply Hle' in H1.
     assumption.
   - destruct g.
     left.
     destruct a.
-    apply ph_le_def with (z:=x); repeat auto.
+    eauto using ph_le_def.
 Qed.
 
 Section PM_DIFF.
@@ -174,7 +165,7 @@ Proof.
     destruct H as (ph, H).
     rewrite <- pm_le_spec in H.
     destruct H.
-    apply wp_le_def_2 with (p:=p) (ph:=ph); repeat auto.
+    eauto using wp_le_def_2.
   - right.
     intuition.
     inversion H; subst; clear H.
