@@ -166,7 +166,7 @@ Qed.
 Definition Valid (v:taskview) :=
   match v.(mode) with
     | SIGNAL_ONLY => v.(wait_phase) <= v.(signal_phase)
-    | _ => v.(wait_phase) = v.(signal_phase) \/ v.(wait_phase) = v.(signal_phase) + 1
+    | _ => v.(wait_phase) = v.(signal_phase) \/ v.(wait_phase) + 1 = v.(signal_phase)
   end.
 
 Variable AllValid :
@@ -176,12 +176,24 @@ Variable AllValid :
   Map_TID.MapsTo t v ph ->
   Valid v.
 
+Lemma is_valid_inv:
+  forall p ph t v,
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.MapsTo t v ph ->
+  Valid v ->
+  wait_phase v <= signal_phase v.
+Proof.
+  intros.
+  unfold Valid in *.
+  destruct (mode v); repeat intuition.
+Qed.
+
 Variable AllSignalled :
   forall p ph,
   Map_PHID.MapsTo p ph pm ->
   forall t v,
   Map_TID.MapsTo t v ph ->
-  WaitCap v -> v.(wait_phase) = v.(signal_phase) + 1.
+  v.(wait_phase) < v.(signal_phase).
 
 Lemma smallest_to_sync:
   forall t p ph,
@@ -196,42 +208,25 @@ Proof.
   * rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo.
     destruct (wait_cap_or_sigonly v).
     - destruct (get_wait_phase v) as (n, Hwp).
-      apply sync_wait with (v:=v) (w:=n); repeat intuition.
+      apply sync_wait with (v:=v); repeat intuition.
       unfold Await.
-      intros t' v' n' Hmt' Hsp.
-      destruct (OnlySW ph _ _ Hmt') as (n'', [Heq|[Heq|(w, (Heq, Hw))]]).
-      + (* v' is SW *)
-        subst.
-        inversion Hsp.
-        subst.
-        (* WP of v' *)
-        assert (Hwait : WaitPhase (SW n'' true) n''). {
-          apply wait_phase_sw.
-        }
-        (* show that: n <= WP(v') *)
-        assert (Hle : n <= n''). {
-          apply Smallest_to_WaitPhase with
-          (t:=t) (t':=t') (v:=v) (v':=(SW n'' true))
-          (p:=p) (ph:=ph); repeat auto.
-        }
-        intuition.
-      + (* v' is WO *)
-        subst. (* absurd *)
-        inversion Hsp.
-      + (* v' is SO *)
-        subst.
-        inversion Hsp.
-        subst.
-        assert (Hwait : WaitPhase (SO n' w) w). {
-          apply wait_phase_so.
-        }
-        (* show that: n <= WP(v') *)
-        assert (Hle : n <= w). {
-          apply Smallest_to_WaitPhase with
-          (t:=t) (t':=t') (v:=v) (v':=(SO n' w))
-          (p:=p) (ph:=ph); repeat auto.
-       }
-       intuition.
+      intros t' v' Hmt'.
+      assert (Hwp' : WaitPhase v' (wait_phase v')). {
+        apply wait_phase_spec_1.
+      }
+      (* show that: n <= WP(v') *)
+      assert (Hle : n <= wait_phase v'). {
+        apply Smallest_to_WaitPhase with
+        (t:=t) (t':=t') (v:=v) (v':=v')
+        (p:=p) (ph:=ph); repeat auto.
+      }
+      assert (wait_phase v' < signal_phase v'). {
+        apply AllSignalled with (p:=p) (ph:=ph) (t:=t'); repeat auto.
+      }
+      assert (n = wait_phase v). {
+        apply wait_phase_spec_2; auto.
+      }
+      intuition.
     - apply sync_so with (v:=v); repeat auto.
   * rewrite <- Map_TID_Facts.not_find_in_iff in Heqo.
     apply sync_skip.
