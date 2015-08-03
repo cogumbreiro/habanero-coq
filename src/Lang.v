@@ -26,8 +26,6 @@ Record taskview := TV {
 
 Let inc_signal (v:taskview) := TV (v.(signal_phase) + 1) v.(wait_phase) v.(mode).
 
-Let inc_wait (v:taskview) := TV v.(signal_phase) (v.(wait_phase) + 1) v.(mode).
-
 Let set_mode (v:taskview) (m:regmode) := TV v.(signal_phase) v.(wait_phase) m.
 
 Definition signal (v:taskview) :=
@@ -36,7 +34,7 @@ Definition signal (v:taskview) :=
     | _ => if eq_nat_dec v.(signal_phase) v.(wait_phase) then (inc_signal v) else v
   end.
 
-Definition wait (v:taskview) := inc_wait v.
+Definition wait (v:taskview) := TV v.(signal_phase) (v.(wait_phase) + 1) v.(mode).
 
 Definition WaitCap (v:taskview) :=
   mode v = SIGNAL_WAIT \/ mode v = WAIT_ONLY.
@@ -116,6 +114,7 @@ Inductive Sync : phaser -> nat -> Prop :=
 Inductive reg : Type :=
   | REGISTER : tid -> regmode -> reg.
 
+
 Inductive Register : phaser -> tid -> reg -> phaser -> Prop :=
   register_def:
     forall t t' v v' ph m,
@@ -150,32 +149,6 @@ Inductive Async : phasermap -> tid -> list phased -> tid -> phasermap -> Prop :=
 
 Definition newPhaser (t:tid) := Map_TID.add t (TV 0 0 SIGNAL_WAIT) (Map_TID.empty taskview).
 
-Definition TaskIn (t:tid) (p:phid) (pm:phasermap) :=
-  exists ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
-
-Lemma task_in_def:
-  forall t p ph pm,
-  Map_PHID.MapsTo p ph pm ->
-  Map_TID.In t ph ->
-  TaskIn t p pm.
-Proof.
-  intros.
-  unfold TaskIn.
-  exists ph.
-  intuition.
-Qed.
-
-Definition TaskInMany (t:tid) (ps:list phid) (pm:phasermap) :=
-  Forall (fun p => TaskIn t p pm) ps.
-
-Inductive Registered : phasermap -> tid -> list phid -> Prop :=
-  registered_def:
-    forall pm t ps,
-    NoDup ps ->
-    TaskInMany t ps pm ->
-    (forall p, TaskIn t p pm -> In p ps) ->
-    Registered pm t ps.
-
 Definition update (t:tid) (f:taskview -> phaser) (ph:phaser) :=
   match Map_TID.find t ph with
     | Some v => f v
@@ -185,8 +158,8 @@ Definition update (t:tid) (f:taskview -> phaser) (ph:phaser) :=
 Definition apply (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
   update t (fun v => Map_TID.add t (f v) ph) ph.
 
-Definition mapi (t:tid) (f:taskview->taskview) (m:phasermap) : phasermap :=
-  Map_PHID.mapi (fun p ph => apply t f ph) m.
+Definition mapi (t:tid) (f:taskview->taskview) : phasermap -> phasermap :=
+  Map_PHID.mapi (fun p ph => apply t f ph).
 
 Inductive Reduce : phasermap -> tid -> op -> phasermap -> Prop :=
   | reduce_new:
@@ -217,65 +190,9 @@ Inductive Reduce : phasermap -> tid -> op -> phasermap -> Prop :=
     (* check if it can synchronize on every phaser *)
     (forall p ph, Map_PHID.MapsTo p ph m -> Sync ph t) ->
     (* --------------- *)
-    Reduce m t WAIT_ALL (mapi t wait m).
+    Reduce m t WAIT_ALL (mapi t wait m)
 
-Section REGISTERED.
-Variable pm:phasermap.
-
-Definition registered_pm t :=
-  Map_PHID_Extra.filter
-  (fun (p:phid) (ph:phaser) =>
-    if Map_TID_Facts.In_dec ph t then true else false)
-  pm.
-
-Definition get_registered t := Map_PHID_Extra.keys (registered_pm t).
-
-Lemma get_registered_spec :
-  forall (t:tid),
-  Registered pm t (get_registered t).
-Proof.
-  intros.
-  unfold get_registered.
-  unfold registered_pm.
-  apply registered_def.
-  - apply Map_PHID_Extra.keys_nodup. intuition.
-  - unfold TaskInMany.
-    apply Forall_forall.
-    intros.
-    rewrite <- Map_PHID_Extra.keys_spec in H. {
-      apply Map_PHID_Extra.in_to_mapsto in H.
-      destruct H as (ph, H).
-      rewrite Map_PHID_Extra.filter_spec in H. {
-        destruct H.
-        destruct (Map_TID_Facts.In_dec ph t).
-        + apply task_in_def with (ph:=ph); repeat auto.
-        + inversion H0. (* absurd *)
-      }
-      intuition.
-    }
-    intuition.
-  - intros.
-    rewrite <- Map_PHID_Extra.keys_spec. {
-      unfold TaskIn in *.
-      destruct H as (ph, (Hmt, Hin)).
-      apply Map_PHID_Extra.mapsto_to_in with (e:=ph).
-      rewrite Map_PHID_Extra.filter_spec. {
-        intuition.
-        destruct (Map_TID_Facts.In_dec ph t).
-        - auto.
-        - intuition.
-      }
-      intuition.
-    }
-    intuition.
-Qed.
-
-Lemma get_registered_spec_alt :
-  forall (t:tid),
-  exists ps, Registered pm t ps.
-Proof.
-  intros.
-  exists (get_registered t).
-  apply get_registered_spec.
-Qed.
-End REGISTERED.
+ | reduce_async:
+    forall m t ps t' m',
+    Async m t ps t' m' ->
+    Reduce m t (ASYNC ps t') m'.
