@@ -126,7 +126,7 @@ Proof.
   - destruct g.
     left.
     destruct a.
-    eauto using ph_le_def.
+    eauto.
 Qed.
 
 Section PM_DIFF.
@@ -173,7 +173,7 @@ Proof.
     assert (Hx : Map_PHID.MapsTo p ph pm_le). {
       apply pm_le_spec.
       intuition.
-      apply ph_le_def with (z:=z); auto.
+      eauto.
     }
     assert (absurd: exists k, Map_PHID.In (elt:=phaser) k pm_le). {
       exists p.
@@ -230,8 +230,7 @@ Proof.
   exists ph.
   rewrite ph_tids_spec.
   intuition.
-  apply Map_PHID_Extra.values_spec_2 with (k:=p).
-  assumption.
+  eauto using Map_PHID_Extra.values_spec_2.
 Qed.
 
 Lemma pm_tids_spec:
@@ -244,7 +243,7 @@ Proof.
   - apply pm_tids_spec_1.
   - intros.
     destruct H as (p, (ph, (?, ?))).
-    apply pm_tids_spec_2 with (p:=p) (ph:=ph); repeat auto.
+    eauto using pm_tids_spec_2. 
 Qed.
 
 Lemma ph_le_in_pm_tids:
@@ -256,10 +255,7 @@ Proof.
   intros.
   apply ph_le_inv_in in H0.
   destruct H0.
-  split; repeat(
-    apply pm_tids_spec_2 with (p:=p) (ph:=ph);
-    assumption
-  ).
+  split; eauto using pm_tids_spec_2.
 Qed.
 
 Lemma wp_le_in_pm_tids:
@@ -270,7 +266,7 @@ Proof.
   intros.
   rewrite wp_le_alt in *.
   destruct H as (p, (ph, (Hmt, Hle))).
-  apply ph_le_in_pm_tids with (p:=p) (ph:=ph); repeat auto.
+  eauto using ph_le_in_pm_tids.
 Qed.
 
 Definition product (t:tid) := map (fun t' => (t, t')) pm_tids.
@@ -315,7 +311,7 @@ Proof.
   exists x.
   split.
   + apply wp_le_in_pm_tids with (y:=y); assumption.
-  + apply wp_le_in_product; assumption.
+  + auto using wp_le_in_product.
 Qed.
 
 Definition wp_le_rel :=
@@ -348,8 +344,7 @@ Lemma LE_dec:
 Proof.
   unfold LE.
   intros.
-  apply TransClosure.clos_trans_dec with (pairs:=wp_le_rel).
-  apply wp_rels_spec.
+  eauto using TransClosure.clos_trans_dec, wp_rels_spec.
 Qed.
 
 End LE_DEC.
@@ -400,11 +395,8 @@ Proof.
   rewrite clos_trans_iff_walk2 with (Edge:=NegDiff diff) in H.
   - destruct H as (w, H).
     exists w.
-    intuition.
-    + apply walk2_neg_diff_to_has_diff; auto.
-    + apply walk2_to_forall with (x:=t1) (y:=t2); repeat auto.
-    + apply walk2_neg_diff_to_has_diff in H; auto.
-      apply has_diff_to_diff_sum with (x:=t1) (y:=t2); repeat auto.
+    intuition; eauto using walk2_neg_diff_to_has_diff, walk2_to_forall.
+    apply walk2_neg_diff_to_has_diff in H; eauto using has_diff_to_diff_sum.
   - intros.
     unfold NegDiff.
     unfold diff.

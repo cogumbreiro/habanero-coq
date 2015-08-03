@@ -16,6 +16,8 @@ Inductive ph_diff : phaser -> tid -> tid -> Z -> Prop :=
     Map_TID.MapsTo t2 v2 ph ->
     ph_diff ph t1 t2 ((Z_of_nat (wait_phase v1)) - (Z_of_nat (wait_phase v2)))%Z.
 
+Hint Resolve ph_diff_def.
+
 Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z :=
   match Map_TID.find t1 ph with
     | Some v1 =>
@@ -43,7 +45,7 @@ Proof.
     destruct o.
     + rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo0.
       inversion H.
-      auto using ph_diff_def.
+      auto.
     + inversion H.
   - inversion H.
 Qed.
@@ -161,9 +163,7 @@ Proof.
   rewrite wtaskin_spec in H.
   apply Map_TID_Extra.in_to_mapsto in H.
   destruct H as (v, H).
-  assert (ph_diff ph t t (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v))). {
-    auto using ph_diff_def.
-  }
+  assert (ph_diff ph t t (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v))). { auto. }
   assert ((Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v)) = 0). { intuition. }
   rewrite H1 in *.
   assumption.
@@ -181,7 +181,7 @@ Proof.
   assert (- (z1 - z2) = z2 - z1). { intuition. }
   rewrite H.
   subst.
-  auto using ph_diff_def.
+  auto.
 Qed.
 
 Lemma ph_diff_inv:
@@ -244,7 +244,7 @@ Proof.
   destruct H as (v, Hmt).
   destruct H0 as (v', Hmt').
   exists (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v')).
-  auto using ph_diff_def.
+  auto.
 Qed.
 
 Definition tid_In (t:tid) (pm:phasermap) :=
@@ -256,6 +256,8 @@ Inductive ph_le : phaser -> tid -> tid -> Prop :=
     ph_diff ph t1 t2 z ->
     (z <= 0)%Z ->
     ph_le ph t1 t2.
+
+Hint Resolve ph_le_def.
 
 Section GET_PH_LE.
 Variable ph:phaser.
@@ -362,10 +364,10 @@ Proof.
   destruct p.
   - left.
     destruct s as (z, (Hdiff, Hle)).
-    eauto using ph_le_def.
+    eauto.
   - right.
     destruct s as (z, (Hdiff, Hle)).
-    eauto using ph_le_def.
+    eauto.
   - destruct s.
     assert (False). {
       unfold WTaskIn in *.
@@ -386,6 +388,8 @@ Inductive pm_diff : tid -> tid -> Z -> Prop :=
     ph_diff ph t t' z ->
     pm_diff t t' z.
 
+Hint Resolve pm_diff_def.
+
 Lemma pm_diff_symm:
   forall t t' z,
   pm_diff t t' z ->
@@ -393,7 +397,7 @@ Lemma pm_diff_symm:
 Proof.
   intros.
   inversion H; subst; clear H.
-  eauto using pm_diff_def, ph_diff_symm.
+  eauto using ph_diff_symm.
 Qed.
 
 Variable t1: tid.
@@ -454,7 +458,7 @@ Proof.
   apply get_pm_diff_eq in Heql.
   destruct Heql as (?, _).
   apply get_ph_diff_spec in H.
-  eauto using pm_diff_def.
+  eauto.
 Qed.
 
 Variable pm_diff_fun:
@@ -518,6 +522,9 @@ Inductive wp_le : tid -> tid -> Prop :=
     (z <= 0 ) % Z ->
     wp_le t t'.
 
+Hint Resolve wp_le_def.
+
+
 Lemma wp_le_spec:
   forall t t',
   wp_le t t' <-> (exists z : Z, pm_diff pm t t' z /\ (z <= 0)%Z).
@@ -531,7 +538,7 @@ Proof.
     intuition.
   + intros.
     destruct H as (z, (Hd, Hle)).
-    eauto using wp_le_def.
+    eauto.
 Qed.
 
 Lemma wp_le_def_2:
@@ -542,7 +549,7 @@ Lemma wp_le_def_2:
 Proof.
   intros.
   inversion H0; subst.
-  eauto using wp_le_def, pm_diff_def.
+  eauto using pm_diff_def.
 Qed.
 
 Lemma wp_le_alt :
@@ -562,7 +569,7 @@ Proof.
   - intros.
     destruct H as (p, (ph, (Hmt, Hle))).
     inversion Hle; subst.
-    eauto using wp_le_def, pm_diff_def.
+    eauto using pm_diff_def.
 Qed.
 
 Lemma wp_le_refl:
@@ -615,9 +622,7 @@ Lemma LE_refl:
 Proof.
   intros.
   unfold LE.
-  apply t_step.
-  apply wp_le_refl.
-  assumption.
+  auto using t_step, wp_le_refl.
 Qed.
 
 Lemma LE_inv:
