@@ -56,10 +56,8 @@ Proof.
   intros.
   inversion H; subst; clear H.
   unfold get_ph_diff.
-  apply Map_TID_Facts.find_mapsto_iff in H0.
-  apply Map_TID_Facts.find_mapsto_iff in H1.
-  rewrite H0.
-  rewrite H1.
+  rewrite Map_TID_Facts.find_mapsto_iff in H1, H0.
+  rewrite H0, H1.
   auto.
 Qed.
 
@@ -89,17 +87,10 @@ Proof.
       intros.
       * inversion H.
       * intros.
-        destruct H.
-        {
-          apply Map_TID_Facts.find_mapsto_iff in Heqo1.
-          apply Map_TID_Extra.mapsto_to_in in Heqo1.
-          contradiction H.
-        }
-        {
-          apply Map_TID_Facts.find_mapsto_iff in Heqo2.
-          apply Map_TID_Extra.mapsto_to_in in Heqo2.
-          contradiction H.
-        }
+        rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+        apply Map_TID_Extra.mapsto_to_in in Heqo1.
+        apply Map_TID_Extra.mapsto_to_in in Heqo2.
+        destruct H; contradiction H.
     + split.
       * intros.
         right.
@@ -489,9 +480,7 @@ Proof.
     unfold all_ph_diffs in *.
     rewrite Map_PHID_Extra.filter_spec in Heql. {
       remember (get_ph_diff ph t1 t2).
-      destruct o.
-      intuition.
-      intuition.
+      destruct o; intuition.
       symmetry in Heqo.
       apply get_diff_none with (z:=z) in Heqo.
       contradiction H1.
@@ -553,8 +542,7 @@ Lemma wp_le_def_2:
 Proof.
   intros.
   inversion H0; subst.
-  apply wp_le_def with (z:=z); auto.
-  apply pm_diff_def with (p:=p) (ph:=ph); repeat auto.
+  eauto using wp_le_def, pm_diff_def.
 Qed.
 
 Lemma wp_le_alt :
@@ -613,15 +601,9 @@ Proof.
   intros.
   destruct (ph_le_total _ _ _ H0 H1).
   + left.
-    apply wp_le_alt.
-    exists p.
-    exists ph.
-    intuition.
+    eauto using wp_le_def_2.
   + right.
-    apply wp_le_alt.
-    exists p.
-    exists ph.
-    intuition.
+    eauto using wp_le_def_2.
 Qed.
 
 Definition LE := clos_trans tid wp_le.
