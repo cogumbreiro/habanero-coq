@@ -133,34 +133,12 @@ Proof.
   trivial.
 Qed.
 
-Definition WTaskIn (t:tid) (ph:phaser) := Map_TID.In t ph.
-
-Lemma wtaskin_spec:
-  forall t ph,
-  WTaskIn t ph <-> Map_TID.In t ph.
-Proof.
-  intros.
-  unfold WTaskIn in *.
-  intuition.
-Qed.
-
-Lemma wtask_in_def:
-  forall t ph,
-  Map_TID.In t ph ->
-  WTaskIn t ph.
-Proof.
-  intros.
-  unfold WTaskIn.
-  intuition.
-Qed.
-
 Lemma ph_diff_refl:
   forall t ph,
-  WTaskIn t ph ->
+  Map_TID.In t ph ->
   ph_diff ph t t 0.
 Proof.
   intros.
-  rewrite wtaskin_spec in H.
   apply Map_TID_Extra.in_to_mapsto in H.
   destruct H as (v, H).
   assert (ph_diff ph t t (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v))). { auto. }
@@ -187,11 +165,10 @@ Qed.
 Lemma ph_diff_inv:
   forall ph t t' z,
   ph_diff ph t t' z ->
-  WTaskIn t ph /\ WTaskIn t' ph.
+  Map_TID.In t ph /\ Map_TID.In t' ph.
 Proof.
   intros.
   inversion H; subst; clear H.
-  unfold WTaskIn in *.
   split.
   - exists v1.
     intuition.
@@ -206,15 +183,13 @@ Lemma ph_diff_inv_in:
 Proof.
   intros.
   destruct (ph_diff_inv _ _ _ _ H).
-  apply wtaskin_spec in H0.
-  apply wtaskin_spec in H1.
   intuition.
 Qed.
 
 Lemma ph_diff_inv_left:
   forall ph t t' z,
   ph_diff ph t t' z ->
-  WTaskIn t ph.
+  Map_TID.In t ph.
 Proof.
   intros.
   apply ph_diff_inv in H.
@@ -224,7 +199,7 @@ Qed.
 Lemma ph_diff_inv_right:
   forall ph t t' z,
   ph_diff ph t t' z ->
-  WTaskIn t' ph.
+  Map_TID.In t' ph.
 Proof.
   intros.
   apply ph_diff_inv in H.
@@ -233,12 +208,11 @@ Qed.
 
 Lemma ph_diff_total:
   forall ph t t',
-  WTaskIn t ph ->
-  WTaskIn t' ph ->
+  Map_TID.In t ph ->
+  Map_TID.In t' ph ->
   exists z, ph_diff ph t t' z.
 Proof.
   intros.
-  rewrite wtaskin_spec in *.
   apply Map_TID_Extra.in_to_mapsto in H.
   apply Map_TID_Extra.in_to_mapsto in H0.
   destruct H as (v, Hmt).
@@ -248,7 +222,7 @@ Proof.
 Qed.
 
 Definition tid_In (t:tid) (pm:phasermap) :=
-  exists p ph, Map_PHID.MapsTo p ph pm /\ WTaskIn t ph.
+  exists p ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
 
 Inductive ph_le : phaser -> tid -> tid -> Prop :=
   ph_le_def :
@@ -303,7 +277,7 @@ End GET_PH_LE.
 
 Lemma ph_le_refl:
   forall t ph,
-  WTaskIn t ph ->
+  Map_TID.In t ph ->
   ph_le ph t t.
 Proof.
   intros.
@@ -315,7 +289,7 @@ Qed.
 Lemma ph_le_inv:
   forall t t' ph,
   ph_le ph t t' ->
-  WTaskIn t ph /\ WTaskIn t' ph.
+  Map_TID.In t ph /\ Map_TID.In t' ph.
 Proof.
   intros.
   inversion H; subst.
@@ -355,8 +329,8 @@ Qed.
 
 Lemma ph_le_total:
   forall ph t t',
-  WTaskIn t ph ->
-  WTaskIn t' ph ->
+  Map_TID.In t ph ->
+  Map_TID.In t' ph ->
   { ph_le ph t t' } + { ph_le ph t' t }.
 Proof.
   intros.
@@ -370,7 +344,6 @@ Proof.
     eauto.
   - destruct s.
     assert (False). {
-      unfold WTaskIn in *.
       destruct o.
       + contradiction H.
       + contradiction H0.
@@ -601,8 +574,8 @@ Qed.
 Lemma wp_le_total:
   forall p ph t t',
   Map_PHID.MapsTo p ph pm ->
-  WTaskIn t ph ->
-  WTaskIn t' ph ->
+  Map_TID.In t ph ->
+  Map_TID.In t' ph ->
   { wp_le t t' } + { wp_le t' t }.
 Proof.
   intros.
@@ -648,8 +621,8 @@ Qed.
 Lemma LE_total:
   forall p ph t t',
   Map_PHID.MapsTo p ph pm ->
-  WTaskIn t ph ->
-  WTaskIn t' ph ->
+  Map_TID.In t ph ->
+  Map_TID.In t' ph ->
   { LE t t' } + { LE t' t }.
 Proof.
   intros.
