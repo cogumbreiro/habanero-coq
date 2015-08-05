@@ -39,6 +39,29 @@ Proof.
   apply Map_TID_Facts.add_neq_mapsto_iff in H3; repeat auto.
 Qed.
 
+Lemma pm_diff_mapi_neq:
+  forall t t1 t2 z pm,
+  pm_diff (mapi t wait pm) t1 t2 z ->
+  t <> t1 ->
+  t <> t2 ->
+  pm_diff pm t1 t2 z.
+Proof.
+  intros.
+  inversion H.
+  subst.
+  unfold mapi in *.
+  apply Map_PHID_Facts.mapi_inv in H2.
+  destruct H2 as (ph', (p', (?, (?,Hmt)))).
+  subst.
+  assert (ph_diff ph' t1 t2 z). {
+    unfold apply in *.
+    unfold update in *.
+    destruct (Map_TID.find t ph');
+    eauto using ph_diff_add.
+  }
+  eauto using pm_diff_def.
+Qed.
+
 Lemma pm_diff_mapi_inv:
   forall t pm t1 t2 z,
   pm_diff (mapi t wait pm) t1 t2 z ->
@@ -105,7 +128,6 @@ Proof.
   apply pm_diff_mapi_inv in H0.
   destruct H0 as (p, (ph, (Hmt, [(?,?)|(v,(?,?))]))).
   - apply ph_diff_inv_right in H1.
-    unfold WTaskIn in *.
     contradiction H1.
   - inversion H1; subst; clear H1.
     apply Map_TID_Facts.add_neq_mapsto_iff in H2; repeat auto.
@@ -132,7 +154,7 @@ Proof.
    + contradiction H1; trivial.
 Qed.
 
-Lemma pm_diff_mapi_right:
+Lemma pm_diff_mapi_left:
   forall t pm t2 z,
   t <> t2 ->
   pm_diff (mapi t wait pm) t t2 z ->
@@ -143,7 +165,6 @@ Proof.
   apply pm_diff_mapi_inv in H0.
   destruct H0 as (p, (ph, (Hmt, [(?,?)|(v,(?,?))]))).
   - apply ph_diff_inv_left in H1.
-    unfold WTaskIn in *.
     contradiction H1.
   - inversion H1; subst; clear H1.
     apply Map_TID_Facts.add_neq_mapsto_iff in H2; repeat auto.
@@ -153,7 +174,85 @@ Proof.
       contradiction H; trivial.
     + assert (Heq : (Z.of_nat (wait_phase v1) - Z.of_nat ((wait_phase v)+1)%nat - 1 = 
               Z.of_nat (wait_phase v1) - Z.of_nat (wait_phase v)) % Z ). {
-      
+Admitted.
+
+Lemma ph_diff_wait_in_inv:
+  forall t t1 t2 ph z,
+  ph_diff (apply t wait ph) t1 t2 z ->
+  Map_TID.In t1 ph /\ Map_TID.In t2 ph.
+Proof.
+  intros.
+  apply ph_diff_inv in H.
+  destruct H.
+  unfold apply in *.
+  unfold update in *.
+  remember (Map_TID.find t ph) as o; symmetry in Heqo.
+  destruct o; intuition.
+  - apply Map_TID_Facts.add_in_iff in H.
+    destruct H; auto.
+    subst.
+    apply Map_TID_Facts.in_find_iff.
+    intuition.
+    rewrite H in Heqo.
+    inversion Heqo.
+  - apply Map_TID_Facts.add_in_iff in H0.
+    destruct H0; auto.
+    subst.
+    apply Map_TID_Facts.in_find_iff.
+    intuition.
+    rewrite H0 in Heqo.
+    inversion Heqo.
+Qed.
+
+Lemma pm_diff_mapi_inv_eq:
+  forall pm t t',
+  pm_diff (mapi t' wait pm) t t 0 ->
+  pm_diff pm t t 0.
+Proof.
+  intros.
+  inversion H.
+  subst.
+  unfold mapi in *.
+  apply Map_PHID_Facts.mapi_inv in H0.
+  destruct H0 as (ph', (p', (?, (?, Hmt)))).
+  subst.
+  assert (Map_TID.In t ph'). {
+    eapply ph_diff_wait_in_inv in H1; intuition.
+ }
+ eauto using pm_diff_refl.
+Qed.
+
+Lemma pm_diff_mapi_to_pm_diff:
+  forall t t1 t2 pm z,
+  pm_diff (mapi t wait pm) t1 t2 z ->
+  (
+    (t <> t1 /\ pm_diff pm t1 t (z + 1)) \/
+    (t <> t2 /\ pm_diff pm t t2 (z - 1)) \/
+    pm_diff pm t1 t2 z
+  ).
+Proof.
+  intros.
+  destruct (TID.eq_dec t t1), (TID.eq_dec t t2).
+  - subst.
+    right; right.
+    subst.
+    assert (z = 0%Z). {
+      eauto using pm_diff_refl_inv.
+    }
+    subst.
+    eauto using pm_diff_mapi_inv_eq.
+  - right; left.
+    split; auto.
+    subst.
+    eauto using pm_diff_mapi_left.
+  - subst.
+    left.
+    split; auto.
+    eauto using pm_diff_mapi_right.
+  - subst.
+    right; right.
+    eauto using pm_diff_mapi_neq.
+Qed.
 
 Lemma not_starts_with_inv {A:Type} (eq_dec: forall x y : A, {x = y} + {x <> y}):
   forall (v v1 v2:A) w,
@@ -179,39 +278,59 @@ Proof.
   destruct (eq_dec v2 v); subst; (contradiction H0 || intuition).
 Qed.
 
+Lemma not_ends_with_decons {A:Type}:
+  forall e w (v:A),
+  ~ EndsWith (e :: w) v ->
+  ~ EndsWith w v.
+Proof.
+  intros.
+  intuition.
+  inversion H0.
+  destruct H1.
+  destruct w.
+  - inversion H1.
+  - subst.
+    auto using ends_with_cons.
+Qed.
+
 Lemma diff_sum_mapi:
-  forall w t pm z,
+  forall w t t1 tn pm z,
   DiffSum (diff (mapi t wait pm)) w z ->
-  ~ StartsWith w t ->
-  ~ EndsWith w t ->
+  StartsWith w t1 ->
+  EndsWith w tn ->
+  t1 <> t ->
+  tn <> t ->
   DiffSum (diff pm) w z.
 Proof.
   intros w.
   induction w.
-  - intros.
+  { (* absurd case *)
+    intros.
     inversion H; subst.
     auto using diff_sum_nil.
-  - intros.
-    destruct a as (t1, t2).
-    assert (t <> t1). {
-        eauto using (not_starts_with_inv TID.eq_dec).
-    }
-    inversion H.
-    + subst.
-      apply diff_sum_pair.
+  }
+  intros.
+  destruct a as (t1', t2).
+  assert (t1' = t1). { eauto using starts_with_eq. }
+  inversion H.
+  + subst.
+    assert (tn = t2). { apply ends_with_eq in H1. auto. }
+    subst.
+    unfold diff in *.
+    apply diff_sum_pair.
+    eauto using pm_diff_mapi_neq.
+  + subst.
+    clear H.
+    destruct (TID.eq_dec t t2).
+    - subst.
       unfold diff in *.
       simpl in *.
-      assert (t <> t2). {
-        eauto using (not_ends_with_inv TID.eq_dec).
-      }
-      eauto using pm_diff_mapi.
-    + subst.
-      clear H.
-      destruct (TID.eq_dec t t2).
-      { subst.
-        
+      apply pm_diff_mapi_right in H10. {
+        eapply IHw in H9; repeat auto.
+        *  
 Qed.
-
+*)
+(*
 Lemma transdiff_mapi:
   forall t pm t1 t2 z,
   TransDiff tid (diff (mapi t wait pm)) t1 t2 z ->
@@ -223,7 +342,7 @@ Proof.
   apply diff_sum_mapi in H0.
   eauto using trans_diff_def.
 Qed.
-
+*)
 Lemma simpl_sr:
   forall pm t,
   Valid pm ->
