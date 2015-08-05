@@ -176,16 +176,6 @@ Proof.
     intuition.
 Qed.
 
-Lemma ph_diff_inv_in:
-  forall ph t t' z,
-  ph_diff ph t t' z ->
-  Map_TID.In t ph /\ Map_TID.In t' ph.
-Proof.
-  intros.
-  destruct (ph_diff_inv _ _ _ _ H).
-  intuition.
-Qed.
-
 Lemma ph_diff_inv_left:
   forall ph t t' z,
   ph_diff ph t t' z ->
@@ -204,6 +194,19 @@ Proof.
   intros.
   apply ph_diff_inv in H.
   intuition.
+Qed.
+
+Lemma ph_diff_refl_inv:
+  forall ph t z,
+  ph_diff ph t t z ->
+  z = 0 % Z.
+Proof.
+  intros.
+  assert (ph_diff ph t t 0). {
+    apply ph_diff_inv_left in H.
+    auto using ph_diff_refl.
+  }
+  eauto using ph_diff_fun.
 Qed.
 
 Lemma ph_diff_total:
@@ -303,7 +306,7 @@ Lemma ph_le_inv_in:
 Proof.
   intros.
   inversion H; subst.
-  apply ph_diff_inv_in in H0.
+  apply ph_diff_inv in H0.
   intuition.
 Qed.
 
@@ -432,6 +435,29 @@ Proof.
   destruct Heql as (?, _).
   apply get_ph_diff_spec in H.
   eauto.
+Qed.
+
+Lemma pm_diff_refl:
+  forall t p ph,
+  Map_PHID.MapsTo p ph pm ->
+  Map_TID.In t ph ->
+  pm_diff t t 0.
+Proof.
+  intros.
+  assert (ph_diff ph t t 0). {
+    auto using ph_diff_refl.
+  }
+  eauto.
+Qed.
+
+Lemma pm_diff_refl_inv:
+  forall t z,
+  pm_diff t t z ->
+  z = 0 % Z.
+Proof.
+  intros.
+  inversion H; subst; clear H.
+  eauto using ph_diff_refl_inv.
 Qed.
 
 Variable pm_diff_fun:
