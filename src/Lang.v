@@ -16,7 +16,10 @@ Inductive r_le : regmode -> regmode -> Prop :=
     r_le WAIT_ONLY WAIT_ONLY
   | r_le_sw:
     forall m,
-    r_le m SIGNAL_WAIT.
+    r_le m SIGNAL_WAIT
+where "n <= m" := (r_le n m) : reg_scope.
+
+Local Open Scope reg_scope.
 
 Record taskview := TV {
   signal_phase: nat;
@@ -75,7 +78,7 @@ Definition SignalCap (v:taskview) :=
 Inductive Copy : taskview -> regmode -> taskview -> Prop :=
   | copy_def:
     forall v m,
-    r_le m v.(mode) -> (* m <= v.(mode) *)
+    (m <= v.(mode)) -> (* m <= v.(mode) *)
     Copy v m (set_mode v m).
 
 Lemma copy_correct:
