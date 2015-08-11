@@ -8,3 +8,5 @@ src/TransClosure.v
 src/Progress.v
 src/LEDec.v
 src/TransDiff.v
+src/SubjectReduction.v
+

@@ -10,7 +10,7 @@ Require Import Aniceto.Pair.
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
 
-Section PROGRESS.
+Section SR.
 
 Lemma walk2_mapi:
   forall t pm t1 t2 w,
@@ -260,91 +260,7 @@ Proof.
     rewrite Heq.
     eauto using pm_diff_mapi_neq.
 Qed.
-(*
-Lemma pm_diff_mapi_to_pm_diff:
-  forall t t1 t2 pm z,
-  pm_diff (mapi t wait pm) t1 t2 z ->
-  (
-    (t <> t1 /\ pm_diff pm t1 t (z + 1)) \/
-    (t <> t2 /\ pm_diff pm t t2 (z - 1)) \/
-    pm_diff pm t1 t2 z
-  ).
-Proof.
-  intros.
-  destruct (TID.eq_dec t t1), (TID.eq_dec t t2).
-  - subst.
-    right; right.
-    subst.
-    assert (z = 0%Z). {
-      eauto using pm_diff_refl_inv.
-    }
-    subst.
-    eauto using pm_diff_mapi_inv_eq.
-  - right; left.
-    split; auto.
-    subst.
-    eauto using pm_diff_mapi_left.
-  - subst.
-    left.
-    split; auto.
-    eauto using pm_diff_mapi_right.
-  - subst.
-    right; right.
-    eauto using pm_diff_mapi_neq.
-Qed.
 
-Lemma not_starts_with_inv {A:Type} (eq_dec: forall x y : A, {x = y} + {x <> y}):
-  forall (v v1 v2:A) w,
-  ~ StartsWith ((v1, v2) :: w) v ->
-  v <> v1.
-Proof.
-  intros.
-  assert (StartsWith ((v1, v2) :: w) v1). {
-    auto using starts_with_def.
-  }
-  destruct (eq_dec v1 v); subst; (contradiction H0 || intuition).
-Qed.
-
-Lemma not_ends_with_inv {A:Type} (eq_dec: forall x y : A, {x = y} + {x <> y}):
-  forall (v v1 v2:A),
-  ~ EndsWith ((v1, v2) :: nil) v ->
-  v <> v2.
-Proof.
-  intros.
-  assert (EndsWith ((v1, v2) :: nil) v2). {
-    eauto using end_nil, ends_with_def.
-  }
-  destruct (eq_dec v2 v); subst; (contradiction H0 || intuition).
-Qed.
-
-Lemma not_ends_with_decons {A:Type}:
-  forall e w (v:A),
-  ~ EndsWith (e :: w) v ->
-  ~ EndsWith w v.
-Proof.
-  intros.
-  intuition.
-  inversion H0.
-  destruct H1.
-  destruct w.
-  - inversion H1.
-  - subst.
-    auto using ends_with_cons.
-Qed.
-*)
-(*
-Lemma diff_sum_mapi_pair:
-  forall t t1 tn pm z,
-  t1 <> t ->
-  tn <> t ->
-  diff (mapi t wait pm) (t1, tn) z ->
-  DiffSum (diff pm) ((t1, tn) :: nil) z.
-Proof.
-  intros.
-  eapply diff_sum_pair.
-  apply pm_diff_mapi_neq with (t:=t); repeat (auto; intuition).
-Qed.
-*)
 Lemma diff_sum_mapi:
   forall w t t1 tn pm z,
   DiffSum (diff (mapi t wait pm)) w z ->
@@ -393,19 +309,20 @@ Proof.
     auto using diff_sum_cons.
 Qed.
 
-(*
+
 Lemma transdiff_mapi:
   forall t pm t1 t2 z,
   TransDiff tid (diff (mapi t wait pm)) t1 t2 z ->
-  TransDiff tid (diff pm) t1 t2 z.
+  TransDiff tid (diff pm) t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
 Proof.
   intros.
   inversion H; subst; clear H.
   apply walk2_mapi in H1.
-  apply diff_sum_mapi in H0.
+  inversion H1; subst.
+  apply diff_sum_mapi with (t1:=t1) (tn:=t2) in H0; repeat auto.
   eauto using trans_diff_def.
 Qed.
-*)
+
 Lemma simpl_sr:
   forall pm t,
   Valid pm ->
@@ -417,7 +334,8 @@ Proof.
   intros.
   apply transdiff_mapi in H0.
   apply transdiff_mapi in H1.
-  eauto using H.
+  assert (Hx := H _ _ _ _ H0 H1).
+  intuition.
 Qed.
 
 Theorem sr :
@@ -431,4 +349,4 @@ Proof.
   auto using simpl_sr.
 Qed.
 
-End Section.
+End SR.
