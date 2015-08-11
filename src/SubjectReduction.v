@@ -222,6 +222,45 @@ Proof.
  eauto using pm_diff_refl.
 Qed.
 
+Definition tid_eq_sig x y := if TID.eq_dec x y then 1%Z else 0%Z.
+
+Lemma pm_diff_mapi_sig:
+  forall t t1 t2 pm z,
+  pm_diff (mapi t wait pm) t1 t2 z ->
+  pm_diff pm t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
+Proof.
+  intros.
+  unfold tid_eq_sig.
+  destruct (TID.eq_dec t1 t), (TID.eq_dec t2 t).
+  - subst.
+    assert (z = 0%Z). {
+      eauto using pm_diff_refl_inv.
+    }
+    subst.
+    assert((0 - 1 + 1 = 0) % Z). {
+      intuition.
+    }
+    rewrite H0.
+    eauto using pm_diff_mapi_inv_eq.
+  - subst.
+    assert ((z - 1 + 0 = z - 1) % Z). {
+      intuition.
+    }
+    rewrite H0.
+    eauto using pm_diff_mapi_left.
+  - subst.
+    assert ((z - 0 + 1 = z + 1) % Z). {
+      intuition.
+    }
+    rewrite H0.
+    eauto using pm_diff_mapi_right.
+  - assert (Heq : (z - 0 + 0 = z) % Z). {
+      intuition.
+    }
+    rewrite Heq.
+    eauto using pm_diff_mapi_neq.
+Qed.
+(*
 Lemma pm_diff_mapi_to_pm_diff:
   forall t t1 t2 pm z,
   pm_diff (mapi t wait pm) t1 t2 z ->
@@ -292,44 +331,68 @@ Proof.
   - subst.
     auto using ends_with_cons.
 Qed.
-
+*)
+(*
+Lemma diff_sum_mapi_pair:
+  forall t t1 tn pm z,
+  t1 <> t ->
+  tn <> t ->
+  diff (mapi t wait pm) (t1, tn) z ->
+  DiffSum (diff pm) ((t1, tn) :: nil) z.
+Proof.
+  intros.
+  eapply diff_sum_pair.
+  apply pm_diff_mapi_neq with (t:=t); repeat (auto; intuition).
+Qed.
+*)
 Lemma diff_sum_mapi:
   forall w t t1 tn pm z,
   DiffSum (diff (mapi t wait pm)) w z ->
   StartsWith w t1 ->
   EndsWith w tn ->
-  t1 <> t ->
-  tn <> t ->
-  DiffSum (diff pm) w z.
+  DiffSum (diff pm) w (z - (tid_eq_sig t1 t) + (tid_eq_sig tn t)).
 Proof.
   intros w.
   induction w.
   { (* absurd case *)
     intros.
     inversion H; subst.
-    auto using diff_sum_nil.
+    apply ends_with_nil_inv in H1.
+    inversion H1.
   }
   intros.
   destruct a as (t1', t2).
   assert (t1' = t1). { eauto using starts_with_eq. }
-  inversion H.
-  + subst.
-    assert (tn = t2). { apply ends_with_eq in H1. auto. }
+  destruct w.
+  - subst.
+    inversion H.
     subst.
-    unfold diff in *.
-    apply diff_sum_pair.
-    eauto using pm_diff_mapi_neq.
-  + subst.
-    clear H.
-    destruct (TID.eq_dec t t2).
-    - subst.
-      unfold diff in *.
-      simpl in *.
-      apply pm_diff_mapi_right in H10. {
-        eapply IHw in H9; repeat auto.
-        *  
+    assert (t2 = tn). {
+      eauto using ends_with_eq.
+    }
+    subst.
+    apply pm_diff_mapi_sig in H5.
+    auto using diff_sum_pair.
+  - subst.
+    destruct p as (t2', t3).
+    inversion H; subst; clear H.
+    rename t2' into t2.
+    assert (StartsWith ((t2, t3) :: w) t2). {
+      eauto using starts_with_def.
+    }
+    apply ends_with_inv in H1.
+    assert ( DiffSum (diff pm) ((t2, t3) :: w) (s - tid_eq_sig t2 t + tid_eq_sig tn t)). {
+      apply IHw; repeat auto.
+    }
+    apply pm_diff_mapi_sig in H9. (* invert diff_mapi *)
+    simpl in *.
+    assert (Heq: ((z0 + s - tid_eq_sig t1 t + tid_eq_sig tn t) =
+          (z0 - tid_eq_sig t1 t + tid_eq_sig t2 t) +
+          (s - tid_eq_sig t2 t + tid_eq_sig tn t)) % Z). { intuition. }
+    rewrite Heq.
+    auto using diff_sum_cons.
 Qed.
-*)
+
 (*
 Lemma transdiff_mapi:
   forall t pm t1 t2 z,
