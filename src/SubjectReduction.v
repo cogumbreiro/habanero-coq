@@ -12,89 +12,63 @@ Require Import Coq.ZArith.BinInt.
 
 Section SR.
 
-Lemma walk2_mapi:
-  forall t pm t1 t2 w,
-  Walk2 (HasDiff (diff (mapi t wait pm))) t1 t2 w ->
-  Walk2 (HasDiff (diff pm)) t1 t2 w.
-Admitted.
 
-Lemma diff_sum_mapi_neq:
-  forall w (t:tid) pm z,
-  (forall e, In e w -> ~ pair_In t e) ->
-  DiffSum (diff (mapi t wait pm)) w z ->
-  DiffSum (diff pm) w z.
-Admitted.
+Definition tid_eq_sig x y := if TID.eq_dec x y then 1%Z else 0%Z.
 
-Lemma ph_diff_add:
-  forall t t1 t2 v ph z,
-  t <> t1 ->
-  t <> t2 ->
-  ph_diff (Map_TID.add t (wait v) ph) t1 t2 z ->
-  ph_diff ph t1 t2 z.
+Definition wait_delta t e := ((tid_eq_sig (snd e) t) - (tid_eq_sig (fst e) t)) % Z.
+
+Lemma wait_delta_refl:
+  forall t t',
+  wait_delta t (t', t') = 0%Z.
 Proof.
   intros.
-  inversion H1.
-  subst.
-  apply Map_TID_Facts.add_neq_mapsto_iff in H2; repeat auto.
-  apply Map_TID_Facts.add_neq_mapsto_iff in H3; repeat auto.
+  unfold wait_delta, tid_eq_sig.
+  simpl.
+  destruct (TID.eq_dec t' t); intuition.
 Qed.
 
-Lemma pm_diff_mapi_neq:
-  forall t t1 t2 z pm,
-  pm_diff (mapi t wait pm) t1 t2 z ->
-  t <> t1 ->
-  t <> t2 ->
-  pm_diff pm t1 t2 z.
+Lemma wait_delta_left:
+  forall t t',
+  t <> t' ->
+  wait_delta t (t, t') = (- 1)%Z.
 Proof.
   intros.
-  inversion H.
-  subst.
-  unfold mapi in *.
-  apply Map_PHID_Facts.mapi_inv in H2.
-  destruct H2 as (ph', (p', (?, (?,Hmt)))).
-  subst.
-  assert (ph_diff ph' t1 t2 z). {
-    unfold apply in *.
-    unfold update in *.
-    destruct (Map_TID.find t ph');
-    eauto using ph_diff_add.
-  }
-  eauto using pm_diff_def.
+  unfold wait_delta, tid_eq_sig.
+  simpl.
+  destruct (TID.eq_dec t' t), (TID.eq_dec t t); intuition.
 Qed.
 
-Lemma pm_diff_mapi_inv:
-  forall t pm t1 t2 z,
-  pm_diff (mapi t wait pm) t1 t2 z ->
-  exists p ph,
-  Map_PHID.MapsTo p ph pm /\
-  (
-    (~ Map_TID.In t ph /\ ph_diff ph t1 t2 z)
-    \/
-    (exists v, Map_TID.MapsTo t v ph /\ ph_diff (Map_TID.add t (wait v) ph) t1 t2 z)
-  ).
+Lemma wait_delta_right:
+  forall t t',
+  t <> t' ->
+  wait_delta t (t', t) = 1%Z.
 Proof.
   intros.
-  unfold mapi in *.
-  inversion H; subst; clear H.
-  unfold apply in *.
-  unfold update in *.
-  apply Map_PHID_Facts.mapi_inv in H0.
-  destruct H0 as (ph', (p', (?, (?,?)))).
-  subst.
-  remember (Map_TID.find t ph').
-  symmetry in Heqo.
-  exists p; exists ph'; intuition.
-  destruct o as [v|].
-  - inversion H1; subst; clear H1.
-    right.
-    exists v.
-    assert (Map_TID.MapsTo t v ph'). {
-      rewrite Map_TID_Facts.find_mapsto_iff; assumption.
-    }
-    intuition.
-  - left.
-    rewrite <- Map_TID_Facts.not_find_in_iff in Heqo.
-    intuition.
+  unfold wait_delta, tid_eq_sig.
+  simpl.
+  destruct (TID.eq_dec t' t), (TID.eq_dec t t); intuition.
+Qed.
+
+Lemma wait_delta_neq:
+  forall t t1 t2,
+  t <> t1 ->
+  t <> t2 ->
+  wait_delta t (t1, t2) = 0%Z.
+Proof.
+  intros.
+  unfold wait_delta, tid_eq_sig.
+  simpl.
+  destruct (TID.eq_dec t1 t), (TID.eq_dec t2 t); intuition.
+Qed.
+
+Lemma wait_phase_wait:
+  forall v,
+  wait_phase (wait v) = S (wait_phase v).
+Proof.
+  intros.
+  unfold wait.
+  simpl.
+  intuition.
 Qed.
 
 Lemma Z_add_to_succ:
@@ -118,111 +92,141 @@ Proof.
    trivial.
 Qed.
 
-Lemma pm_diff_mapi_right:
-  forall t pm t1 z,
-  t <> t1 ->
-  pm_diff (mapi t wait pm) t1 t z ->
-  pm_diff pm t1 t (z + 1).
+Lemma ph_diff_add_wait:
+  forall t t1 t2 z v ph,
+  ph_diff (Map_TID.add t (wait v) ph) t1 t2 z ->
+  Map_TID.MapsTo t v ph ->
+  ph_diff ph t1 t2 (z + wait_delta t (t1, t2)).
 Proof.
   intros.
-  apply pm_diff_mapi_inv in H0.
-  destruct H0 as (p, (ph, (Hmt, [(?,?)|(v,(?,?))]))).
-  - apply ph_diff_inv_right in H1.
-    contradiction H1.
-  - inversion H1; subst; clear H1.
-    apply Map_TID_Facts.add_neq_mapsto_iff in H2; repeat auto.
-    rewrite Map_TID_Facts.add_mapsto_iff in H3.
-    destruct H3 as [(?, ?)|(?,?)].
-    + subst.
-      unfold wait in *.
-      simpl.
-      assert (Heq : (Z.of_nat (wait_phase v1) - Z.of_nat ((wait_phase v)+1)%nat + 1 = 
-              Z.of_nat (wait_phase v1) - Z.of_nat (wait_phase v)) % Z ). {
-        remember (wait_phase v1) as n1.
-        remember (wait_phase v) as n.
-        remember (Z.of_nat n1) as z1.
-        remember (Z.of_nat (n + 1)) as z_1.
-        remember (Z.of_nat n) as z.
-        assert (n + 1 % nat = S n). { intuition. }
-        rewrite H3 in *; clear H3.
-        assert (z_1 = (z + 1) % Z). {
-        rewrite Z_of_nat_succ in *. intuition. }
-        intuition.
-     }
-     rewrite Heq.
-     eauto using pm_diff_def.
-   + contradiction H1; trivial.
+    inversion H; subst; clear H.
+    rewrite Map_TID_Facts.add_mapsto_iff in *.
+    destruct H1 as [(?,?)|(?,?)].
+    + destruct H2 as [(?,?)|(?,?)].
+      * subst.
+        subst.
+        rewrite wait_delta_refl.
+        remember (Z.of_nat (wait_phase (wait v))) as z.
+        assert (Heq: ((z - z + 0 = 0) %Z)). {
+          intuition.
+        }
+        rewrite Heq.
+        eauto using Map_TID_Extra.mapsto_to_in, ph_diff_refl.
+      * subst.
+        rewrite wait_delta_left; auto.
+        rewrite wait_phase_wait.
+        rewrite Z_of_nat_succ.
+        assert (Heq:
+          (Z.of_nat (wait_phase v) + 1 - Z.of_nat (wait_phase v2) + -1 =
+          (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v2))) % Z). {
+          intuition.
+        }
+        rewrite Heq.
+        auto.
+    + destruct H2 as [(?,?)|(?,?)].
+      * subst.
+        rewrite wait_delta_right; auto.
+        rewrite wait_phase_wait.
+        rewrite Z_of_nat_succ.
+        assert (Heq: (
+          (Z.of_nat (wait_phase v1) - (Z.of_nat (wait_phase v) + 1) + 1) =
+          (Z.of_nat (wait_phase v1) - (Z.of_nat (wait_phase v)))) % Z). {
+          intuition.
+        }
+        rewrite Heq.
+        auto.
+      * rewrite wait_delta_neq; repeat auto.
+        assert (Heq: (
+          (Z.of_nat (wait_phase v1) - Z.of_nat (wait_phase v2) + 0) =
+          (Z.of_nat (wait_phase v1) - Z.of_nat (wait_phase v2))) % Z). {
+          intuition.
+        }
+        rewrite Heq; auto.
 Qed.
 
-Lemma pm_diff_mapi_left:
-  forall t pm t2 z,
-  t <> t2 ->
-  pm_diff (mapi t wait pm) t t2 z ->
-  pm_diff pm t t2 (z - 1).
+Lemma in_neq:
+  forall t t1 ph,
+  ~ Map_TID.In (elt:=taskview) t ph ->
+  Map_TID.In (elt:=taskview) t1 ph ->
+  t <> t1.
 Proof.
   intros.
-  intros.
-  apply pm_diff_mapi_inv in H0.
-  destruct H0 as (p, (ph, (Hmt, [(?,?)|(v,(?,?))]))).
-  - apply ph_diff_inv_left in H1.
-    contradiction H1.
-  - inversion H1; subst; clear H1.
-    apply Map_TID_Facts.add_neq_mapsto_iff in H2; repeat auto.
-    rewrite Map_TID_Facts.add_mapsto_iff in H3.
-    destruct H3 as [(?, ?)|(?,?)].
-    + subst.
-      contradiction H; trivial.
-    + assert (Heq : (Z.of_nat (wait_phase v1) - Z.of_nat ((wait_phase v)+1)%nat - 1 = 
-              Z.of_nat (wait_phase v1) - Z.of_nat (wait_phase v)) % Z ). {
-Admitted.
-
-Lemma ph_diff_wait_in_inv:
-  forall t t1 t2 ph z,
-  ph_diff (apply t wait ph) t1 t2 z ->
-  Map_TID.In t1 ph /\ Map_TID.In t2 ph.
-Proof.
-  intros.
-  apply ph_diff_inv in H.
-  destruct H.
-  unfold apply in *.
-  unfold update in *.
-  remember (Map_TID.find t ph) as o; symmetry in Heqo.
-  destruct o; intuition.
-  - apply Map_TID_Facts.add_in_iff in H.
-    destruct H; auto.
-    subst.
-    apply Map_TID_Facts.in_find_iff.
-    intuition.
-    rewrite H in Heqo.
-    inversion Heqo.
-  - apply Map_TID_Facts.add_in_iff in H0.
-    destruct H0; auto.
-    subst.
-    apply Map_TID_Facts.in_find_iff.
-    intuition.
-    rewrite H0 in Heqo.
-    inversion Heqo.
-Qed.
-
-Lemma pm_diff_mapi_inv_eq:
-  forall pm t t',
-  pm_diff (mapi t' wait pm) t t 0 ->
-  pm_diff pm t t 0.
-Proof.
-  intros.
-  inversion H.
+  destruct (TID.eq_dec t t1); repeat auto.
   subst.
+  contradiction.
+Qed.
+
+Lemma ph_diff_apply_wait:
+  forall t t1 t2 z ph,
+  ph_diff (apply t wait ph) t1 t2 z ->
+  ph_diff ph t1 t2 (z + wait_delta t (t1, t2)).
+Proof.
+  intros.
+  unfold apply, update in *.
+  remember (Map_TID.find t ph).
+  symmetry in Heqo.
+  destruct o as [v|].
+  - assert (Map_TID.MapsTo t v ph). {
+      rewrite Map_TID_Facts.find_mapsto_iff; assumption.
+    }
+    clear Heqo.
+    eauto using ph_diff_add_wait.
+ - rewrite <- Map_TID_Facts.not_find_in_iff in Heqo.
+   assert (t <> t1). {
+     apply ph_diff_inv_left in H.
+     apply in_neq with (ph:=ph); repeat auto.
+   }
+   assert (t <> t2). {
+     apply ph_diff_inv_right in H.
+     apply in_neq with (ph:=ph); repeat auto.
+   }
+   rewrite wait_delta_neq; repeat auto.
+   assert (Heq: ((z + 0 = z) % Z)); intuition.
+   rewrite Heq.
+   assumption.
+Qed.
+
+Lemma pm_diff_mapi_wait:
+  forall t t1 t2 z pm,
+  pm_diff (mapi t wait pm) t1 t2 z ->
+  pm_diff pm t1 t2 (z + wait_delta t (t1, t2)).
+Proof.
+  intros.
+  inversion H; subst; clear H.
   unfold mapi in *.
   apply Map_PHID_Facts.mapi_inv in H0.
-  destruct H0 as (ph', (p', (?, (?, Hmt)))).
+  destruct H0 as (ph', (p', (?, (?, ?)))).
   subst.
-  assert (Map_TID.In t ph'). {
-    eapply ph_diff_wait_in_inv in H1; intuition.
- }
- eauto using pm_diff_refl.
+  rename ph' into ph.
+  eauto using ph_diff_apply_wait, pm_diff_def.
 Qed.
 
-Definition tid_eq_sig x y := if TID.eq_dec x y then 1%Z else 0%Z.
+Lemma diff_mapi_wait:
+  forall t e z pm,
+  diff (mapi t wait pm) e z ->
+  diff pm e (z + wait_delta t e).
+Proof.
+  intros.
+  unfold diff in *.
+  destruct e as (t1, t2).
+  simpl in *.
+  auto using pm_diff_mapi_wait.
+Qed.
+
+Lemma walk2_mapi:
+  forall t pm t1 t2 w,
+  Walk2 (HasDiff (diff (mapi t wait pm))) t1 t2 w ->
+  Walk2 (HasDiff (diff pm)) t1 t2 w.
+Proof.
+  intros.
+  apply walk2_impl with (E:=HasDiff (diff (mapi t wait pm))); repeat auto.
+  intros.
+  unfold HasDiff in *.
+  destruct e as (ta, tb).
+  destruct H0 as (z, ?).
+  exists (z + wait_delta t (ta, tb))%Z.
+  auto using diff_mapi_wait.
+Qed.
 
 Lemma pm_diff_mapi_sig:
   forall t t1 t2 pm z,
@@ -230,35 +234,13 @@ Lemma pm_diff_mapi_sig:
   pm_diff pm t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
 Proof.
   intros.
-  unfold tid_eq_sig.
-  destruct (TID.eq_dec t1 t), (TID.eq_dec t2 t).
-  - subst.
-    assert (z = 0%Z). {
-      eauto using pm_diff_refl_inv.
-    }
-    subst.
-    assert((0 - 1 + 1 = 0) % Z). {
-      intuition.
-    }
-    rewrite H0.
-    eauto using pm_diff_mapi_inv_eq.
-  - subst.
-    assert ((z - 1 + 0 = z - 1) % Z). {
-      intuition.
-    }
-    rewrite H0.
-    eauto using pm_diff_mapi_left.
-  - subst.
-    assert ((z - 0 + 1 = z + 1) % Z). {
-      intuition.
-    }
-    rewrite H0.
-    eauto using pm_diff_mapi_right.
-  - assert (Heq : (z - 0 + 0 = z) % Z). {
-      intuition.
-    }
-    rewrite Heq.
-    eauto using pm_diff_mapi_neq.
+  assert (Heq: ((z - tid_eq_sig t1 t + tid_eq_sig t2 t) = (z + wait_delta t (t1, t2))) %Z). {
+    unfold wait_delta.
+    simpl.
+    intuition.
+  }
+  rewrite Heq.
+  eauto using pm_diff_mapi_wait.
 Qed.
 
 Lemma diff_sum_mapi:
@@ -308,7 +290,6 @@ Proof.
     rewrite Heq.
     auto using diff_sum_cons.
 Qed.
-
 
 Lemma transdiff_mapi:
   forall t pm t1 t2 z,
