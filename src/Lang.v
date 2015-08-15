@@ -75,21 +75,6 @@ Qed.
 Definition SignalCap (v:taskview) :=
   mode v = SIGNAL_WAIT \/ mode v = SIGNAL_ONLY.
 
-Inductive Copy : taskview -> regmode -> taskview -> Prop :=
-  | copy_def:
-    forall v m,
-    (m <= v.(mode)) -> (* m <= v.(mode) *)
-    Copy v m (set_mode v m).
-
-Lemma copy_correct:
-  forall v r v',
-  Copy v r v' ->
-  r = mode v'.
-Proof.
-  intros.
-  inversion H; repeat (subst; auto).
-Qed.
-
 Definition phaser := Map_TID.t taskview.
 
 Definition Await (ph:phaser) (n:nat) :=
@@ -114,17 +99,6 @@ Inductive Sync : phaser -> nat -> Prop :=
     ~ Map_TID.In t ph ->
     Sync ph t.
 
-Inductive reg : Type :=
-  | REGISTER : tid -> regmode -> reg.
-
-
-Inductive Register : phaser -> tid -> reg -> phaser -> Prop :=
-  register_def:
-    forall t t' v v' ph m,
-    Map_TID.MapsTo t v ph ->
-    Copy v m v' ->
-    Register ph t (REGISTER t' m) (Map_TID.add t' v' ph).
-
 Definition phased := (phid * regmode) % type.
 
 Inductive op : Type :=
@@ -139,12 +113,13 @@ Definition phasermap := Map_PHID.t phaser.
 
 Inductive Async : phasermap -> tid -> list phased -> tid -> phasermap -> Prop :=
   | async_step:
-    forall m t p r a t' m' ph ph',
+    forall m t p r a t' m' v ph,
     Async m t a t' m' ->
     Map_PHID.MapsTo p ph m' ->
-    Register ph t (REGISTER t' r) ph' ->
+    Map_TID.MapsTo t v ph ->
+    (r <= v.(mode)) ->
     (* -------------- *)
-    Async m t ((p,r)::a) t' (Map_PHID.add p ph' m')
+    Async m t ((p,r)::a) t' (Map_PHID.add p (Map_TID.add t' (set_mode v r) ph) m')
 
   | async_nil:
     forall m t t',
