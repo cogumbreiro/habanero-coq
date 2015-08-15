@@ -1,6 +1,7 @@
 Require Import HJ.Lang.
 Require Import HJ.Vars.
 Require Import Coq.Lists.List.
+Require Import Coq.Lists.SetoidList.
 
 Definition tid_In (t:tid) (pm:phasermap) :=
   exists p ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
@@ -14,6 +15,8 @@ Inductive CanRegister: tid -> phasermap -> phased -> Prop :=
     Map_TID.MapsTo t v ph ->
     r <= (mode v) ->
     CanRegister t pm (p, r).
+
+Definition eq_phid (p p':phased) := (fst p) = (fst p').
 
 Inductive Check: tid -> op -> phasermap -> Prop :=
   | check_ph_new:
@@ -49,5 +52,6 @@ Inductive Check: tid -> op -> phasermap -> Prop :=
   | check_async:
     forall t t' ps pm,
     ~ tid_In t' pm ->
+    NoDupA eq_phid ps ->
     Forall (CanRegister t pm) ps ->
     Check t (ASYNC ps t') pm.
