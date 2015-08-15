@@ -269,7 +269,7 @@ Lemma prog_simpl:
   forall pm t i,
   Valid pm ->
   Check t i pm ->
-  (match i with | WAIT_ALL => False | _ => True end) ->
+  i <> WAIT_ALL ->
   exists pm',
   Reduce pm t i pm'.
 Proof.
@@ -288,8 +288,9 @@ Proof.
     auto using reduce_drop.
   - exists (mapi t signal pm).
     auto using reduce_signal_all.
-  - inversion H1.
+  - contradiction H1; auto.
   - inversion H0; subst; clear H0.
+    clear H1.
     rename t0 into t'.
     assert (Hpm : exists pm', Async pm t l t' pm'). {
       induction l.
@@ -297,10 +298,10 @@ Proof.
         auto using async_nil.
       + inversion H8; subst; clear H8.
         inversion H6; subst; clear H6.
-        apply IHl in H8; auto; clear IHl.
-        destruct H8 as (pm', Ha).
+        apply IHl in H7; auto; clear IHl.
+        destruct H7 as (pm', Ha).
         destruct a as (p, r).
-        inversion H3; subst; clear H3.
+        inversion H2; subst; clear H2.
         exists  (Map_PHID.add p (Map_TID.add t' (set_mode v r) ph0) pm').
         apply async_step; repeat auto.
         eauto using async_preserves_pm.
