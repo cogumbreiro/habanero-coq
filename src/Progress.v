@@ -232,3 +232,58 @@ Proof.
   eauto using smallest_to_sync.
 Qed.
 End HAS_SMALLEST.
+
+Require Import HJ.Typesystem.
+
+Lemma async_preserves_pm:
+  forall p ph r l pm t t' pm',
+  ~ SetoidList.InA eq_phid (p, r) l ->
+  Async pm t l t' pm' ->
+  Map_PHID.MapsTo p ph pm ->
+  Map_PHID.MapsTo p ph pm'.
+Admitted.
+
+Lemma prog_simpl:
+  forall pm t i,
+  Valid pm ->
+  Check t i pm ->
+  (match i with | WAIT_ALL => False | _ => True end) ->
+  exists pm',
+  Reduce pm t i pm'.
+Proof.
+  intros.
+  destruct i.
+  - inversion H0.
+    subst.
+    exists (Map_PHID.add p (newPhaser t) pm).
+    auto using reduce_new.
+  - inversion H0.
+    subst.
+    exists (Map_PHID.add p (apply t signal ph) pm).
+    auto using reduce_signal.
+  - inversion H0; subst.
+    exists (Map_PHID.add p (Map_TID.remove t ph) pm).
+    auto using reduce_drop.
+  - exists (mapi t signal pm).
+    auto using reduce_signal_all.
+  - inversion H1.
+  - inversion H0; subst; clear H0.
+    rename t0 into t'.
+    assert (Hpm : exists pm', Async pm t l t' pm'). {
+      induction l.
+      + exists pm.
+        auto using async_nil.
+      + inversion H8; subst; clear H8.
+        inversion H6; subst; clear H6.
+        apply IHl in H8; auto; clear IHl.
+        destruct H8 as (pm', Ha).
+        destruct a as (p, r).
+        inversion H3; subst; clear H3.
+        exists  (Map_PHID.add p (Map_TID.add t' (set_mode v r) ph0) pm').
+        apply async_step; repeat auto.
+        eauto using async_preserves_pm.
+   }
+   destruct Hpm as (pm', ?).
+   exists pm'.
+   auto using reduce_async.
+Qed.
