@@ -1,5 +1,6 @@
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
+Require Import Coq.Lists.SetoidList.
 
 Require Import HJ.Vars.
 Require Import HJ.Lang.
@@ -236,12 +237,33 @@ End HAS_SMALLEST.
 Require Import HJ.Typesystem.
 
 Lemma async_preserves_pm:
-  forall p ph r l pm t t' pm',
+  forall l p ph r pm t t' pm',
   ~ SetoidList.InA eq_phid (p, r) l ->
   Async pm t l t' pm' ->
   Map_PHID.MapsTo p ph pm ->
   Map_PHID.MapsTo p ph pm'.
-Admitted.
+Proof.
+  intros l.
+  induction l.
+  - intros.
+    inversion H0; subst.
+    auto.
+  - intros.
+    inversion H0; subst; clear H0.
+    apply IHl with (r:=r) (t:=t) (t':=t') (pm':=m') in H1; auto; clear IHl.
+    rename p0 into p'.
+    rename ph0 into ph'.
+    destruct (PHID.eq_dec p p').
+    + subst.
+      intuition.
+      assert ( InA eq_phid (p', r) ((p', r0) :: l)). {
+        apply InA_cons_hd.
+        unfold eq_phid.
+        auto.
+      }
+      contradiction H0.
+    + apply Map_PHID_Facts.add_neq_mapsto_iff; repeat auto.
+Qed.
 
 Lemma prog_simpl:
   forall pm t i,
