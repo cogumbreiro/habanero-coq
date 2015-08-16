@@ -236,7 +236,12 @@ End HAS_SMALLEST.
 
 Require Import HJ.Typesystem.
 
-Lemma async_preserves_pm:
+Require Coq.FSets.FMapFacts.
+Module M := FMapFacts.WProperties_fun TID Map_TID.
+
+Section PROGRESS.
+
+Let async_preserves_pm:
   forall l p ph r pm t t' pm',
   ~ SetoidList.InA eq_phid (p, r) l ->
   Async pm t l t' pm' ->
@@ -265,7 +270,7 @@ Proof.
     + apply Map_PHID_Facts.add_neq_mapsto_iff; repeat auto.
 Qed.
 
-Lemma prog_simpl:
+Lemma progress_simple:
   forall pm t i,
   Valid pm ->
   Check t i pm ->
@@ -310,3 +315,157 @@ Proof.
    exists pm'.
    auto using reduce_async.
 Qed.
+
+
+Variable reqs: Map_TID.t op.
+Variable pm: phasermap.
+Variable pm_spec: Valid pm.
+
+Require Import HJ.PhaseDiff.
+
+Variable reqs_spec_1:
+  forall t,
+  tid_In t pm <-> (exists i, Map_TID.MapsTo t i reqs).
+
+Variable reqs_spec_2:
+  forall t i,
+  Map_TID.MapsTo t i reqs ->
+  Check t i pm.
+
+Let tids := pm_tids pm.
+
+Let eq_wait_all (i:op) :=
+  match i with
+    | WAIT_ALL => true
+    | _ => false
+  end.
+
+Lemma eq_wait_all_true:
+  forall i,
+  eq_wait_all i = true <->
+  i = WAIT_ALL.
+Proof.
+  intros.
+  unfold eq_wait_all in *.
+  split;
+  ( intros;
+    destruct i;
+    try (inversion H || auto)).
+Qed.
+
+Lemma eq_wait_all_false:
+  forall i,
+  eq_wait_all i = false <->
+  i <> WAIT_ALL.
+Proof.
+  intros.
+  unfold eq_wait_all in *.
+  split; (
+    intros;
+    destruct i; (
+      intuition;
+      inversion H0
+    )
+  ).
+Qed.
+
+Lemma wait_all_dec:
+  forall i,
+  { i = WAIT_ALL } + { i <> WAIT_ALL }.
+Proof.
+  intros.
+  remember (eq_wait_all i).
+  symmetry in Heqb.
+  destruct b.
+  - rewrite eq_wait_all_true in *.
+    auto.
+  - rewrite eq_wait_all_false in *.
+    auto.
+Qed.
+
+Lemma i_case:
+  (exists t i, Map_TID.MapsTo t i reqs /\ i <> WAIT_ALL)
+  \/
+  (forall t, Map_TID.In t reqs -> Map_TID.MapsTo t WAIT_ALL reqs).
+Proof.
+  intros.
+  remember (snd (M.partition (fun (t:tid) => eq_wait_all) reqs)).
+  destruct (Map_TID_Extra.in_choice y).
+  - left.
+    destruct e as (t, Hin).
+    apply Map_TID_Extra.in_to_mapsto in Hin.
+    destruct Hin as (i, Hin).
+    exists t.
+    exists i.
+    apply M.partition_iff_2 with (k:=t) (e:=i) in Heqy; auto with *.
+    apply Heqy in Hin; clear Heqy.
+    destruct Hin.
+    rewrite eq_wait_all_false  in H0.
+    intuition.
+  - right.
+    intros.
+    apply Map_TID_Extra.in_to_mapsto in H.
+    destruct H as (i, Hmt).
+    destruct (wait_all_dec i).
+    + subst; assumption.
+    + (* absurd case *)
+      assert (exists (k:tid), Map_TID.In (elt:=op) k y). {
+        exists t.
+        apply M.partition_iff_2 with (k:=t) (e:=i) in Heqy; auto with *.
+        apply Map_TID_Extra.mapsto_to_in with (e:=i).
+        rewrite Heqy.
+        rewrite eq_wait_all_false.
+        intuition.
+      }
+      contradiction H.
+Qed.
+
+Theorem progress:
+  tids <> nil ->
+  exists t i,
+  Map_TID.MapsTo t i reqs /\
+  exists pm', Reduce pm t i pm'.
+Proof.
+  intros.
+  destruct i_case.
+  - destruct H0 as (t, (i, (Hmt, Hneq))).
+    exists t; exists i.
+    intuition.
+    apply progress_simple; auto.
+  - assert (AllSig: forall p ph,
+            Map_PHID.MapsTo p ph pm ->
+            forall t v,
+            Map_TID.MapsTo t v ph ->
+            (wait_phase v < signal_phase v)%nat). {
+      intros.
+      assert (tid_In t pm). {
+        unfold tid_In.
+        exists p; exists ph.
+        intuition.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      }
+      assert (Hcheck : Check t WAIT_ALL pm). {
+        apply reqs_spec_2.
+        apply reqs_spec_1 in H3.
+        apply H0.
+        destruct H3 as (?, H3).
+        eauto using Map_TID_Extra.mapsto_to_in.
+     }
+     inversion Hcheck; subst.
+     eauto using H4.
+    }
+    destruct (has_unblocked _ pm_spec AllSig H) as (t, (Hin, Hred)).
+    exists t.
+    exists WAIT_ALL.
+    assert (tid_In t pm). {
+      unfold tid_In.
+      auto using pm_tids_spec_1.
+    }
+    rewrite reqs_spec_1 in H1.
+    destruct H1 as (i, Hmt).
+    apply Map_TID_Extra.mapsto_to_in in Hmt.
+    apply H0 in Hmt.
+    intuition.
+Qed.
+
+End PROGRESS.
