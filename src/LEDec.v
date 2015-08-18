@@ -350,7 +350,7 @@ Qed.
 End LE_DEC.
 
 Section LE_PM_DIFF.
-Require Import Aniceto.Graphs.Core.
+Require Import Aniceto.Graphs.Graph.
 Require Import HJ.TransDiff.
 
 Variable pm:phasermap.

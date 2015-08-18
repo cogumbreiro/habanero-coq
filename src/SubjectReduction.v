@@ -4,7 +4,7 @@ Require Import HJ.TransDiff.
 Require Import HJ.Vars.
 Require Import HJ.PhaseDiff.
 
-Require Import Aniceto.Graphs.Core.
+Require Import Aniceto.Graphs.Graph.
 Require Import Aniceto.Pair.
 
 Require Import Coq.Lists.List.

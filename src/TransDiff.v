@@ -214,7 +214,7 @@ Qed.
 
 Definition HasDiff e := exists z, diff e z.
 
-Require Import Aniceto.Graphs.Core.
+Require Import Aniceto.Graphs.Graph.
 
 Lemma has_diff_to_diff_sum:
   forall w x y,
