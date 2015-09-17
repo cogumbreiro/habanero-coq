@@ -30,3 +30,14 @@ Module Map_PHID_Extra := MapUtil Map_PHID.
 
 Definition phid := PHID.t.
 Definition set_phid := Set_PHID.t.
+
+Module FID := Nat_as_OT.
+Module Set_FID := FSetAVL.Make FID.
+Module Set_FID_Extra := SetUtil Set_FID.
+Module Map_FID := FMapAVL.Make FID.
+Module Map_FID_Facts := FMapFacts.Facts Map_FID.
+Module Map_FID_Props := FMapFacts.Properties Map_FID.
+Module Map_FID_Extra := MapUtil Map_FID.
+
+Definition fid := FID.t.
+Definition set_fid := Set_FID.t.
