@@ -325,7 +325,7 @@ Require Import HJ.PhaseDiff.
 
 Variable reqs_spec_1:
   forall t,
-  tid_In t pm <-> (exists i, Map_TID.MapsTo t i reqs).
+  tid_In t pm -> (exists i, Map_TID.MapsTo t i reqs).
 
 Variable reqs_spec_2:
   forall t i,
@@ -461,7 +461,7 @@ Proof.
       unfold tid_In.
       auto using pm_tids_spec_1.
     }
-    rewrite reqs_spec_1 in H1.
+    apply reqs_spec_1 in H1.
     destruct H1 as (i, Hmt).
     apply Map_TID_Extra.mapsto_to_in in Hmt.
     apply H0 in Hmt.
