@@ -241,6 +241,37 @@ Proof.
   - apply pm_tids_spec_2.
 Qed.
 
+Lemma in_dec:
+  forall t,
+  { In t pm } + { ~ In t pm }.
+Proof.
+  intros.
+  destruct (List.in_dec TID.eq_dec t pm_tids).
+  - left. apply pm_tids_spec. assumption.
+  - rewrite pm_tids_spec in n.
+    right.
+    assumption.
+Qed.
+
+Lemma pm_tids_nonempty:
+  pm_tids <> nil <-> exists t, In t pm.
+Proof.
+  intros.
+  intuition.
+  remember (pm_tids).
+  destruct l.
+  + contradiction H; trivial.
+  + exists k.
+    rewrite <- pm_tids_spec.
+    rewrite <- Heql.
+    auto with *.
+  + destruct H as (t, Hin).
+    rewrite <- pm_tids_spec in Hin.
+    rewrite H0 in *.
+    inversion Hin.
+Qed.
+
+
 Lemma ph_le_in_pm_tids:
   forall p ph x y,
   Map_PHID.MapsTo p ph pm ->
