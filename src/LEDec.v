@@ -190,7 +190,7 @@ Definition ph_tids (ph:phaser) := Map_TID_Extra.keys ph.
 
 Lemma ph_tids_spec:
   forall ph t,
-  In t (ph_tids ph) <->
+  List.In t (ph_tids ph) <->
   Map_TID.In t ph.
 Proof.
   intros.
@@ -204,8 +204,8 @@ Definition pm_tids :=
 
 Lemma pm_tids_spec_1:
   forall t,
-  In t pm_tids ->
-  exists (p : Map_PHID.key) (ph : phaser), Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
+  List.In t pm_tids ->
+  In t pm.
 Proof.
   intros.
   unfold pm_tids in *.
@@ -214,19 +214,17 @@ Proof.
   rewrite ph_tids_spec in Hin.
   apply Map_PHID_Extra.values_spec in Hmt.
   destruct Hmt as (p, Hmt).
-  exists p; exists ph.
-  intuition.
+  eauto using in_def.
 Qed.
 
 Lemma pm_tids_spec_2:
-  forall p ph t,
-  Map_PHID.MapsTo p ph pm ->
-  Map_TID.In t ph ->
-  In t pm_tids.
+  forall t,
+  In t pm -> List.In t pm_tids.
 Proof.
   intros.
   unfold pm_tids in *.
   rewrite in_flat_map.
+  inversion H.
   exists ph.
   rewrite ph_tids_spec.
   intuition.
@@ -235,33 +233,32 @@ Qed.
 
 Lemma pm_tids_spec:
   forall t,
-  In t pm_tids <->
-  exists p ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
+  List.In t pm_tids <-> In t pm.
 Proof.
   intros.
   split.
   - apply pm_tids_spec_1.
-  - intros.
-    destruct H as (p, (ph, (?, ?))).
-    eauto using pm_tids_spec_2. 
+  - apply pm_tids_spec_2.
 Qed.
 
 Lemma ph_le_in_pm_tids:
   forall p ph x y,
   Map_PHID.MapsTo p ph pm ->
   ph_le ph x y ->
-  In x pm_tids /\ In y pm_tids.
+  List.In x pm_tids /\ List.In y pm_tids.
 Proof.
   intros.
   apply ph_le_inv_in in H0.
   destruct H0.
-  split; eauto using pm_tids_spec_2.
+  split; (
+  apply pm_tids_spec;
+  eauto using in_def).
 Qed.
 
 Lemma wp_le_in_pm_tids:
   forall x y,
   wp_le pm x y ->
-  In x pm_tids /\ In y pm_tids.
+  List.In x pm_tids /\ List.In y pm_tids.
 Proof.
   intros.
   rewrite wp_le_alt in *.
@@ -274,7 +271,7 @@ Definition product (t:tid) := map (fun t' => (t, t')) pm_tids.
 Lemma wp_le_in_product:
   forall x y,
   wp_le pm x y ->
-  In (x, y) (product x).
+  List.In (x, y) (product x).
 Proof.
   intros.
   unfold product.
@@ -285,7 +282,7 @@ Qed.
 
 Lemma in_product_inv_eq:
   forall x y z,
-  In (x, y) (product z) ->
+  List.In (x, y) (product z) ->
   x = z.
 Proof.
   intros.
@@ -303,7 +300,7 @@ Definition all_pairs : list (tid*tid)%type :=
 
 Lemma all_pairs_spec_1:
   forall x y : tid,
-  wp_le pm x y -> In (x, y) all_pairs.
+  wp_le pm x y -> List.In (x, y) all_pairs.
 Proof.
   intros.
   unfold all_pairs.
@@ -319,7 +316,7 @@ Definition wp_le_rel :=
 
 Lemma wp_rels_spec:
   forall x y : tid,
-  wp_le pm x y <-> In (x, y) wp_le_rel.
+  wp_le pm x y <-> List.In (x, y) wp_le_rel.
 Proof.
   intros.
   unfold wp_le_rel.

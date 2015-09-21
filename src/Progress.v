@@ -23,7 +23,7 @@ Definition Valid (pm:phasermap) := TransDiffFun tid (diff pm).
 
 Section HAS_SMALLEST.
 Variable pm: phasermap.
-Let IsA t := tid_In t pm.
+Let IsA t := In t pm.
 
 Let wtid_le (t1:tid) (t2:tid) := LE pm t1 t2.
 
@@ -44,8 +44,8 @@ Let wtid_has_smallest :=
   (LE_refl pm) wtid_le_trans.
 
 Definition Smallest (t:tid) (ts:list tid)  :=
-  In t ts /\
-  forall t', In t' ts -> (~ LE pm t t' /\ ~ LE pm t' t) \/ LE pm t t'.
+  List.In t ts /\
+  forall t', List.In t' ts -> (~ LE pm t t' /\ ~ LE pm t' t) \/ LE pm t t'.
 
 Theorem has_smallest:
   forall ts,
@@ -64,7 +64,7 @@ Proof.
 Qed.
 
 Let tids := pm_tids pm.
-
+(*
 Let tids_def:
   forall t, In t tids <-> IsA t.
 Proof.
@@ -75,11 +75,11 @@ Proof.
   unfold tid_In.
   intuition.
 Qed.
-
+*)
 Let smallest_inv:
   forall t,
   Smallest t tids ->
-  In t tids.
+  List.In t tids.
 Proof.
   intros.
   unfold Smallest in *.
@@ -90,14 +90,12 @@ Lemma in_tids:
   forall p ph t,
   Map_PHID.MapsTo p ph pm ->
   Map_TID.In t ph ->
-  In t tids.
+  List.In t tids.
 Proof.
   intros.
-  rewrite tids_def.
-  unfold IsA.
-  unfold tid_In.
-  exists p; exists ph.
-  intuition.
+  unfold tids.
+  rewrite pm_tids_spec.
+  eauto using in_def.
 Qed.
 
 Lemma Smallest_to_LE :
@@ -112,8 +110,8 @@ Proof.
   unfold Smallest in *.
   destruct H as (Hin, H).
   assert (Hx := H t'); clear H.
-  assert (Hin' : In t' tids). {
-    apply in_tids with (p:=p) (ph:=ph); repeat auto.
+  assert (Hin' : List.In t' tids). {
+    eauto using in_tids.
   }
   apply Hx in Hin'; clear Hx.
   destruct Hin' as [(?,?)|?].
@@ -213,14 +211,15 @@ Qed.
 
 Theorem has_unblocked:
   tids <> nil ->
-  exists t, In t tids /\
+  exists t, List.In t tids /\
   exists pm', Reduce pm t WAIT_ALL pm'.
 Proof.
   intros.
   assert (Hisa : Forall IsA tids). {
     apply Forall_forall.
     intros.
-    apply tids_def.
+    unfold IsA, tids in *.
+    apply pm_tids_spec.
     assumption.
   }
   assert (Hsmall := has_smallest _ H Hisa).
@@ -325,16 +324,16 @@ Require Import HJ.PhaseDiff.
 
 Variable reqs_spec_1:
   forall t,
-  tid_In t pm -> (exists i, Map_TID.MapsTo t i reqs).
+  In t pm -> (exists i, Map_TID.MapsTo t i reqs).
 
 Variable reqs_spec_2:
   forall t i,
   Map_TID.MapsTo t i reqs ->
   Check t i pm.
 
-Let tids := pm_tids pm.
+Let tids := pm_tids pm.  
 
-Let eq_wait_all (i:op) :=
+Definition eq_wait_all (i:op) :=
   match i with
     | WAIT_ALL => true
     | _ => false
@@ -368,7 +367,16 @@ Proof.
     )
   ).
 Qed.
-
+(*
+Theorem progress_blocked:
+  (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
+  exists t o,
+  Map_TID.MapsTo t o reqs /\ (exists pm' : phasermap, Reduce pm t o pm').
+Proof.
+  intros.
+  
+Qed.
+*)
 Lemma wait_all_dec:
   forall i,
   { i = WAIT_ALL } + { i <> WAIT_ALL }.
@@ -438,11 +446,8 @@ Proof.
             Map_TID.MapsTo t v ph ->
             (wait_phase v < signal_phase v)%nat). {
       intros.
-      assert (tid_In t pm). {
-        unfold tid_In.
-        exists p; exists ph.
-        intuition.
-        eauto using Map_TID_Extra.mapsto_to_in.
+      assert (In t pm). {
+        eauto using in_def, Map_TID_Extra.mapsto_to_in.
       }
       assert (Hcheck : Check t WAIT_ALL pm). {
         apply reqs_spec_2.
@@ -457,8 +462,7 @@ Proof.
     destruct (has_unblocked _ pm_spec AllSig H) as (t, (Hin, Hred)).
     exists t.
     exists WAIT_ALL.
-    assert (tid_In t pm). {
-      unfold tid_In.
+    assert (In t pm). {
       auto using pm_tids_spec_1.
     }
     apply reqs_spec_1 in H1.

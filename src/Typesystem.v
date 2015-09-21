@@ -3,9 +3,6 @@ Require Import HJ.Vars.
 Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
 
-Definition tid_In (t:tid) (pm:phasermap) :=
-  exists p ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
-
 Local Open Scope reg_scope.
 
 Inductive CanRegister: tid -> phasermap -> phased -> Prop :=
@@ -51,7 +48,7 @@ Inductive Check: tid -> op -> phasermap -> Prop :=
 
   | check_async:
     forall t t' ps pm,
-    ~ tid_In t' pm ->
+    ~ Lang.In t' pm ->
     NoDupA eq_phid ps ->
     Forall (CanRegister t pm) ps ->
     Check t (ASYNC ps t') pm.

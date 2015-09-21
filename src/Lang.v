@@ -174,3 +174,10 @@ Inductive Reduce : phasermap -> tid -> op -> phasermap -> Prop :=
     forall m t ps t' m',
     Async m t ps t' m' ->
     Reduce m t (ASYNC ps t') m'.
+
+Inductive In (t:tid) (pm:phasermap) : Prop :=
+  in_def:
+    forall p ph,
+    Map_PHID.MapsTo p ph pm ->
+    Map_TID.In t ph ->
+    In t pm.

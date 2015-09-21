@@ -188,7 +188,7 @@ Proof.
     inversion H0.
     + subst.
       intuition.
-      assert (Hin : In (t1, t2) ((t1, t2) :: nil)). {
+      assert (Hin : List.In (t1, t2) ((t1, t2) :: nil)). {
         apply in_eq.
       }
       rewrite Forall_forall in H.
@@ -202,7 +202,7 @@ Proof.
      }
      assert (z0 <= 0). {
        rewrite Forall_forall in H.
-       assert (Hin : In (t1, t2) ((t1, t2) :: (t2, t3) :: w0)). {
+       assert (Hin : List.In (t1, t2) ((t1, t2) :: (t2, t3) :: w0)). {
          apply in_eq.
        }
        destruct (H _ Hin) as (z, (?,?)).

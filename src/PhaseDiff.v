@@ -224,9 +224,6 @@ Proof.
   auto.
 Qed.
 
-Definition tid_In (t:tid) (pm:phasermap) :=
-  exists p ph, Map_PHID.MapsTo p ph pm /\ Map_TID.In t ph.
-
 Inductive ph_le : phaser -> tid -> tid -> Prop :=
   ph_le_def :
     forall ph t1 t2 z,
@@ -573,13 +570,12 @@ Qed.
 
 Lemma wp_le_refl:
   forall t,
-  tid_In t pm ->
+  In t pm ->
   wp_le t t.
 Proof.
   intros.
   apply wp_le_def with (z:=0%Z).
-  - unfold tid_In in H.
-    destruct H as (p, (ph, (Hmt, Hin))).
+  - inversion H.
     eauto using pm_diff_def, ph_diff_refl.
   - intuition.
 Qed.
@@ -587,14 +583,14 @@ Qed.
 Lemma wp_le_inv:
   forall t t',
   wp_le t t' ->
-  tid_In t pm /\ tid_In t' pm.
+  In t pm /\ In t' pm.
 Proof.
   intros.
   apply wp_le_alt in H.
   destruct H as (p, (ph, (Hmt, Hin))).
   apply ph_le_inv in Hin.
-  unfold tid_In.
-  split; repeat (exists p; exists ph; intuition).
+  destruct Hin.
+  eauto using in_def.
 Qed.
 
 Lemma wp_le_total:
@@ -616,7 +612,7 @@ Definition LE := clos_trans tid wp_le.
 
 Lemma LE_refl:
   forall t,
-  tid_In t pm ->
+  In t pm ->
   LE t t.
 Proof.
   intros.
@@ -627,7 +623,7 @@ Qed.
 Lemma LE_inv:
   forall t t',
   LE t t' ->
-  tid_In t pm /\ tid_In t' pm.
+  In t pm /\ In t' pm.
 Proof.
   intros.
   unfold LE in H.
