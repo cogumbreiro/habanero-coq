@@ -269,7 +269,7 @@ Proof.
     + apply Map_PHID_Facts.add_neq_mapsto_iff; repeat auto.
 Qed.
 
-Lemma progress_simple:
+Lemma progress_unblocking_simple:
   forall pm t i,
   Valid pm ->
   Check t i pm ->
@@ -367,6 +367,16 @@ Proof.
     )
   ).
 Qed.
+
+Lemma negb_eq_wait_all:
+  forall o,
+  negb (eq_wait_all o) = false <-> o = WAIT_ALL.
+Proof.
+  intros.
+  rewrite Bool.negb_false_iff, eq_wait_all_true.
+  tauto.
+Qed.
+
 (*
 Theorem progress_blocked:
   (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
@@ -391,41 +401,54 @@ Proof.
     auto.
 Qed.
 
-Lemma i_case:
-  (exists t i, Map_TID.MapsTo t i reqs /\ i <> WAIT_ALL)
-  \/
-  (forall t, Map_TID.In t reqs -> Map_TID.MapsTo t WAIT_ALL reqs).
+Lemma progress_blocking:
+  tids <> nil ->
+  (forall t o, Map_TID.MapsTo t o reqs -> negb (eq_wait_all o) = false) ->
+  exists t i,  Map_TID.MapsTo t i reqs /\ exists pm', Reduce pm t i pm'.
 Proof.
   intros.
-  remember (snd (M.partition (fun (t:tid) => eq_wait_all) reqs)).
-  destruct (Map_TID_Extra.in_choice y).
-  - left.
-    destruct e as (t, Hin).
-    apply Map_TID_Extra.in_to_mapsto in Hin.
-    destruct Hin as (i, Hin).
-    exists t.
-    exists i.
-    apply M.partition_iff_2 with (k:=t) (e:=i) in Heqy; auto with *.
-    apply Heqy in Hin; clear Heqy.
-    destruct Hin.
-    rewrite eq_wait_all_false  in H0.
-    intuition.
-  - right.
+  assert (AllSig: forall p ph,
+          Map_PHID.MapsTo p ph pm ->
+          forall t v,
+          Map_TID.MapsTo t v ph ->
+          (wait_phase v < signal_phase v)%nat). {
     intros.
-    apply Map_TID_Extra.in_to_mapsto in H.
-    destruct H as (i, Hmt).
-    destruct (wait_all_dec i).
-    + subst; assumption.
-    + (* absurd case *)
-      assert (exists (k:tid), Map_TID.In (elt:=op) k y). {
-        exists t.
-        apply M.partition_iff_2 with (k:=t) (e:=i) in Heqy; auto with *.
-        apply Map_TID_Extra.mapsto_to_in with (e:=i).
-        rewrite Heqy.
-        rewrite eq_wait_all_false.
-        intuition.
+    assert (In t pm). {
+      eauto using in_def, Map_TID_Extra.mapsto_to_in.
+    }
+    assert (Hcheck : Check t WAIT_ALL pm). {
+      apply reqs_spec_2.
+      apply reqs_spec_1 in H3.
+      destruct H3 as (?, Hmt).
+      assert (Heq : x = WAIT_ALL). {
+        apply H0 in Hmt.
+        rewrite negb_eq_wait_all in *.
+        assumption.
       }
-      contradiction H.
+      subst.
+      assumption.
+   }
+   inversion Hcheck; subst.
+   eauto using H3.
+  }
+  destruct (has_unblocked _ pm_spec AllSig H) as (t, (Hin, Hred)).
+  exists t.
+  assert (In t pm). {
+    auto using pm_tids_spec_1.
+  }
+  exists WAIT_ALL.
+  assert (Map_TID.MapsTo t WAIT_ALL reqs). {
+    apply reqs_spec_1 in H1.
+    destruct H1 as (o, Hmt).
+    assert (Heq : o = WAIT_ALL). {
+      apply H0 in Hmt.
+      rewrite negb_eq_wait_all in Hmt.
+      assumption.
+    }
+    subst.
+    auto.
+  }
+  intuition.
 Qed.
 
 Theorem progress:
@@ -435,41 +458,16 @@ Theorem progress:
   exists pm', Reduce pm t i pm'.
 Proof.
   intros.
-  destruct i_case.
-  - destruct H0 as (t, (i, (Hmt, Hneq))).
-    exists t; exists i.
+  destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:op) =>  negb (eq_wait_all o))); auto with *.
+  - destruct e as (t, (o, (Hmt, Hneq))).
+    exists t; exists o.
     intuition.
-    apply progress_simple; auto.
-  - assert (AllSig: forall p ph,
-            Map_PHID.MapsTo p ph pm ->
-            forall t v,
-            Map_TID.MapsTo t v ph ->
-            (wait_phase v < signal_phase v)%nat). {
-      intros.
-      assert (In t pm). {
-        eauto using in_def, Map_TID_Extra.mapsto_to_in.
-      }
-      assert (Hcheck : Check t WAIT_ALL pm). {
-        apply reqs_spec_2.
-        apply reqs_spec_1 in H3.
-        apply H0.
-        destruct H3 as (?, H3).
-        eauto using Map_TID_Extra.mapsto_to_in.
-     }
-     inversion Hcheck; subst.
-     eauto using H4.
-    }
-    destruct (has_unblocked _ pm_spec AllSig H) as (t, (Hin, Hred)).
-    exists t.
-    exists WAIT_ALL.
-    assert (In t pm). {
-      auto using pm_tids_spec_1.
-    }
-    apply reqs_spec_1 in H1.
-    destruct H1 as (i, Hmt).
-    apply Map_TID_Extra.mapsto_to_in in Hmt.
-    apply H0 in Hmt.
-    intuition.
+    apply progress_unblocking_simple; auto.
+    rewrite <- eq_wait_all_false.
+    destruct (eq_wait_all o).
+    + inversion Hneq.
+    + trivial.
+  - auto using progress_blocking.
 Qed.
 
 End PROGRESS.
