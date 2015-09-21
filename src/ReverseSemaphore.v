@@ -74,15 +74,84 @@ Lemma pm_prog:
   (forall t, tid_In t pm -> Map_TID.In t r) ->
   (forall t o, Map_TID.MapsTo t o r -> Check t o pm) ->
   P.Valid pm ->
-  Progress.Progress phasermap op.
+  @Progress.Progress phasermap op.
 Proof.
   intros.
   refine (
-    Progress.mk_progress
+    @Progress.mk_progress
       _ _
       pm r
-      (fun (t:tid) => tid_In t pm) 
-      (fun (t:tid) (o:op) => Check t o pm) (Reduce pm) _ _ _); auto.
+      (fun (t:tid) (o:op) => Check t o pm)
+      (Reduce pm)
+      P.eq_wait_all
+      _ _ _); auto.
+  - intros.
+    eapply P.progress_simple; auto.
+    destruct o; (
+      simpl in *;
+      intuition;
+      inversion H4).
+  - intros.
+    assert (LEDec.pm_tids pm <> nil). {
+    intuition.
+    apply Map_TID_Extra.non_empty_eq_in in H2.
+    destruct H2 as (k, Hin).
+    apply Map_TID_Extra.in_to_mapsto in Hin.
+    destruct Hin as (v, Hmt).
+    assert (forall t, ~ List.In t (LEDec.pm_tids pm)). {
+      intros.
+      intuition.
+      unfold LEDec.pm_tids in *.
+      rewrite H4 in H2.
+      inversion H2.
+    }
+    assert (List.In k (LEDec.pm_tids pm)). {
+      assert (Hc : Check k WAIT_ALL pm). {
+        assert (Hw : P.eq_wait_all v = true). {
+          eauto using H3.
+        }
+        assert (Heq : v = WAIT_ALL). {
+          destruct v; (inversion Hw; trivial).
+        }
+        subst.
+        auto.
+      }
+      inversion Hc; subst; clear Hc.
+      rewrite LEDec.pm_tids_spec.
+      unfold tid_In in *.
+      assert (Hx := H k).
+      destruct H2 as (p, (ph, (?, ?))).
+      exists p.
+      exists ph.
+      intuition.
+    }
+    contradiction (H4 x).
+  }
+
+    (*
+    apply Map_TID_Extra.non_empty_eq_in in H2.
+    destruct H2 as (k, Hin).
+    apply Map_TID_Extra.in_to_mapsto in Hin.
+    destruct Hin as (v, Hmt).
+    *)
+    assert (LEDec.pm_tids pm <> nil). {
+      intuition.
+      destruct (List.in_dec TID.eq_dec tid (LEDec.pm_tids pm)).
+      rewrite <- LEDec.pm_tids_spec in H5.
+      unfold LEDec.pm_tids in *.
+      
+    apply Map_TID_Extra.non_empty_eq_in in H2.
+    destruct H2 as (tm, Hmt).
+    apply Map_TID_Extra.in_to_mapsto in Hmt.
+    destruct Hmt as (o, Hmt).
+    assert (P.eq_wait_all o = true). {
+      eauto.
+    }
+      
+    
+  
+    eapply P.has_unblocked.
+(simpl in *; try inversion H3; intuition).
   intros.
   assert (LEDec.pm_tids pm <> nil). {
     destruct H2.
