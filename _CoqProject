@@ -1,14 +1,14 @@
 -R src HJ
 
 src/Vars.v
-src/Rel.v
-src/PhaseDiff.v
-src/Lang.v
-src/TransClosure.v
-src/Progress.v
-src/LEDec.v
-src/TransDiff.v
-src/SubjectReduction.v
-src/Typesystem.v
+src/Phasers/Rel.v
+src/Phasers/PhaseDiff.v
+src/Phasers/Lang.v
+src/Phasers/TransClosure.v
+src/Phasers/Progress.v
+src/Phasers/LEDec.v
+src/Phasers/TransDiff.v
+src/Phasers/SubjectReduction.v
+src/Phasers/Typesystem.v
 src/ReverseSemaphore.v
 

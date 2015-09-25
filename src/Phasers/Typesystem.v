@@ -1,5 +1,5 @@
-Require Import HJ.Lang.
 Require Import HJ.Vars.
+Require Import HJ.Phasers.Lang.
 Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
 

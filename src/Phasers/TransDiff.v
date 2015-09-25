@@ -2,8 +2,8 @@ Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
 
 Require Import HJ.Vars.
-Require Import HJ.Lang.
-Require Import HJ.PhaseDiff.
+Require Import HJ.Phasers.Lang.
+Require Import HJ.Phasers.PhaseDiff.
 
 Open Local Scope Z.
 

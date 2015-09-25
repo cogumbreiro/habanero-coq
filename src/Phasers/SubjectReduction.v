@@ -1,8 +1,8 @@
-Require Import HJ.Progress.
-Require Import HJ.Lang.
-Require Import HJ.TransDiff.
+Require Import HJ.Phasers.Progress.
+Require Import HJ.Phasers.Lang.
+Require Import HJ.Phasers.TransDiff.
+Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Vars.
-Require Import HJ.PhaseDiff.
 
 Require Import Aniceto.Graphs.Graph.
 Require Import Aniceto.Pair.

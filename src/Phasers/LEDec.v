@@ -4,9 +4,9 @@ Require Import Coq.Lists.List.
 Require Import Aniceto.Pair.
 
 Require Import HJ.Vars.
-Require Import HJ.Lang.
-Require Import HJ.PhaseDiff.
-Require HJ.TransClosure.
+Require Import HJ.Phasers.Lang.
+Require Import HJ.Phasers.PhaseDiff.
+Require HJ.Phasers.TransClosure.
 
 Open Local Scope Z.
 
@@ -379,7 +379,7 @@ End LE_DEC.
 
 Section LE_PM_DIFF.
 Require Import Aniceto.Graphs.Graph.
-Require Import HJ.TransDiff.
+Require Import HJ.Phasers.TransDiff.
 
 Variable pm:phasermap.
 Notation t_edge := (tid * tid) % type.

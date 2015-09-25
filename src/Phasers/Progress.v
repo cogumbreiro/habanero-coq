@@ -3,11 +3,11 @@ Require Import Coq.ZArith.BinInt.
 Require Import Coq.Lists.SetoidList.
 
 Require Import HJ.Vars.
-Require Import HJ.Lang.
-Require Import HJ.PhaseDiff.
-Require Import HJ.LEDec.
-Require HJ.Rel.
-Require Import TransDiff.
+Require Import HJ.Phasers.Lang.
+Require Import HJ.Phasers.PhaseDiff.
+Require Import HJ.Phasers.LEDec.
+Require HJ.Phasers.Rel.
+Require Import HJ.Phasers.TransDiff.
 
 Open Local Scope Z.
 
@@ -64,18 +64,7 @@ Proof.
 Qed.
 
 Let tids := pm_tids pm.
-(*
-Let tids_def:
-  forall t, In t tids <-> IsA t.
-Proof.
-  unfold tids.
-  intros.
-  rewrite pm_tids_spec.
-  unfold IsA.
-  unfold tid_In.
-  intuition.
-Qed.
-*)
+
 Let smallest_inv:
   forall t,
   Smallest t tids ->
@@ -174,12 +163,14 @@ Open Local Scope nat.
   performed a signal prior to waiting.
 *)
 
-Variable AllSignalled :
+Definition AllSignalled : Prop  :=
   forall p ph,
   Map_PHID.MapsTo p ph pm ->
   forall t v,
   Map_TID.MapsTo t v ph ->
   v.(wait_phase) < v.(signal_phase).
+
+Variable AS : AllSignalled.
 
 Lemma smallest_to_sync:
   forall t p ph,
@@ -201,7 +192,7 @@ Proof.
         eauto using Smallest_to_WaitPhase.
       }
       assert (wait_phase v' < signal_phase v'). {
-        eauto using AllSignalled.
+        eauto using AS.
       }
       intuition.
     - eauto using sync_so.
@@ -233,7 +224,7 @@ Proof.
 Qed.
 End HAS_SMALLEST.
 
-Require Import HJ.Typesystem.
+Require Import HJ.Phasers.Typesystem.
 
 Require Coq.FSets.FMapFacts.
 Module M := FMapFacts.WProperties_fun TID Map_TID.
@@ -320,11 +311,11 @@ Variable reqs: Map_TID.t op.
 Variable pm: phasermap.
 Variable pm_spec: Valid pm.
 
-Require Import HJ.PhaseDiff.
+Require Import HJ.Phasers.PhaseDiff.
 
 Variable reqs_spec_1:
   forall t,
-  In t pm -> (exists i, Map_TID.MapsTo t i reqs).
+  In t pm <-> Map_TID.In t reqs.
 
 Variable reqs_spec_2:
   forall t i,
@@ -377,16 +368,6 @@ Proof.
   tauto.
 Qed.
 
-(*
-Theorem progress_blocked:
-  (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
-  exists t o,
-  Map_TID.MapsTo t o reqs /\ (exists pm' : phasermap, Reduce pm t o pm').
-Proof.
-  intros.
-  
-Qed.
-*)
 Lemma wait_all_dec:
   forall i,
   { i = WAIT_ALL } + { i <> WAIT_ALL }.
@@ -401,35 +382,43 @@ Proof.
     auto.
 Qed.
 
+Lemma all_sig:
+  (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
+  AllSignalled pm.
+Proof.
+  unfold AllSignalled.
+  intros.
+  assert (Hin : In t pm). {
+    eauto using in_def, Map_TID_Extra.mapsto_to_in.
+  }
+  assert (Hcheck : Check t WAIT_ALL pm). {
+    apply reqs_spec_2.
+    apply reqs_spec_1 in Hin.
+    destruct Hin as (?, Hmt).
+    assert (Heq : x = WAIT_ALL). {
+      apply H in Hmt.
+      assumption.
+    }
+    subst.
+    assumption.
+ }
+ inversion Hcheck; subst.
+ eauto using Hin.
+Qed.
+
+
 Lemma progress_blocking:
   tids <> nil ->
   (forall t o, Map_TID.MapsTo t o reqs -> negb (eq_wait_all o) = false) ->
   exists t i,  Map_TID.MapsTo t i reqs /\ exists pm', Reduce pm t i pm'.
 Proof.
   intros.
-  assert (AllSig: forall p ph,
-          Map_PHID.MapsTo p ph pm ->
-          forall t v,
-          Map_TID.MapsTo t v ph ->
-          (wait_phase v < signal_phase v)%nat). {
+  assert (AllSig: AllSignalled pm). {
+    eapply all_sig.
     intros.
-    assert (In t pm). {
-      eauto using in_def, Map_TID_Extra.mapsto_to_in.
-    }
-    assert (Hcheck : Check t WAIT_ALL pm). {
-      apply reqs_spec_2.
-      apply reqs_spec_1 in H3.
-      destruct H3 as (?, Hmt).
-      assert (Heq : x = WAIT_ALL). {
-        apply H0 in Hmt.
-        rewrite negb_eq_wait_all in *.
-        assumption.
-      }
-      subst.
-      assumption.
-   }
-   inversion Hcheck; subst.
-   eauto using H3.
+    apply H0 in H1.
+    rewrite negb_eq_wait_all in *.
+    assumption.
   }
   destruct (has_unblocked _ pm_spec AllSig H) as (t, (Hin, Hred)).
   exists t.
@@ -451,6 +440,83 @@ Proof.
   intuition.
 Qed.
 
+Theorem progress_wait_all_notin:
+  forall t,
+  ~ In t pm ->
+  exists pm', Reduce pm t WAIT_ALL pm'.
+Proof.
+  intros.
+  exists (mapi t wait pm).
+  eapply reduce_wait_all.
+  intros.
+  destruct (Map_TID_Extra.in_dec tid_eq_rw t ph).
+  - assert (In t pm). {
+      eauto using in_def.
+    }
+    contradiction H1.
+  - auto using sync_skip.
+Qed.
+
+Lemma tids_nonempty:
+  forall t,
+  In t pm -> tids <> nil.
+Proof.
+  intros.
+  unfold tids.
+  apply pm_tids_nonempty.
+  exists t.
+  assumption.
+Qed.
+
+Theorem progress_blocked':
+  ~ Map_TID.Empty reqs ->
+  (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
+  exists t o,
+  Map_TID.MapsTo t o reqs /\ (exists pm' : phasermap, Reduce pm t o pm').
+Proof.
+  intros.
+  assert (AllSig: AllSignalled pm). {
+    auto using all_sig.
+  }
+  assert (Hmt: exists t, Map_TID.In t reqs). {
+    apply Map_TID_Extra.nonempty_in; auto.
+  }
+  destruct Hmt as (t, Hin).
+  assert (Hn: tids <> nil). {
+    apply reqs_spec_1 in Hin.
+    eauto using tids_nonempty.
+  }
+  rename t into t'.
+  clear Hin.
+  destruct (has_unblocked _ pm_spec AllSig Hn) as (t, (Hin, Hred)).
+  exists t.
+  assert (In t pm). {
+      auto using pm_tids_spec_1.
+    }
+    exists WAIT_ALL.
+    assert (Map_TID.MapsTo t WAIT_ALL reqs). {
+      apply reqs_spec_1 in H1.
+      destruct H1 as (o, Hmt).
+      assert (Heq : o = WAIT_ALL). {
+        apply H0 in Hmt.
+        assumption.
+      }
+      subst.
+      auto.
+    }
+    intuition.
+Qed.
+(*
+Lemma progress_unblocking:
+  forall (t : tid) (o : op),
+  Check t o pm ->
+  eq_wait_all o = false -> exists s' : phasermap, Reduce pm t o s'.
+Proof.
+  intros.
+  rewrite eq_wait_all_false in *.
+  auto using progress_unblocking_simple.
+Qed.
+*)
 Theorem progress:
   tids <> nil ->
   exists t i,

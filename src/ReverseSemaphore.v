@@ -1,21 +1,57 @@
 Require Import HJ.Vars.
+Set Arguments Implicit.
+Module XProgress.
 
-Module Progress.
-Record Progress {S:Type} {O:Type} := mk_progress {
-  (** Defines the state of our synchronization mechanism. *)
-  state: S;
-  (** A map of possible requests issued by some tasks. *)
-  reqs: Map_TID.t O;
-  (** The given task can invoke the given operation. *)
-  Check : tid -> O -> Prop;
-  (** The given task issues an operation that yields a new state. *)
-  Reduce : tid -> O -> S -> Prop;
-  (** Returns [true] when the given operation is blocking, [false] if unblocking. *)
-  blocking : O -> bool;
+Module Request.
+
+Record request {O:Type} := mk_request {
+  reqs : Map_TID.t O;
+  Check: tid -> O -> Prop;
+  In : tid -> Prop
+}.
+
+Implicit Arguments reqs.
+Implicit Arguments Check.
+Implicit Arguments In.
+Implicit Arguments mk_request.
+End Request.
+
+Module RequestSpec.
+Record request_spec
+  {O:Type} 
+  (reqs : Map_TID.t O)
+  (Check: tid -> O -> Prop)
+  (In : tid -> Prop)
+:= {
+  (** We only consider operations from task in the state. *)
+  reqs_in:
+    forall t,
+    In t <-> Map_TID.In t reqs;
   (** All requests are valid. *)
-  reqs_spec:
+  reqs_check:
     forall t o,
-    Map_TID.MapsTo t o reqs -> Check t o;
+    Map_TID.MapsTo t o reqs -> Check t o
+}.
+Implicit Arguments reqs_in.
+Implicit Arguments reqs_check.
+End RequestSpec.
+
+Section ProgressProp.
+Variable O:Type.
+Variable reqs : Map_TID.t O.
+Variable Check: tid -> O -> Prop.
+Variable In : tid -> Prop.
+Variable reqs_spec : RequestSpec.request_spec reqs Check In.
+Variable S:Type.
+(** The state. *)
+Variable state : S.
+(** The given task issues an operation that yields a new state. *)
+Variable Reduce : tid -> O -> S -> Prop.
+(** Returns [true] when the given operation is blocking, [false] if unblocking. *)
+Variable blocking : O -> bool.
+
+Record progress_spec
+:= mk_progress_spec {
   (** Any valid unblocked operation must be able to reduce. *)
   progress_unblocked:
     forall t o,
@@ -35,148 +71,86 @@ Record Progress {S:Type} {O:Type} := mk_progress {
     exists t o,
     Map_TID.MapsTo t o reqs /\ exists s', Reduce t o s' 
 }.
+Implicit Arguments progress_unblocked.
+Implicit Arguments progress_blocked.
 
-Lemma progress:
-  forall {S O:Type} (p:@Progress S O),
-  ~ Map_TID.Empty (reqs p) ->
+Lemma main_progress:
+  forall (p:progress_spec),
+  ~ Map_TID.Empty reqs ->
   (** There is a task that can reduce. *)
   exists t o,
-  Map_TID.MapsTo t o (reqs p) /\ exists s', (Reduce p) t o s'.
+  Map_TID.MapsTo t o reqs /\ exists s', Reduce t o s'.
 Proof.
   intros.
-  destruct (Map_TID_Extra.pred_choice (reqs p) (fun (_:tid) (o:O) => (negb (blocking p o)))).
+  destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:O) => (negb (blocking o)))).
   - auto with *. (* Proper *)
   - destruct e as (t, (o, (Hmt, Hb))).
-    remember (blocking p  o) as b.
+    remember (blocking o) as b.
     destruct b.
     + inversion Hb.
     + exists t.
       exists o.
       intuition.
-      apply (progress_unblocked p); auto.
-      apply (reqs_spec p); auto.
+      apply (progress_unblocked); auto.
+      apply (RequestSpec.reqs_check reqs_spec); auto.
   - apply (progress_blocked p); auto.
     intros.
     apply e in H0.
-    destruct (blocking p o); auto.
+    destruct (blocking o); auto.
 Qed.
-End Progress.
+End ProgressProp.
+End XProgress.
 
 
 Module PhProg.
-Require Import HJ.Lang.
-Require HJ.Progress.
-Module P := HJ.Progress.
-Require Import HJ.PhaseDiff.
-Require Import HJ.Typesystem.
+Require Import HJ.Phasers.Lang.
+Require HJ.Phasers.Progress.
+Module P := HJ.Phasers.Progress.
+Require Import HJ.Phasers.PhaseDiff.
+Require Import HJ.Phasers.Typesystem.
+Module R := XProgress.Request.
+Section  XP.
+Variable pm:phasermap.
+Variable is_valid: P.Valid pm.
+Variable reqs : Map_TID.t op.
+Let Check' (t:tid) (o:op) := Check t o pm.
+Let In' (t:tid) := In t pm.
+Variable reqs_spec :
+  XProgress.RequestSpec.request_spec reqs
+  Check'
+  In'.
+
 Lemma pm_prog:
-  forall (pm:phasermap) (r:Map_TID.t op),
-  (forall t, tid_In t pm -> Map_TID.In t r) ->
-  (forall t o, Map_TID.MapsTo t o r -> Check t o pm) ->
-  P.Valid pm ->
-  @Progress.Progress phasermap op.
+  @XProgress.progress_spec op reqs Check' phasermap (Reduce pm) P.eq_wait_all.
 Proof.
   intros.
   refine (
-    @Progress.mk_progress
-      _ _
-      pm r
-      (fun (t:tid) (o:op) => Check t o pm)
-      (Reduce pm)
-      P.eq_wait_all
-      _ _ _); auto.
+    @XProgress.mk_progress_spec op reqs Check' phasermap
+      (Reduce pm) P.eq_wait_all _ _ ); auto.
   - intros.
-    eapply P.progress_simple; auto.
-    destruct o; (
-      simpl in *;
-      intuition;
-      inversion H4).
+    rewrite P.eq_wait_all_false in *.
+    apply P.progress_unblocking_simple; auto.
   - intros.
-    assert (LEDec.pm_tids pm <> nil). {
-    intuition.
-    apply Map_TID_Extra.non_empty_eq_in in H2.
-    destruct H2 as (k, Hin).
-    apply Map_TID_Extra.in_to_mapsto in Hin.
-    destruct Hin as (v, Hmt).
-    assert (forall t, ~ List.In t (LEDec.pm_tids pm)). {
-      intros.
-      intuition.
-      unfold LEDec.pm_tids in *.
-      rewrite H4 in H2.
-      inversion H2.
-    }
-    assert (List.In k (LEDec.pm_tids pm)). {
-      assert (Hc : Check k WAIT_ALL pm). {
-        assert (Hw : P.eq_wait_all v = true). {
-          eauto using H3.
-        }
-        assert (Heq : v = WAIT_ALL). {
-          destruct v; (inversion Hw; trivial).
-        }
-        subst.
-        auto.
-      }
-      inversion Hc; subst; clear Hc.
-      rewrite LEDec.pm_tids_spec.
-      unfold tid_In in *.
-      assert (Hx := H k).
-      destruct H2 as (p, (ph, (?, ?))).
-      exists p.
-      exists ph.
-      intuition.
-    }
-    contradiction (H4 x).
-  }
-
-    (*
-    apply Map_TID_Extra.non_empty_eq_in in H2.
-    destruct H2 as (k, Hin).
-    apply Map_TID_Extra.in_to_mapsto in Hin.
-    destruct Hin as (v, Hmt).
-    *)
-    assert (LEDec.pm_tids pm <> nil). {
-      intuition.
-      destruct (List.in_dec TID.eq_dec tid (LEDec.pm_tids pm)).
-      rewrite <- LEDec.pm_tids_spec in H5.
-      unfold LEDec.pm_tids in *.
-      
-    apply Map_TID_Extra.non_empty_eq_in in H2.
-    destruct H2 as (tm, Hmt).
-    apply Map_TID_Extra.in_to_mapsto in Hmt.
-    destruct Hmt as (o, Hmt).
-    assert (P.eq_wait_all o = true). {
-      eauto.
-    }
-      
-    
-  
-    eapply P.has_unblocked.
-(simpl in *; try inversion H3; intuition).
-  intros.
-  assert (LEDec.pm_tids pm <> nil). {
-    destruct H2.
-    intuition.
-    assert (forall t, ~ List.In t (LEDec.pm_tids pm)). {
-      intros.
-      intuition.
-      unfold LEDec.pm_tids in *.
-      rewrite H3 in H4.
-      inversion H4.
-    }
-    assert (List.In x (LEDec.pm_tids pm)). {
-      rewrite LEDec.pm_tids_spec.
-      unfold tid_In in *.
-      destruct H2 as (p, (ph, (?, ?))).
-      exists p.
-      exists ph.
-      intuition.
-    }
-    contradiction (H4 x).
-  }
-  eauto using P.progress.
+    apply P.progress_blocked'; auto.
+    + apply (XProgress.RequestSpec.reqs_in reqs_spec).
+    + apply (XProgress.RequestSpec.reqs_check reqs_spec).
+    + intros.
+      apply H0 in H1.
+      rewrite  P.eq_wait_all_true in *.
+      assumption.
 Defined.
-
-Check pm_prog.
+Import XProgress.
+Lemma progress:
+  ~ Map_TID.Empty reqs ->
+  (** There is a task that can reduce. *)
+  exists t o,
+  Map_TID.MapsTo t o reqs /\ exists s', Reduce pm t o s'.
+Proof.
+  intros.
+  eauto using main_progress, pm_prog. 
+Qed.
+End XP.
+End PhProg.
 
 Module Latch.
 (**
@@ -202,7 +176,7 @@ Record latch := mk_latch {
 
 Definition zero := mk_latch Set_TID.empty.
 
-Section Ops.
+Section API.
 
 Variable l:latch.
 
@@ -234,17 +208,21 @@ Definition dec := signal.
   no registered tasks.
   *)
 
-Definition Wait :=
-  Set_TID.Empty (value l).
+Inductive Wait : Prop :=
+  wait_def:
+    Set_TID.Empty (value l) ->
+    Wait.
 
 (**
   Asserts that task [t] is registerd in latch [l].
   *)
 
-Definition Registered (t:tid) :=
-  Set_TID.In t (value l).
+Inductive Registered (t:tid) : Prop :=
+  registered_def:
+    Set_TID.In t (value l) ->
+    Registered t.
 
-End Ops.
+End API.
 End Latch.
 
 Module LatchSem.
@@ -309,12 +287,22 @@ Variable l: latch.
   when the operation is unblocking.
 *)
 
-Definition unblocking (o:op) :=
+Definition blocking (o:op) :=
   match o with
-  | REG _ => true
-  | SIG _ => true
-  | WAIT => false
+  | REG _ => false
+  | SIG _ => false
+  | WAIT => true
   end.
+
+Lemma blocking_true:
+  forall o,
+  blocking o = true <-> o = WAIT.
+Proof.
+  destruct o; (simpl;
+    (split; (
+    intros;
+    inversion H))); auto.
+Qed.
 
 (**
   The proof for this lemma is trivial, by inversion of proposition [Check].
@@ -322,46 +310,131 @@ Definition unblocking (o:op) :=
 
 Lemma progress_unblocked:
   forall t o,
-  unblocking o = true ->
   Check l t o ->
+  blocking o = false ->
   exists l',
   LatchSem.Redex l t o l'.
 Proof.
   intros.
   destruct o.
-  - inversion H0.
+  - inversion H.
     subst.
     eauto using redex_reg.
-  - inversion H0.
+  - inversion H.
     subst.
     eauto using redex_sig.
-  - inversion H.
+  - inversion H0.
 Qed.
 
-Lemma l_prog:
-  forall (l:latch) (r:Map_TID.t op),
-  (forall t, Registered l t -> Map_TID.In t r) ->
-  (forall t o, Map_TID.MapsTo t o r -> Check l t o) ->
-  Progress.Progress latch op.
+Variable r:Map_TID.t op.
+
+Variable reg_in_r : forall t, Registered l t <-> Map_TID.In t r.
+
+Variable r_check: 
+  forall t o, Map_TID.MapsTo t o r -> Check l t o.
+
+Lemma registered_in_reqs:
+  (forall t o, Map_TID.MapsTo t o r -> blocking o = true) ->
+  forall t,
+  Registered l t ->
+  Map_TID.MapsTo t WAIT r.
 Proof.
   intros.
-  
+  apply reg_in_r in H0.
+  apply Map_TID_Extra.in_to_mapsto in H0.
+  destruct H0 as (o,  Hmt).
+  assert (o = WAIT). {
+    apply H in Hmt.
+    apply blocking_true.
+    assumption.
+  }
+  subst.
+  assumption.
 Qed.
 
-Lemma latch_prog:
-  forall (l:latch) (r:Map_TID.t op),
-  (forall t, Registered l t -> Map_TID.In t r) ->
-  (forall t o, Map_TID.MapsTo t o r -> Check l t o) ->
-  
-   => Progress.mk_progress latch op l r
-  (Registered l)
-  (Check l) (Redex l).
+Lemma registered_check_wait:
+  (forall t o, Map_TID.MapsTo t o r -> blocking o = true) ->
+  forall t,
+  Registered l t ->
+  Check l t WAIT.
+Proof.
+  intros.
+  auto using registered_in_reqs.
+Qed.
 
+Lemma progress_blocked:
+  ~ Map_TID.Empty r ->
+  (forall t o, Map_TID.MapsTo t o r -> blocking o = true) ->
+  exists t o,
+  Map_TID.MapsTo t o r /\
+  (exists l', Redex l t o l').
+Proof.
+  intros.
+  (** Wait is enabled. *)
+  assert (Hw: Wait l). {
+    apply wait_def.
+    unfold Set_TID.Empty.
+    intros.
+    destruct (Set_TID_Props.In_dec a (value l)).
+    - assert (Hreg : Registered l a). { auto using registered_def. }
+      assert (Check l a WAIT). {
+        eapply registered_check_wait; auto.
+      }
+      inversion H1.
+      contradiction H2.
+    - assumption.
+  }
+  (** We can pick a task. *)
+  destruct (Vars.Set_TID_Dep.choose (value l)) as [(t,Hin)|Hempty].
+  - exists t.
+    exists WAIT.
+    split.
+    + eauto using registered_def, registered_in_reqs.
+    + exists l.
+      auto using redex_wait.
+  - apply Map_TID_Extra.nonempty_in in H.
+    destruct H as (t, Hin).
+    assert (Hsin : Set_TID.In t (value l)). {
+      apply reg_in_r in Hin.
+      inversion Hin.
+      assumption.
+    }
+    unfold Set_TID.Empty in Hempty.
+    assert (~ Set_TID.In t (value l)). {
+      apply Hempty.
+    }
+    contradiction Hsin.
+Qed.
+
+Variable reqs_spec :
+  XProgress.RequestSpec.request_spec r
+  (Check l)
+  (Registered l).
+
+Let l_prog:
+  @XProgress.progress_spec op r (Check l) latch (Redex l) blocking.
+Proof.
+  intros.
+  refine (
+    @XProgress.mk_progress_spec op r (Check l) _
+      (Redex l) blocking _ _); auto.
+  - apply progress_unblocked.
+  - apply progress_blocked.
+Defined.
+
+Lemma prog:
+  ~ Map_TID.Empty r ->
+  (** There is a task that can reduce. *)
+  exists t o,
+  Map_TID.MapsTo t o r /\ exists l', Redex l t o l'.
+Proof.
+  intros.
+  eauto using XProgress.main_progress, l_prog.
+Qed.
 End Progress.
-
 End LatchProps.
 
-Require Import HJ.Lang.
+Require Import HJ.Phasers.Lang.
 
 Module Finish.
 
@@ -495,3 +568,60 @@ Inductive Redex (s:state) (t:tid) : op -> state -> Prop  :=
    Redex s t (END_ASYNC t) (set_latch s l).
 
 
+End Finish.
+
+Module AsyncFinish.
+
+(** Task in A/F can be either running or blocked. *)
+
+Inductive task_status := 
+  (** The task is running. *)
+  | Running : task_status
+  (** Blocked on which join barrier? *)
+  | Blocked : fid -> task_status.
+
+(** Defines the state of a join barrier. *)
+Definition finish := Map_TID.t task_status.
+
+Definition dereg (f:finish) (t:tid) : finish :=
+  Map_TID.remove t f.
+
+Definition reg (f:finish) (t:tid) : finish :=
+  Map_TID.add t Running f.
+
+(** Defines the global state of a fork/join computation. *)
+Definition state := Map_FID.t finish.
+
+Inductive Wait (j:finish) : Prop  :=
+  wait_def:
+    Map_TID.Empty j ->
+    Wait j.
+
+Inductive op :=
+  | BEGIN_ASYNC : fid -> tid -> op
+  | END_ASYNC : fid -> op
+  | BEGIN_FINISH : fid -> op
+  | END_FINISH : fid -> op.
+
+Inductive Reduction (s:state) (t:tid) : op -> state -> Prop :=
+  | begin_async:
+    forall h f t',
+    Map_FID.MapsTo h f s ->
+    ~ Map_TID.In t f ->
+    Reduction s t (BEGIN_ASYNC h t') (Map_FID.add h (reg f t') s)
+  | end_async:
+    forall h f,
+    Map_FID.MapsTo h f s ->
+    Reduction s t (END_ASYNC h) (Map_FID.add h (dereg f t) s)
+  | begin_finish:
+    forall f j,
+    Map_FID.MapsTo f j s ->
+    Wait j ->
+    Reduction s t (BEGIN_FINISH f) s
+  | end_finish:
+    forall f j,
+    Map_FID.MapsTo f j s ->
+    Wait j ->
+    Reduction s t (END_FINISH f) s.
+
+End AsyncFinish.

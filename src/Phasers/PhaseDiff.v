@@ -5,7 +5,7 @@ Require Import Aniceto.List.
 Require Import Aniceto.Map.
 Require Import Aniceto.ListSet.
 Require Import HJ.Vars.
-Require Import HJ.Lang.
+Require Import HJ.Phasers.Lang.
 
 Open Local Scope Z.
 
