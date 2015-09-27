@@ -537,3 +537,53 @@ Proof.
 Qed.
 
 End PROGRESS.
+
+Module PhProg.
+Require Import HJ.Phasers.Lang.
+Require Import HJ.Phasers.PhaseDiff.
+Require Import HJ.Phasers.Typesystem.
+Require Import HJ.Progress.
+Module R := HJ.Progress.Request.
+
+Section  XP.
+Variable pm:phasermap.
+Variable is_valid: Valid pm.
+Variable reqs : Map_TID.t op.
+Let Check' (t:tid) (o:op) := Check t o pm.
+Let In' (t:tid) := In t pm.
+Variable reqs_spec :
+  HJ.Progress.RequestSpec.request_spec reqs
+  Check'
+  In'.
+
+Lemma pm_prog:
+  @HJ.Progress.progress_spec op reqs Check' phasermap (Reduce pm) eq_wait_all.
+Proof.
+  intros.
+  refine (
+    @HJ.Progress.mk_progress_spec op reqs Check' phasermap
+      (Reduce pm) eq_wait_all _ _ ); auto.
+  - intros.
+    rewrite eq_wait_all_false in *.
+    apply progress_unblocking_simple; auto.
+  - intros.
+    apply progress_blocked'; auto.
+    + apply (HJ.Progress.RequestSpec.reqs_in reqs_spec).
+    + apply (HJ.Progress.RequestSpec.reqs_check reqs_spec).
+    + intros.
+      apply H0 in H1.
+      rewrite eq_wait_all_true in *.
+      assumption.
+Defined.
+Import HJ.Progress.
+Lemma progress:
+  ~ Map_TID.Empty reqs ->
+  (** There is a task that can reduce. *)
+  exists t o,
+  Map_TID.MapsTo t o reqs /\ exists s', Reduce pm t o s'.
+Proof.
+  intros.
+  eauto using main_progress, pm_prog. 
+Qed.
+End XP.
+End PhProg.

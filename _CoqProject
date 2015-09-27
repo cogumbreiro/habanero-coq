@@ -11,4 +11,5 @@ src/Phasers/TransDiff.v
 src/Phasers/SubjectReduction.v
 src/Phasers/Typesystem.v
 src/ReverseSemaphore.v
+src/Progress.v
 

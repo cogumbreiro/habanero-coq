@@ -1,156 +1,6 @@
 Require Import HJ.Vars.
 Set Arguments Implicit.
-Module XProgress.
 
-Module Request.
-
-Record request {O:Type} := mk_request {
-  reqs : Map_TID.t O;
-  Check: tid -> O -> Prop;
-  In : tid -> Prop
-}.
-
-Implicit Arguments reqs.
-Implicit Arguments Check.
-Implicit Arguments In.
-Implicit Arguments mk_request.
-End Request.
-
-Module RequestSpec.
-Record request_spec
-  {O:Type} 
-  (reqs : Map_TID.t O)
-  (Check: tid -> O -> Prop)
-  (In : tid -> Prop)
-:= {
-  (** We only consider operations from task in the state. *)
-  reqs_in:
-    forall t,
-    In t <-> Map_TID.In t reqs;
-  (** All requests are valid. *)
-  reqs_check:
-    forall t o,
-    Map_TID.MapsTo t o reqs -> Check t o
-}.
-Implicit Arguments reqs_in.
-Implicit Arguments reqs_check.
-End RequestSpec.
-
-Section ProgressProp.
-Variable O:Type.
-Variable reqs : Map_TID.t O.
-Variable Check: tid -> O -> Prop.
-Variable In : tid -> Prop.
-Variable reqs_spec : RequestSpec.request_spec reqs Check In.
-Variable S:Type.
-(** The state. *)
-Variable state : S.
-(** The given task issues an operation that yields a new state. *)
-Variable Reduce : tid -> O -> S -> Prop.
-(** Returns [true] when the given operation is blocking, [false] if unblocking. *)
-Variable blocking : O -> bool.
-
-Record progress_spec
-:= mk_progress_spec {
-  (** Any valid unblocked operation must be able to reduce. *)
-  progress_unblocked:
-    forall t o,
-    Check t o ->
-    blocking o = false ->
-    exists s', Reduce t o s';
-  (**
-    If all our requests are blocking requests, then there is at least
-    one that can be issued.
-  *)
-  progress_blocked:
-    (** The [state] must be nonempty. *)
-    ~ Map_TID.Empty reqs ->
-    (** All available requests are blocking. *)
-    (forall t o, Map_TID.MapsTo t o reqs -> blocking o = true) ->
-    (** There is a task that can reduce. *)
-    exists t o,
-    Map_TID.MapsTo t o reqs /\ exists s', Reduce t o s' 
-}.
-Implicit Arguments progress_unblocked.
-Implicit Arguments progress_blocked.
-
-Lemma main_progress:
-  forall (p:progress_spec),
-  ~ Map_TID.Empty reqs ->
-  (** There is a task that can reduce. *)
-  exists t o,
-  Map_TID.MapsTo t o reqs /\ exists s', Reduce t o s'.
-Proof.
-  intros.
-  destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:O) => (negb (blocking o)))).
-  - auto with *. (* Proper *)
-  - destruct e as (t, (o, (Hmt, Hb))).
-    remember (blocking o) as b.
-    destruct b.
-    + inversion Hb.
-    + exists t.
-      exists o.
-      intuition.
-      apply (progress_unblocked); auto.
-      apply (RequestSpec.reqs_check reqs_spec); auto.
-  - apply (progress_blocked p); auto.
-    intros.
-    apply e in H0.
-    destruct (blocking o); auto.
-Qed.
-End ProgressProp.
-End XProgress.
-
-
-Module PhProg.
-Require Import HJ.Phasers.Lang.
-Require HJ.Phasers.Progress.
-Module P := HJ.Phasers.Progress.
-Require Import HJ.Phasers.PhaseDiff.
-Require Import HJ.Phasers.Typesystem.
-Module R := XProgress.Request.
-Section  XP.
-Variable pm:phasermap.
-Variable is_valid: P.Valid pm.
-Variable reqs : Map_TID.t op.
-Let Check' (t:tid) (o:op) := Check t o pm.
-Let In' (t:tid) := In t pm.
-Variable reqs_spec :
-  XProgress.RequestSpec.request_spec reqs
-  Check'
-  In'.
-
-Lemma pm_prog:
-  @XProgress.progress_spec op reqs Check' phasermap (Reduce pm) P.eq_wait_all.
-Proof.
-  intros.
-  refine (
-    @XProgress.mk_progress_spec op reqs Check' phasermap
-      (Reduce pm) P.eq_wait_all _ _ ); auto.
-  - intros.
-    rewrite P.eq_wait_all_false in *.
-    apply P.progress_unblocking_simple; auto.
-  - intros.
-    apply P.progress_blocked'; auto.
-    + apply (XProgress.RequestSpec.reqs_in reqs_spec).
-    + apply (XProgress.RequestSpec.reqs_check reqs_spec).
-    + intros.
-      apply H0 in H1.
-      rewrite  P.eq_wait_all_true in *.
-      assumption.
-Defined.
-Import XProgress.
-Lemma progress:
-  ~ Map_TID.Empty reqs ->
-  (** There is a task that can reduce. *)
-  exists t o,
-  Map_TID.MapsTo t o reqs /\ exists s', Reduce pm t o s'.
-Proof.
-  intros.
-  eauto using main_progress, pm_prog. 
-Qed.
-End XP.
-End PhProg.
 
 Module Latch.
 (**
@@ -406,17 +256,19 @@ Proof.
     contradiction Hsin.
 Qed.
 
+Require HJ.Progress.
+
 Variable reqs_spec :
-  XProgress.RequestSpec.request_spec r
+  HJ.Progress.RequestSpec.request_spec r
   (Check l)
   (Registered l).
 
 Let l_prog:
-  @XProgress.progress_spec op r (Check l) latch (Redex l) blocking.
+  @HJ.Progress.progress_spec op r (Check l) latch (Redex l) blocking.
 Proof.
   intros.
   refine (
-    @XProgress.mk_progress_spec op r (Check l) _
+    @HJ.Progress.mk_progress_spec op r (Check l) _
       (Redex l) blocking _ _); auto.
   - apply progress_unblocked.
   - apply progress_blocked.
@@ -429,7 +281,7 @@ Lemma prog:
   Map_TID.MapsTo t o r /\ exists l', Redex l t o l'.
 Proof.
   intros.
-  eauto using XProgress.main_progress, l_prog.
+  eauto using HJ.Progress.main_progress, l_prog.
 Qed.
 End Progress.
 End LatchProps.
