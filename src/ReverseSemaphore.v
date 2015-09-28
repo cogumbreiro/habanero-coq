@@ -2,9 +2,8 @@ Require Import HJ.Vars.
 Set Arguments Implicit.
 
 
-Module Latch.
 (**
-  A count-down latch with dynamic registration works exactly like
+  A count-down rsem with dynamic registration works exactly like
   a reverse semaphore, it includes has three operations:
   - an operation to register a task that increments the reverse semaphore;
   - an operation to signal, or deregister, a task that decrements the reverse semaphore;
@@ -13,31 +12,31 @@ Module Latch.
   is reversed, that is a semaphore blocks while it is zero, whereas a reverse semaphore
   blocks until it becomes zero.
 
-  We represent a latch as a set of tasks to be able to bookkeep registered tasks.
+  We represent a rsem as a set of tasks to be able to bookkeep registered tasks.
   *)
 
-Record latch := mk_latch {
+Record rsem := mk_rsem {
   value : set_tid
 }.
 
 (**
-  We create a latch without any registered task.
+  We create a rsem without any registered task.
   *) 
 
-Definition zero := mk_latch Set_TID.empty.
+Definition zero := mk_rsem Set_TID.empty.
 
 Section API.
 
-Variable l:latch.
+Variable l:rsem.
 
 (**
-  Registers a task in the latch. Registered task must
+  Registers a task in the rsem. Registered task must
   be eventually signaled or deregistered so that
   synchronization can happen.
   *)
 
 Definition register (t:tid) :=
-  mk_latch (Set_TID.add t (value l)).
+  mk_rsem (Set_TID.add t (value l)).
 
 Definition inc := register.
 
@@ -48,7 +47,7 @@ Definition inc := register.
   *)
 
 Definition signal (t:tid) :=
-  mk_latch (Set_TID.remove t (value l)).
+  mk_rsem (Set_TID.remove t (value l)).
 
 Definition deregister := signal.
 Definition dec := signal.
@@ -64,7 +63,7 @@ Inductive Wait : Prop :=
     Wait.
 
 (**
-  Asserts that task [t] is registerd in latch [l].
+  Asserts that task [t] is registerd in rsem [l].
   *)
 
 Inductive Registered (t:tid) : Prop :=
@@ -73,63 +72,87 @@ Inductive Registered (t:tid) : Prop :=
     Registered t.
 
 End API.
-End Latch.
 
-Module LatchSem.
-Import Latch.
+Inductive Eq (l1:rsem) (l2:rsem) : Prop :=
+  eq_def:
+    Set_TID.eq (value l1) (value l2) ->
+    Eq l1 l2.
+Module Sem.
 
 (** How do we represent that synchronization works? *)
 
 Inductive op :=
-  | REG : tid -> op
-  | SIG : tid -> op
-  | WAIT : op.
+  | REG
+  | SIG
+  | WAIT.
 
-Inductive Redex (l:latch) (t:tid) : op -> latch -> Prop  :=
+Inductive Redex (l:rsem) (t:tid) : op -> rsem -> Prop  :=
   | redex_reg:
-    forall t',
-    ~ Registered l t' ->
-    Redex l t (REG t') (register l t')
+    ~ Registered l t ->
+    Redex l t REG (register l t)
 
   | redex_sig:
-    forall t',
-    Registered l t' ->
-    Redex l t (SIG t') (signal l t')
+    Registered l t ->
+    Redex l t SIG (signal l t)
 
   | redex_wait:
     Wait l ->
     Redex l t WAIT l.
 
-End LatchSem.
+End Sem.
 
-Module LatchProps.
+Module Props.
 
-Import Latch.
-Import LatchSem.
+Import Sem.
 
-Inductive Check (l:latch) (t:tid) : op -> Prop :=
+Inductive Check (l:rsem) (t:tid) : op -> Prop :=
   | check_reg:
-    forall t',
-    ~ Registered l t' ->
-    Check l t (REG t')
+    ~ Wait l ->
+    ~ Registered l t ->
+    Check l t REG
   | check_sig:
-    forall t',
-    Registered l t' ->
-    Check l t (SIG t')
+    Registered l t ->
+    Check l t SIG
   | check_wait:
     ~ Registered l t ->
     Check l t WAIT.
 
+(*
+Module Commutativity.
+
+Lemma check_respects_reduce:
+  forall l l' t t' o o',
+  Check l t o ->
+  Redex l t' o' l' ->
+  t <> t' ->
+  Check l' t o.
+Admitted.
+
+Lemma check_reduces_inv:
+  forall l t o l',
+  Redex l t o l' ->
+  Check l t o.
+Admitted.
+
+Lemma commutativity:
+  forall l1 l2 l2' l3 l3' t1 t2 o1 o2,
+  t1 <> t2 ->
+  Redex l1 t1 o1 l2  -> Redex l2  t2 o2 l3 ->
+  Redex l1 t2 o2 l2' -> Redex l2' t1 o1 l3' ->
+  Eq l1 l2.
+Admitted.  
+*)
+
 Section Progress.
 (**
-  Progress means that either the latch is a value, or there
+  Progress means that either the rsem is a value, or there
   is at least an operation that can be issued.
   But how can we enumerate the available operations?
 
   At any time a task may be registered, which means that there is always  
   *)
 
-Variable l: latch.
+Variable l: rsem.
 
 (**
   The first thing to show is that there is progress for
@@ -139,8 +162,8 @@ Variable l: latch.
 
 Definition blocking (o:op) :=
   match o with
-  | REG _ => false
-  | SIG _ => false
+  | REG => false
+  | SIG => false
   | WAIT => true
   end.
 
@@ -155,24 +178,26 @@ Proof.
 Qed.
 
 (**
+  Any unblocked 
   The proof for this lemma is trivial, by inversion of proposition [Check].
   *)
+
+Require Import HJ.Progress.
 
 Lemma progress_unblocked:
   forall t o,
   Check l t o ->
   blocking o = false ->
-  exists l',
-  LatchSem.Redex l t o l'.
+  CanReduce (Redex l) t o.
 Proof.
   intros.
   destruct o.
   - inversion H.
     subst.
-    eauto using redex_reg.
+    eauto using redex_reg, can_reduce_def.
   - inversion H.
     subst.
-    eauto using redex_sig.
+    eauto using redex_sig, can_reduce_def.
   - inversion H0.
 Qed.
 
@@ -217,7 +242,7 @@ Lemma progress_blocked:
   (forall t o, Map_TID.MapsTo t o r -> blocking o = true) ->
   exists t o,
   Map_TID.MapsTo t o r /\
-  (exists l', Redex l t o l').
+  CanReduce (Redex l) t o.
 Proof.
   intros.
   (** Wait is enabled. *)
@@ -264,7 +289,7 @@ Variable reqs_spec :
   (Registered l).
 
 Let l_prog:
-  @HJ.Progress.progress_spec op r (Check l) latch (Redex l) blocking.
+  @HJ.Progress.progress_spec op r (Check l) rsem (Redex l) blocking.
 Proof.
   intros.
   refine (
@@ -278,202 +303,11 @@ Lemma prog:
   ~ Map_TID.Empty r ->
   (** There is a task that can reduce. *)
   exists t o,
-  Map_TID.MapsTo t o r /\ exists l', Redex l t o l'.
+  Map_TID.MapsTo t o r /\ CanReduce (Redex l) t o.
 Proof.
   intros.
   eauto using HJ.Progress.main_progress, l_prog.
 Qed.
 End Progress.
-End LatchProps.
+End Props.
 
-Require Import HJ.Phasers.Lang.
-
-Module Finish.
-
-(**
-  We now want to define a finish state that encompasses
-  a latch that represents the finish instruction and a
-  phaser map that is available inside the finish scope.
-  *)
-
-Record state := mk_state {
-  get_latch: Latch.latch;
-  get_phasers: phasermap;
-  get_owner: tid
-}.
-
-(**
-  We define two obvious mutators.
-  *)
-
-Definition set_latch (s:state) (l:Latch.latch) :=
-  mk_state l (get_phasers s) (get_owner s).
-
-Definition set_phasers (s:state) (m:phasermap) :=
-  mk_state (get_latch s) m (get_owner s). 
-
-Definition set_owner (s:state) (t:tid) :=
-  mk_state (get_latch s) (get_phasers s) t.
-
-(**
-  We also define a new language of operations. Most are
-  phasermap-operations, with two exceptions: [BEGIN_ASYNC] and
-  [END_ASYNC]. The former represents an [Lang.ASYNC] and at the same 
-  a [LatchSem.REG]. The latter represents a [LatchSem.SIG].
-  *)
-
-Inductive op : Type :=
-  | PH_NEW : phid -> op
-  | PH_SIGNAL : phid -> op
-  | PH_DROP : phid -> op
-  | SIGNAL_ALL : op
-  | WAIT_ALL : op
-  | BEGIN_ASYNC : list phased -> tid -> op
-  | END_ASYNC : tid -> op.
-
-(**
-  We define a translation from [op] to [Lang.op]. The function returns
-  [None] when undefined.
-  *)
-
-Definition as_pm_op(o:op) : option Lang.op :=
-  match o with
-  | PH_NEW p => Some (Lang.PH_NEW p)
-  | PH_SIGNAL p => Some (Lang.PH_SIGNAL p)
-  | PH_DROP p => Some (Lang.PH_SIGNAL p)
-  | SIGNAL_ALL => Some Lang.SIGNAL_ALL
-  | WAIT_ALL => Some Lang.WAIT_ALL
-  | BEGIN_ASYNC l t => Some (Lang.ASYNC l t)
-  | END_ASYNC _ => None
-  end.  
-
-(**
-  Definition [PmReduce] abbreviates the translation of [op] and a call to [Lang.Reduce].
- *)
-
-Definition PmReduce (s:state) (t:tid) (o:op) (m:phasermap) :=
-  exists pm_op, as_pm_op o = Some pm_op /\ Lang.Reduce (get_phasers s) t pm_op m.
-
-(**
-  Function [as_latch_op] translates an [op] into a [LatchSem.op] and returns
-  [None] when it is undefined.
-  *)
-
-Definition as_latch_op(o:op) : option LatchSem.op :=
-  match o with
-  | PH_NEW p => None
-  | PH_SIGNAL p => None
-  | PH_DROP p => None
-  | SIGNAL_ALL => None
-  | WAIT_ALL => None
-  | BEGIN_ASYNC _ t => Some (LatchSem.REG t)
-  | END_ASYNC t => Some (LatchSem.SIG t)
-  end.
-
-(**
-  Similarly to [PmReduce], definition [LatchReduce] translates operation [op]
-  into [LatchSem.op] and invokes [LatchSem.Redex].
-  *)
-
-Definition LatchReduce (s:state) (t:tid) (o:op) (l:Latch.latch) :=
-  exists l_op, as_latch_op o = Some l_op /\ LatchSem.Redex (get_latch s) t l_op l.
-
-(**
-  Finally, we define the reduction.
-  *)
-
-Inductive Redex (s:state) (t:tid) : op -> state -> Prop  :=
-  | redex_ph_new:
-    forall p m,
-    PmReduce s t (PH_NEW p) m ->
-    Redex s t (PH_NEW p) (set_phasers s m)
-
-  | redex_ph_signal:
-    forall p m,
-    PmReduce s t (PH_SIGNAL p) m ->
-    Redex s t (PH_SIGNAL p) (set_phasers s m)
-
-  | redex_ph_drop:
-    forall p m,
-    PmReduce s t (PH_DROP p) m ->
-    Redex s t (PH_DROP p) (set_phasers s m)
-
-  | redex_ph_signal_all:
-    forall m,
-    PmReduce s t SIGNAL_ALL m ->
-    Redex s t SIGNAL_ALL (set_phasers s m)
-
-  | redex_ph_wait_all:
-    forall m,
-    PmReduce s t WAIT_ALL m ->
-    Redex s t WAIT_ALL (set_phasers s m)
-
-  | redex_begin_async:
-    forall p t' l m,
-    LatchReduce s t (BEGIN_ASYNC p t') l ->
-    PmReduce s t (BEGIN_ASYNC p t') m ->
-    Redex s t (BEGIN_ASYNC p t') (mk_state l m (get_owner s))
-
- | redex_end_async:
-   forall l,
-   LatchReduce s t (END_ASYNC t) l ->
-   Redex s t (END_ASYNC t) (set_latch s l).
-
-
-End Finish.
-
-Module AsyncFinish.
-
-(** Task in A/F can be either running or blocked. *)
-
-Inductive task_status := 
-  (** The task is running. *)
-  | Running : task_status
-  (** Blocked on which join barrier? *)
-  | Blocked : fid -> task_status.
-
-(** Defines the state of a join barrier. *)
-Definition finish := Map_TID.t task_status.
-
-Definition dereg (f:finish) (t:tid) : finish :=
-  Map_TID.remove t f.
-
-Definition reg (f:finish) (t:tid) : finish :=
-  Map_TID.add t Running f.
-
-(** Defines the global state of a fork/join computation. *)
-Definition state := Map_FID.t finish.
-
-Inductive Wait (j:finish) : Prop  :=
-  wait_def:
-    Map_TID.Empty j ->
-    Wait j.
-
-Inductive op :=
-  | BEGIN_ASYNC : fid -> tid -> op
-  | END_ASYNC : fid -> op
-  | BEGIN_FINISH : fid -> op
-  | END_FINISH : fid -> op.
-
-Inductive Reduction (s:state) (t:tid) : op -> state -> Prop :=
-  | begin_async:
-    forall h f t',
-    Map_FID.MapsTo h f s ->
-    ~ Map_TID.In t f ->
-    Reduction s t (BEGIN_ASYNC h t') (Map_FID.add h (reg f t') s)
-  | end_async:
-    forall h f,
-    Map_FID.MapsTo h f s ->
-    Reduction s t (END_ASYNC h) (Map_FID.add h (dereg f t) s)
-  | begin_finish:
-    forall f j,
-    Map_FID.MapsTo f j s ->
-    Wait j ->
-    Reduction s t (BEGIN_FINISH f) s
-  | end_finish:
-    forall f j,
-    Map_FID.MapsTo f j s ->
-    Wait j ->
-    Reduction s t (END_FINISH f) s.
-
-End AsyncFinish.
