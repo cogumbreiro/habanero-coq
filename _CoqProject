@@ -12,4 +12,5 @@ src/Phasers/SubjectReduction.v
 src/Phasers/Typesystem.v
 src/ReverseSemaphore.v
 src/Progress.v
+src/AsyncFinish.v
 
