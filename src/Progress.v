@@ -48,6 +48,12 @@ Variable Reduce : tid -> O -> S -> Prop.
 (** Returns [true] when the given operation is blocking, [false] if unblocking. *)
 Variable blocking : O -> bool.
 
+Inductive CanReduce (t:tid) (o:O) : Prop :=
+  can_reduce_def:
+    forall s',
+    Reduce t o s' ->
+    CanReduce t o.
+
 Record progress_spec
 := mk_progress_spec {
   (** Any valid unblocked operation must be able to reduce. *)
@@ -55,7 +61,7 @@ Record progress_spec
     forall t o,
     Check t o ->
     blocking o = false ->
-    exists s', Reduce t o s';
+    CanReduce t o;
   (**
     If all our requests are blocking requests, then there is at least
     one that can be issued.
@@ -67,7 +73,7 @@ Record progress_spec
     (forall t o, Map_TID.MapsTo t o reqs -> blocking o = true) ->
     (** There is a task that can reduce. *)
     exists t o,
-    Map_TID.MapsTo t o reqs /\ exists s', Reduce t o s' 
+    Map_TID.MapsTo t o reqs /\ CanReduce t o
 }.
 Implicit Arguments progress_unblocked.
 Implicit Arguments progress_blocked.
@@ -77,11 +83,11 @@ Lemma main_progress:
   ~ Map_TID.Empty reqs ->
   (** There is a task that can reduce. *)
   exists t o,
-  Map_TID.MapsTo t o reqs /\ exists s', Reduce t o s'.
+  Map_TID.MapsTo t o reqs /\ CanReduce t o.
 Proof.
   intros.
   destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:O) => (negb (blocking o)))).
-  - auto with *. (* Proper *)
+  - auto with *. (* fProper *)
   - destruct e as (t, (o, (Hmt, Hb))).
     remember (blocking o) as b.
     destruct b.
@@ -97,3 +103,8 @@ Proof.
     destruct (blocking o); auto.
 Qed.
 End ProgressProp.
+
+Implicit Arguments CanReduce.
+Implicit Arguments can_reduce_def.
+
+
