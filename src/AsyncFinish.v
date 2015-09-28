@@ -1,13 +1,13 @@
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Vars.
 
-Inductive tree :=
-  | Finish : tree -> tid -> tree
-  | Par : tree -> tree -> tree
-  | Task : tid -> tree
-  | Idle : tree.
+Inductive finish :=
+  | Finish : finish -> tid -> finish
+  | Par : finish -> finish -> finish
+  | Task : tid -> finish
+  | Idle : finish.
 
-Inductive In : tree -> tid -> Prop :=
+Inductive In : finish -> tid -> Prop :=
   | in_finish_left:
     forall T1 T2 t,
     In T1 t ->
@@ -33,17 +33,17 @@ Inductive op_kind :=
   | BEGIN_FINISH
   | END_FINISH.
 
-Inductive Disjoint (a:tree) : op_kind -> Prop :=
+Inductive Disjoint (f:finish) : op_kind -> Prop :=
   | disjoint_ok:
     forall t,
-    ~ In a t ->
-    Disjoint a (BEGIN_ASYNC t)
+    ~ In f t ->
+    Disjoint f (BEGIN_ASYNC t)
   | disjoint_skip:
     forall o,
     (match o with | BEGIN_ASYNC _ => False |  _ => True end) ->
-    Disjoint a o.
+    Disjoint f o.
 
-Fixpoint normalize (a:tree) : tree :=
+Fixpoint normalize (a:finish) : finish :=
 match a with
   | Finish a' t => Finish (normalize a') t
   | Par a1 a2 =>
@@ -59,7 +59,7 @@ match a with
  | Idle => Idle
 end.
 
-Inductive Reduce : tree -> tid -> op_kind -> tree -> Prop :=
+Inductive Reduce : finish -> tid -> op_kind -> finish -> Prop :=
   | begin_async:
     forall t t',
     Reduce (Task t) t (BEGIN_ASYNC t') (Par (Task t) (Task t'))
@@ -73,19 +73,19 @@ Inductive Reduce : tree -> tid -> op_kind -> tree -> Prop :=
     forall t,
     Reduce (Finish Idle t) t END_FINISH (Task t)
   | run_finish:
-    forall T1 T2 t o T1',
-    Reduce T1 t o T1' ->
-    Reduce (Finish T1 T2) t o (Finish T1' T2)
+    forall f1 f2 t o f1',
+    Reduce f1 t o f1' ->
+    Reduce (Finish f1 f2) t o (Finish f1' f2)
   | run_par_left:
-    forall T1 T2 t o T1',
-    Disjoint T2 o ->
-    Reduce T1 t o T1' ->
-    Reduce (Par T1 T2) t o (Par T1' T2)
+    forall f1 f2 t o f1',
+    Disjoint f2 o ->
+    Reduce f1 t o f1' ->
+    Reduce (Par f1 f2) t o (Par f1' f2)
   | run_par_right:
-    forall T1 T2 t o T2',
-    Disjoint T1 o ->
-    Reduce T2 t o T2' ->
-    Reduce (Par T1 T2) t o (Par T1 T2')
+    forall f1 f2 t o f2',
+    Disjoint f1 o ->
+    Reduce f2 t o f2' ->
+    Reduce (Par f1 f2) t o (Par f1 f2')
   | run_congruence:
     forall a t o a',
     Reduce (normalize a) t o a' ->
