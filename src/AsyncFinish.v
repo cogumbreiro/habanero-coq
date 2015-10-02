@@ -210,28 +210,28 @@ Inductive Leaf (t:tid) (f:finish) : Prop :=
     Child t leaf f ->
     Leaf t f.
 
-Inductive MapsTo (t:tid) (f:finish) : finish -> Prop :=
+Inductive MapsTo: list tid -> finish -> finish -> Prop :=
   | maps_to_child:
-    forall f',
+    forall t f f',
     Child t f f' ->
-    MapsTo t f f'
+    MapsTo (t::nil) f f'
   | maps_to_ancestor:
-    forall tc child f'',
-    MapsTo t f child ->
-    Child tc child f'' ->
-    MapsTo t f f''.
+    forall l f fc t f',
+    MapsTo l f fc ->
+    Child t fc f' ->
+    MapsTo (t::l) f f'.
 
 Lemma maps_to_eq:
   forall t f l,
-  MapsTo t f (Node ((t, f) :: l)).
+  MapsTo (t::nil) f (Node ((t, f) :: l)).
 Proof.
   intros.
   auto using maps_to_child, child_eq.
 Qed.
 
 Lemma maps_to_leaf_absurd:
-  forall t f,
-  MapsTo t f leaf -> False.
+  forall l f,
+  MapsTo l f leaf -> False.
 Proof.
   intros.
   inversion H; (
@@ -239,23 +239,67 @@ Proof.
     eauto using child_leaf_absurd).
 Qed.
 
+Lemma maps_to_cons:
+  forall t f f' l l',
+  MapsTo l' f' f ->
+  MapsTo (cons t l') f' (Node ((t, f) :: l)).
+Proof.
+  intros.
+  eauto using maps_to_ancestor, child_eq.
+Qed.
+
 Lemma maps_to_cons_perm:
-  forall l t f p,
-  MapsTo t f (Node l) ->
-  MapsTo t f (Node (p :: l)).
+  forall l' f p l,
+  MapsTo l' f (Node l) ->
+  MapsTo l' f (Node (p :: l)%list).
 Proof.
   intros.
   inversion H.
   - subst.
-    auto using child_cons_perm, maps_to_child.
+    auto using maps_to_child, child_cons_perm.
   - subst.
-    eauto using child_cons_perm, maps_to_ancestor.
+    eauto using maps_to_ancestor, child_cons_perm.
+Qed.
+
+Inductive First : tid -> list tid -> Prop :=
+  | first_eq:
+    forall t,
+    First t (t :: nil)
+  | first_cons:
+    forall t l t',
+    First t l ->
+    First t (t' :: l)%list.
+
+Inductive Lookup (t:tid) (f':finish) (f:finish) : Prop :=
+  lookup_def:
+    forall l,
+    MapsTo l f' f ->
+    First t l ->
+    Lookup t f' f.
+
+Lemma lookup_leaf_absurd:
+  forall t f,
+  Lookup t f leaf -> False.
+Proof.
+  intros.
+  inversion H; subst.
+  eauto using maps_to_leaf_absurd.
+Qed.
+
+Lemma lookup_cons:
+  forall t t' f f' l,
+  Lookup t f' f ->
+  Lookup t f' (Node ((t', f) :: l)).
+Proof.
+  intros.
+  inversion H.
+  eauto using lookup_def, maps_to_cons, first_cons.
 Qed.
 
 Inductive In (t:tid) (f:finish) : Prop :=
   in_def:
     forall f',
-    MapsTo t f' f ->
+    Lookup t f' f ->
     In t f.
 
 Lemma in_eq:
@@ -263,7 +307,17 @@ Lemma in_eq:
   In t (Node ((t, f) :: l)).
 Proof.
   intros.
-  eauto using in_def, maps_to_eq.
+  eauto using in_def, lookup_def, maps_to_eq, first_eq.
+Qed.
+
+Lemma in_cons:
+  forall t f t' l,
+  In t f ->
+  In t (Node ((t', f) :: l)).
+Proof.
+  intros.
+  inversion H.
+  eauto using in_def, lookup_cons.
 Qed.
 
 (** Add task [t] to finish [f]. *)
@@ -353,7 +407,7 @@ Lemma in_leaf_absurd:
 Proof.
   intros.
   inversion H.
-  eauto using maps_to_leaf_absurd.
+  eauto using lookup_leaf_absurd.
 Qed.
 
 Lemma nonempty_leaf_absurd:
@@ -401,11 +455,7 @@ Proof.
       exists t'.
       split.
       { (* left *)
-        inversion Hin.
-        apply in_def with (f').
-        apply maps_to_ancestor with (tc:=t) (child:=Node (p :: l')).
-        * assumption.
-        * apply child_eq.
+        eauto using in_cons.
       }
       (* right *)
       inversion Hc; clear Hc; subst.
@@ -458,7 +508,7 @@ Qed.
 Lemma find_flat:
   forall (f:finish),
   Nonempty f ->
-  Flat f \/ (exists t f', MapsTo t f' f /\ Flat f').
+  Flat f \/ (exists l f', MapsTo l f' f /\ Flat f').
 Proof.
   intros.
   induction f using finish_ind_strong.
@@ -467,18 +517,17 @@ Proof.
   - clear H.
     destruct (nonempty_dec f).
     + apply IHf in n; clear IHf.
-      destruct n as [?|(t', (f', (Hmt, Hf)))].
+      destruct n as [?|(l', (f', (Hmt, Hf)))].
       * right.
-        exists t.
+        exists (t::nil)%list.
         exists f.
         intuition.
         apply maps_to_eq.
       * right.
-        exists t'.
+        exists (t::l')%list.
         exists f'.
         intuition.
-        apply maps_to_ancestor with (tc:=t) (child:=f); auto.
-        apply child_eq.
+        auto using maps_to_cons.
     + subst.
       clear IHf.
       destruct l.
@@ -498,8 +547,8 @@ Proof.
           auto using flat_cons.
         }
         right.
-        destruct H as (t', (f, (?, ?))).
-        exists t'.
+        destruct H as (l', (f, (?, ?))).
+        exists l'.
         exists f.
         intuition.
         auto using maps_to_cons_perm.
