@@ -507,7 +507,7 @@ Qed.
 
 End Progress.
 
-
+(*
 Module Examples.
 (**
 Original FX10 example:
@@ -662,3 +662,4 @@ Proof.
 Qed.
 
 End Examples.
+*)

@@ -8,6 +8,9 @@ Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.LEDec.
 Require HJ.Phasers.Rel.
 Require Import HJ.Phasers.TransDiff.
+Require HJ.Progress.
+
+Module P := HJ.Progress.
 
 Open Local Scope Z.
 
@@ -203,7 +206,7 @@ Qed.
 Theorem has_unblocked:
   tids <> nil ->
   exists t, List.In t tids /\
-  exists pm', Reduce pm t WAIT_ALL pm'.
+  P.CanReduce (Reduce pm) t WAIT_ALL.
 Proof.
   intros.
   assert (Hisa : Forall IsA tids). {
@@ -265,8 +268,7 @@ Lemma progress_unblocking_simple:
   Valid pm ->
   Check t i pm ->
   i <> WAIT_ALL ->
-  exists pm',
-  Reduce pm t i pm'.
+  P.CanReduce (Reduce pm) t i.
 Proof.
   intros.
   destruct i.
@@ -410,7 +412,7 @@ Qed.
 Lemma progress_blocking:
   tids <> nil ->
   (forall t o, Map_TID.MapsTo t o reqs -> negb (eq_wait_all o) = false) ->
-  exists t i,  Map_TID.MapsTo t i reqs /\ exists pm', Reduce pm t i pm'.
+  exists t i,  Map_TID.MapsTo t i reqs /\ P.CanReduce (Reduce pm) t i.
 Proof.
   intros.
   assert (AllSig: AllSignalled pm). {
@@ -472,7 +474,7 @@ Theorem progress_blocked':
   ~ Map_TID.Empty reqs ->
   (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
   exists t o,
-  Map_TID.MapsTo t o reqs /\ (exists pm' : phasermap, Reduce pm t o pm').
+  Map_TID.MapsTo t o reqs /\ P.CanReduce (Reduce pm) t o.
 Proof.
   intros.
   assert (AllSig: AllSignalled pm). {
@@ -521,7 +523,7 @@ Theorem progress:
   tids <> nil ->
   exists t i,
   Map_TID.MapsTo t i reqs /\
-  exists pm', Reduce pm t i pm'.
+  P.CanReduce (Reduce pm) t i.
 Proof.
   intros.
   destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:op) =>  negb (eq_wait_all o))); auto with *.
@@ -557,19 +559,19 @@ Variable reqs_spec :
   In'.
 
 Lemma pm_prog:
-  @HJ.Progress.progress_spec op reqs Check' phasermap (Reduce pm) eq_wait_all.
+  @P.progress_spec op reqs Check' phasermap (Reduce pm) eq_wait_all.
 Proof.
   intros.
   refine (
-    @HJ.Progress.mk_progress_spec op reqs Check' phasermap
+    @P.mk_progress_spec op reqs Check' phasermap
       (Reduce pm) eq_wait_all _ _ ); auto.
   - intros.
     rewrite eq_wait_all_false in *.
     apply progress_unblocking_simple; auto.
   - intros.
     apply progress_blocked'; auto.
-    + apply (HJ.Progress.RequestSpec.reqs_in reqs_spec).
-    + apply (HJ.Progress.RequestSpec.reqs_check reqs_spec).
+    + apply (P.RequestSpec.reqs_in reqs_spec).
+    + apply (P.RequestSpec.reqs_check reqs_spec).
     + intros.
       apply H0 in H1.
       rewrite eq_wait_all_true in *.
@@ -580,7 +582,7 @@ Lemma progress:
   ~ Map_TID.Empty reqs ->
   (** There is a task that can reduce. *)
   exists t o,
-  Map_TID.MapsTo t o reqs /\ exists s', Reduce pm t o s'.
+  Map_TID.MapsTo t o reqs /\ P.CanReduce (Reduce pm) t o.
 Proof.
   intros.
   eauto using main_progress, pm_prog. 
