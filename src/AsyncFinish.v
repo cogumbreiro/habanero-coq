@@ -1,6 +1,8 @@
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Vars.
 
+Require Import Coq.Lists.SetoidList.
+
 Inductive finish :=
   | Node : list (tid * finish) -> finish.
 
@@ -10,6 +12,9 @@ match f with
 end.
 
 Notation leaf := (Node nil).
+
+Definition singleton (t:tid) : finish :=
+  Node (  (t,leaf)  :: nil).
 
 Section IND.
 
@@ -37,7 +42,7 @@ Hypothesis Hcons: forall f l, P f -> P (Node l) -> forall t, P (Node ((t, f) :: 
 Fixpoint length f :=
 match f with
   | Node l =>
-    S (List.fold_left (fun (a:nat) (p:tid*finish) => a + length (snd p)) l 0) 
+    S (List.fold_left (fun (a:nat) (p:(tid*finish)%type) => a + length (snd p)) l 0) 
 end.
 
 Let fold_left_simpl:
@@ -139,6 +144,18 @@ Proof.
   intuition.
 Qed.
 
+Lemma child_cons:
+  forall t f l t' f',
+  Child t f (Node l) ->
+  Child t f (Node ((t', f') :: l)).
+Proof.
+  intros.
+  eapply child_def.
+  destruct H.
+  simpl in *.
+  intuition.
+Qed.
+
 Lemma child_leaf_absurd:
   forall t f,
   Child t f leaf -> False.
@@ -147,6 +164,19 @@ Proof.
   inversion H.
   simpl in *.
   inversion H0.
+Qed.
+
+Lemma child_inv_cons:
+  forall t t' f f' l,
+  Child t f (Node ((t', f') :: l)) ->
+  (t' = t /\ f' = f) \/ Child t f (Node l).
+Proof.
+  intros.
+  inversion H.
+  inversion H0.
+  - inversion H1; intuition.
+  - right.
+    apply child_def; simpl; assumption.
 Qed.
 
 Lemma child_inv_cons_nil:
@@ -159,7 +189,7 @@ Proof.
   simpl in *.
   destruct H0; (inversion H0; intuition).
 Qed.
-
+(*
 Lemma child_inv_cons:
   forall t f f' l,
   Child t f' (Node ((t, f) :: l)) ->
@@ -176,7 +206,50 @@ Proof.
     apply child_def.
     auto.
 Qed.
+*)
+Lemma child_to_ina:
+  forall  t f l,
+  Child t f (Node l) -> 
+  InA (Map_TID.eq_key (elt:=finish)) (t, f) l.
+Proof.
+  intros.
+  destruct H.
+  apply InA_alt.
+  exists (t,f).
+  intuition.
+Qed.
 
+Lemma ina_eq_key_subst:
+  forall t f f' l, 
+  InA (Map_TID.eq_key (elt:=finish)) (t, f) l ->
+  InA (Map_TID.eq_key (elt:=finish)) (t, f') l.
+Proof.
+  intros.
+  apply InA_alt.
+  apply InA_alt  in H.
+  destruct H as ((t',f''), (?,?)).
+  apply Map_TID_Extra.eq_key_unfold in H.
+  subst.
+  exists (t', f'').
+  rewrite Map_TID_Extra.eq_key_unfold.
+  intuition.
+Qed.
+(*
+Lemma child_inv_cons_nodupa:
+  forall t f f' l,
+  NoDupA (Map_TID.eq_key (elt:=finish)) ((t,f') :: l) ->
+  Child t f (Node ((t, f') :: l)) ->
+  f' = f.
+Proof.
+  intros.
+  apply child_inv_cons in H0.
+  destruct H0; auto.
+  inversion H.
+  subst.
+  contradiction H3.
+  eauto using child_to_ina, ina_eq_key_subst.
+Qed.
+*)
 Lemma child_neq:
   forall t f t' f' l,
   t <> t' ->
@@ -261,6 +334,54 @@ Proof.
     eauto using maps_to_ancestor, child_cons_perm.
 Qed.
 
+Lemma maps_to_inv_child:
+  forall t f f',
+  MapsTo (t :: nil) f f' ->
+  Child t f f'.
+Proof.
+  intros.
+  inversion H.
+  - subst.
+    assumption.
+  - subst.
+    inversion H2.
+Qed.
+
+Lemma maps_to_inv_cons_nil:
+  forall t t' f f',
+  MapsTo (t::nil) f (Node ((t', f') :: nil)) ->
+  t' = t /\ f' = f.
+Proof.
+  intros.
+  inversion H.
+  - subst.
+    apply child_inv_cons_nil in H1.
+    destruct H1.
+    subst.
+    intuition.
+  - subst.
+    inversion H2.
+Qed.
+
+Lemma maps_to_inv_leaf:
+  forall l f t,
+  MapsTo l f (Node ((t, leaf):: nil))%list ->
+  l = (t::nil)%list /\ f = leaf.
+Proof.
+  intros.
+  inversion H.
+  - subst.
+    apply child_inv_cons_nil in H0.
+    destruct H0.
+    subst.
+    intuition.
+  - subst.
+    apply child_inv_cons_nil in H1.
+    destruct H1; subst.
+    apply maps_to_leaf_absurd in H0.
+    inversion H0.
+Qed.
+
 Inductive First : tid -> list tid -> Prop :=
   | first_eq:
     forall t,
@@ -270,11 +391,83 @@ Inductive First : tid -> list tid -> Prop :=
     First t l ->
     First t (t' :: l)%list.
 
+Lemma first_inv_eq:
+  forall t t',
+  First t (t' :: nil) ->
+  t =  t'.
+Proof.
+  intros.
+  inversion H.
+  - auto.
+  - inversion H2.
+Qed.
+
+(*
+Lemma maps_to_inv_cons_nodupa:
+  forall t f l l' f',
+  NoDupA (Map_TID.eq_key (elt:=finish)) ((t, f) :: l) ->
+  MapsTo l' f' (Node ((t, f) :: l)) ->
+  First t l' ->
+  f = f' /\ l' = (t::nil).
+Proof.
+  intros.
+  inversion H.
+  subst.
+  inversion H0.
+  - subst.
+    apply first_inv_eq in H1.
+    subst.
+    apply child_inv_cons_nodupa in H2; auto.
+  - subst.
+    destruct l0.
+    { inversion H2. }
+    inversion H1.
+    subst.
+Qed.
+*)
+
+Inductive Lt (f:finish) (f':finish) : Prop :=
+  lt_def:
+    forall t,
+    Child t f f' ->
+    Lt f f'
+where "f < f'" := (Lt f f') : finish_scope.
+
+Local Open Scope finish_scope.
+
+Lemma lt_leaf_absurd:
+  forall f,
+  f < leaf -> False.
+Proof.
+  intros.
+  intuition.
+  inversion H.
+  apply child_leaf_absurd in H0.
+  assumption.
+Qed.
+
+Inductive Some (P: finish -> Prop) (f:finish) : Prop :=
+  | some_ok:
+    P f ->
+    Some P f
+  | some_parent:
+    forall f',
+    Some P f' ->
+    f' < f ->
+    Some P f.
+
+Lemma some_cons:
+  forall P f t l,
+  Some P f ->
+  Some P (Node ((t,f)::l)).
+Proof.
+  intros.
+  eauto using some_parent, lt_def, child_eq.
+Qed.
+
 Inductive Lookup (t:tid) (f':finish) (f:finish) : Prop :=
   lookup_def:
-    forall l,
-    MapsTo l f' f ->
-    First t l ->
+    Some (fun (f'':finish) => Child t f' f'') f -> 
     Lookup t f' f.
 
 Lemma lookup_leaf_absurd:
@@ -283,7 +476,9 @@ Lemma lookup_leaf_absurd:
 Proof.
   intros.
   inversion H; subst.
-  eauto using maps_to_leaf_absurd.
+  inversion H0.
+  - eauto using child_leaf_absurd.
+  - eauto using lt_leaf_absurd.
 Qed.
 
 Lemma lookup_cons:
@@ -293,7 +488,51 @@ Lemma lookup_cons:
 Proof.
   intros.
   inversion H.
-  eauto using lookup_def, maps_to_cons, first_cons.
+  eauto using lookup_def, some_cons, lt_def.
+Qed.
+
+Lemma lookup_eq:
+  forall t f l,
+  Lookup t f (Node ((t, f) :: l)).
+Proof.
+  intros.
+  eauto using lookup_def, some_ok, child_eq.
+Qed.
+
+Lemma lookup_inv:
+  forall l f t f' t',
+  Lookup t f (Node ((t', f') :: l)) ->
+  (t' = t /\ f' = f) \/ Lookup t f f' \/ Lookup t f (Node l).
+Proof.
+  intros.
+  destruct H.
+  inversion H.
+  - destruct H0.
+    inversion H0.
+    + inversion H1.
+      left.
+      intuition.
+    + assert (Child t f (Node l)). {
+        assert (In (t, f) (get_tasks (Node l))). {
+          auto.
+        }
+        auto using child_def.
+      }
+      right.
+      right.
+      eauto using lookup_def, some_ok.
+  - inversion H1.
+    apply child_inv_cons in H2.
+    destruct H2.
+    + destruct H2; subst.
+      right.
+      left.
+      auto using lookup_def.
+    + right; right.
+      assert (f'0 < (Node l)). {
+        eauto using lt_def.
+      }
+      eauto using lookup_def, some_parent.
 Qed.
 
 Inductive In (t:tid) (f:finish) : Prop :=
@@ -307,7 +546,7 @@ Lemma in_eq:
   In t (Node ((t, f) :: l)).
 Proof.
   intros.
-  eauto using in_def, lookup_def, maps_to_eq, first_eq.
+  eauto using in_def, lookup_eq.
 Qed.
 
 Lemma in_cons:
@@ -320,6 +559,83 @@ Proof.
   eauto using in_def, lookup_cons.
 Qed.
 
+Lemma in_leaf_absurd:
+  forall t,
+  In t leaf -> False.
+Proof.
+  intros.
+  inversion H.
+  eauto using lookup_leaf_absurd.
+Qed.
+
+Lemma in_inv_leaf:
+  forall t t',
+  In t (Node ((t',leaf)::nil)) ->
+  t = t'.
+Proof.
+  intros.
+  inversion H.
+  apply lookup_inv in H0.
+  destruct H0.
+  - intuition.
+  - destruct H0; (apply lookup_leaf_absurd in H0; inversion H0).
+Qed.
+
+Lemma in_inv_cons:
+  forall t t' f l,
+  In t (Node ((t',f) :: l)) ->
+  t = t' \/ In t f \/ In t (Node l).
+Proof.
+  intros.
+  inversion H.
+  apply lookup_inv in H0.
+  destruct H0 as [(?,?)|[?|?]].
+  - intuition.
+  - right.
+    left.
+    eauto using in_def.
+  - right.
+    right.
+    eauto using in_def.
+Qed.
+
+(*
+Lemma lookup_impl_some_child:
+  forall f' t f,
+  Lookup t f f' -> Some (fun (f'':finish) => Child t f f'') f'.
+Proof.
+  intros f'.
+  induction f' using finish_ind_strong.
+  - intros.
+    apply lookup_leaf_absurd in H.
+    inversion H.
+  - intros.
+      
+Qed.*)
+(*
+Lemma lookup_alt:
+  forall t f f',
+  Lookup t f f' <-> Some (fun (f'':finish) => Child t f f'') f'.
+Qed.
+*)
+Inductive ParentOf (t:tid) (t':tid) (f:finish) : Prop :=
+  | parent_of_def:
+    forall f' f'',
+    Child t' f'' f' ->
+    Child t f' f ->
+    ParentOf t t' f.
+
+Inductive AncestorOf (t:tid) (t':tid) (f:finish) : Prop :=
+  | ancestor_of_eq:
+    ParentOf t t' f ->
+    AncestorOf t t' f
+
+  | ancestor_of_cons:
+    forall t'' f',
+    AncestorOf t'' t' f' ->
+    Child t f' f ->
+    AncestorOf t t' f.
+
 (** Add task [t] to finish [f]. *)
 
 Definition as_map (f:finish) : Map_TID.t finish :=
@@ -328,8 +644,11 @@ Definition as_map (f:finish) : Map_TID.t finish :=
 Definition from_map (m:Map_TID.t finish) : finish :=
   Node (Map_TID.elements m).
 
-Definition add t f f' :=
-    from_map (Map_TID.add t f (as_map f')).
+Definition put t f f' :=
+  from_map (Map_TID.add t f (as_map f')).
+
+Definition put_leaf t f :=
+  put t leaf f.
 
 Definition remove t f :=
   from_map (Map_TID.remove t (as_map f)).
@@ -362,26 +681,126 @@ Inductive Disjoint (f:finish) : op -> Prop :=
     is_begin_async o = false ->
     Disjoint f o.
 
+Lemma disjoint_inv_begin_async:
+  forall f t,
+  Disjoint f (BEGIN_ASYNC t) ->
+  ~ In t f.
+Proof.
+  intros.
+  inversion H.
+  - assumption.
+  - simpl in H0.
+    inversion H0.
+Qed.
+
+Fixpoint NotIn (t:tid) (f:finish) : Prop :=
+  match f with
+   Node l =>
+     (fix disjoint_alt (l:list (tid*finish)) : Prop :=
+       match l with
+       | (t',f) :: l => t <> t' /\ NotIn t f /\ disjoint_alt l
+       | nil => True
+       end
+     ) l
+  end.
+
+Lemma disjoint_alt_spec_1:
+  forall t f,
+  NotIn t f ->
+  ~ In t f.
+Proof.
+  intros.
+  induction f using finish_ind_strong.
+  - eauto using in_leaf_absurd.
+  - simpl in  H.
+    destruct H as (?, (?, ?)).
+    intuition.
+    apply in_inv_cons in H2.
+    destruct H2 as [?|[?|?]].
+    + subst.
+      apply H; trivial.
+    + contradiction H3.
+    + contradiction H4.
+Qed.
+
+(*
+Lemma disjoint_alt_spec_2:
+  forall t f,
+  Disjoint f (BEGIN_ASYNC t) ->
+  DisjointAlt t f.
+Proof.
+  intros.
+  induction f using finish_ind_strong.
+  - simpl. trivial.
+  - simpl.
+    
+    inversion H.
+    + subst; clear H.
+      assert (
+Qed.
+*)
+Fixpoint disjoint (t:tid) (f:finish) : bool :=
+  match f with
+    Node l =>
+      (fix disjoint_alt (l:list (tid*finish)) : bool :=
+       match l with
+       | (t',f) :: l =>
+         if TID.eq_dec t t then false
+         else andb (disjoint t f) (disjoint_alt l)
+       | nil => true
+       end
+     ) l 
+  end.
+
+(*
+Fixpoint names (f:finish) : list tid :=
+match f with
+  | Node l =>
+    (fix lnames (l':list (tid *finish)) : list tid :=
+    match l' with
+      | ((t,f) :: l'') =>
+        t :: (names f) ++ (lnames l'')
+      | nil => nil
+    end) l
+end.
+
+Lemma names_spec_1:
+  forall f t,
+  In t f ->
+  List.In t (names f).
+Proof.
+  intros f.
+  induction f using finish_ind_strong.
+  - intros; apply in_leaf_absurd in H.
+    inversion H.
+  - intros.
+    inversion H.
+Qed.
+
+Lemma names_spec:
+  forall f,
+  (forall t, In t f <-> List.In t (names f)).
+*)
 Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
   | begin_async:
     forall t',
     Leaf t f ->
     ~ In t' f ->
-    Reduce f t (BEGIN_ASYNC t') (add t' leaf f)
+    Reduce f t (BEGIN_ASYNC t') (put_leaf t' f)
   | end_async:
     Leaf t f ->
     Reduce f t END_ASYNC (remove t f)
   | begin_finish:
-    Reduce f t BEGIN_FINISH (add t (add t leaf leaf) f)
+    Reduce f t BEGIN_FINISH (put t (singleton t) f)
   | end_finish:
     Child t leaf f ->
-    Reduce f t END_FINISH (add t leaf f)
+    Reduce f t END_FINISH f
   | reduce_nested:
     forall o f' f'' t',
     Disjoint f o ->
     Child t' f' f ->
     Reduce f' t o f'' ->
-    Reduce f t o (add t' f'' f).
+    Reduce f t o (put t' f'' f).
 
 End Semantics.
 
@@ -400,15 +819,6 @@ Inductive Nonempty : finish -> Prop :=
     forall t f,
     In t f ->
     Nonempty f.
-
-Lemma in_leaf_absurd:
-  forall t,
-  In t leaf -> False.
-Proof.
-  intros.
-  inversion H.
-  eauto using lookup_leaf_absurd.
-Qed.
 
 Lemma nonempty_leaf_absurd:
   Nonempty leaf -> False.
@@ -460,7 +870,7 @@ Proof.
       (* right *)
       inversion Hc; clear Hc; subst.
       remember (Node ((t, Node (p :: l')) :: l)) as s.
-      apply can_reduce_def with (add t s' s).
+      apply can_reduce_def with (put t s' s).
       apply Semantics.reduce_nested with (f':=(Node (p :: l'))).
       * apply Semantics.disjoint_skip.
         simpl.
@@ -487,7 +897,7 @@ Proof.
   - subst.
     apply child_inv_cons in H1.
     destruct H1.
-    + assumption.
+    + intuition.
     + eauto using H0.
   - apply child_neq in H1; auto.
     eauto using H0.
@@ -556,8 +966,10 @@ Qed.
 
 End Progress.
 
-(*
 Module Examples.
+Module FX10.
+Import Semantics.
+
 (**
 Original FX10 example:
 
@@ -578,24 +990,56 @@ Let t1:= 1.
 (t1: "finish { async S3 f() } S2") -> (t1, begin_finish)
 (t1: "async S3 f()"> |> t1: "S2"
 *)
-Goal Reduce (Task t1) t1 BEGIN_FINISH (Finish (Task t1) t1).
+Goal Reduce (singleton t1) t1 BEGIN_FINISH (put t1 (singleton t1) (singleton t1)).
 Proof.
   auto using begin_finish.
+Qed.
+
+(* Making singleton works as expected. *)
+Goal singleton t1 = Node ((t1,leaf) :: nil).
+Proof.
+  auto.
+Qed.
+
+Notation "[]" := leaf : finish_scope.
+(* Notation "*" := (Node nil) : finish_scope. *)
+Notation "[ p ]" :=  (Node ( (p  :: nil ) ))   :  finish_scope.
+Infix " <| " :=  (@pair tid finish) (at level 60, right associativity)  :  finish_scope.
+Notation "! t" :=  (@pair tid finish t (Node nil)) (at level 60)   :  finish_scope.
+Notation " [ x | .. | y ] " := (Node ((cons x .. (cons y nil) ..) )) : finish_scope.
+
+Ltac solve_notin :=
+  (apply disjoint_alt_spec_1;
+    simpl;
+    intuition; inversion H).
+
+Ltac solve_disjoint :=
+  (apply disjoint_ok; solve_notin) ||
+  (apply disjoint_skip; auto).
+
+Goal put t1 (singleton t1) (singleton t1) = [ t1 <| [ ! t1 ] ] .
+Proof.
+  auto.
 Qed.
 
 Let t2 := 2.
 (*
 (t1: "async S3 f()"> |> t1: "S2" -> (t1, begin_async t2)
-(t2: "S3") || (t1: "f()") |> t1: "S2"
+[(t2: "S3") || (t1: "f()") |> t1: "S2"]
 *)
-Goal Reduce (Finish (Task t1) t1) t1 (BEGIN_ASYNC t2)
-  (Finish (Par (Task t1) (Task t2)) t1).
+Goal Reduce
+  [ t1 <| [ ! t1 ] ]
+  t1 (BEGIN_ASYNC t2)
+  (put t1 [ ! t1 | ! t2 ]  [ t1 <| [ ! t1 ] ]).
 Proof.
-  eapply run_finish.
-  - eapply disjoint_ok.
-    intuition.
-    inversion H.
+  apply reduce_nested with (f':=[!t1]).
+  - solve_disjoint.
+  - eapply child_eq.
   - eapply begin_async.
+    eapply leaf_def, child_eq.
+    intuition.
+    apply in_inv_leaf in H.
+    inversion H.
 Qed.
 
 (*
@@ -607,18 +1051,36 @@ Qed.
 Let t3 := 3.
 
 Goal Reduce
-  (Finish (Par (Task t1) (Task t2)) t1)
+  [ t1 <| [ !t2 | !t1 ] ]
   t1 (BEGIN_ASYNC t3)
-  (Finish
-    (Par (Par (Task t1) (Task t3)) (Task t2)) t1).
+  (put t1 (put t3 leaf [ !t2 | !t1 ]) [ t1 <| [ !t2 | !t1 ] ]).
 Proof.
-  eapply run_finish.
-  + eapply disjoint_ok; intuition; inversion H.
-  + eapply run_par_left.
-    - eapply disjoint_ok.
-      intuition.
-      inversion H.
-    - eapply begin_async.
+  apply reduce_nested with ([ !t2 | !t1 ]).
+  + solve_disjoint.
+  + eapply child_eq.
+  + eapply begin_async.
+    eapply leaf_def.
+    eapply child_cons.
+    eapply child_eq.
+    apply disjoint_alt_spec_1.
+    simpl.
+    intuition; inversion H.
+Qed.
+
+(** Test the output of test. *)
+Goal
+  (put t3 leaf [ !t2 | !t1 ]) = 
+  [ !t1 | !t2 | !t3 ].
+auto.
+Qed.
+
+
+(** Test the simplification of this expression. *)
+Goal 
+  (put t1 (put t3 leaf [ !t2 | !t1 ]) [ t1 <| [ !t2 | !t1 ] ])
+  = 
+  [ t1 <| [  !t1 | !t2 | !t3 ] ].
+auto.
 Qed.
 
 (*
@@ -626,19 +1088,24 @@ Qed.
 (t2: "S3") || Idle || (t3: "S5") |> t1: "S2"
 *)
 Goal Reduce
-  (Finish
-    (Par (Par (Task t1) (Task t3)) (Task t2)) t1)
+  [ t1 <| [  !t1 | !t2 | !t3 ] ]
   t1 END_ASYNC
-  (Finish
-    (Par (Par Idle (Task t3)) (Task t2)) t1).
+  (put t1 (remove t1 [ !t1 | !t2 | !t3 ]) [ t1 <| [ !t1 | !t2 | !t3 ] ])
+  .
 Proof.
-  eapply run_finish.
-  { eapply disjoint_skip. auto. }
-  eapply run_par_left.
-  - eauto using disjoint_skip.
-  - eapply run_par_left.
-    + eauto using disjoint_skip.
-    + eapply end_async.
+  apply reduce_nested with ([  !t1 | !t2 | !t3 ]).
+  - solve_disjoint.
+  - apply child_eq.
+  - apply end_async.
+    apply leaf_def.
+    apply child_eq.
+Qed.
+
+Goal
+  (put t1 (remove t1 [ !t1 | !t2 | !t3 ]) [ t1 <| [ !t1 | !t2 | !t3 ] ])
+  = 
+  [ t1 <| [ !t2 | !t3 ] ].
+auto.
 Qed.
 
 (*
@@ -647,17 +1114,23 @@ Qed.
 (t3: "S5") || Idle || Idle |> t1: "S2"
 *)
 Goal Reduce
-  (Finish
-    (Par (Par Idle (Task t3)) (Task t2)) t1)
+  [ t1 <| [ !t2 | !t3 ] ]
   t2 END_ASYNC
-  (Finish
-    (Par (Par Idle (Task t3)) Idle) t1).
+  (put t1 (remove t2 [ !t2 | !t3 ]) [ t1 <| [ !t2 | !t3 ] ])
+  .
 Proof.
-  eapply run_finish.
-  { eapply disjoint_skip. auto. }
-  eapply run_par_right.
-  - eauto using disjoint_skip.
-  - eapply end_async.
+  apply reduce_nested with ([ !t2 | !t3 ]).
+  - solve_disjoint.
+  - apply child_eq.
+  - apply end_async.
+    apply leaf_def.
+    apply child_eq.
+Qed.
+
+Goal (put t1 (remove t2 [ !t2 | !t3 ]) [ t1 <| [ !t2 | !t3 ] ])
+ = 
+ [ t1 <| [ !t3 ] ].
+auto.
 Qed.
 
 (*
@@ -666,19 +1139,24 @@ Qed.
 Idle |> t1: "S2"
 *)
 Goal Reduce
-  (Finish
-    (Par (Par Idle (Task t3)) Idle) t1)
+  [ t1 <| [ !t3 ] ]
   t3 END_ASYNC
-  (Finish
-    (Par (Par Idle Idle) Idle) t1).
+  (put t1 (remove t3 [ !t3 ]) [ t1 <| [ !t3 ] ])
+  .
 Proof.
-  eapply run_finish.
-  { apply disjoint_skip. auto. }
-  eapply run_par_left.
-  - eauto using disjoint_skip.
-  - eapply run_par_right.
-    + eauto using disjoint_skip.
-    + eapply end_async.
+  apply reduce_nested with ([ !t3 ]).
+  - solve_disjoint.
+  - apply child_eq.
+  - apply end_async.
+    apply leaf_def.
+    apply child_eq.
+Qed.
+
+Goal
+  (put t1 (remove t3 [ !t3 ]) [ t1 <| [ !t3 ] ])
+  = 
+  [!t1].
+auto.
 Qed.
 
 (*
@@ -687,14 +1165,13 @@ Idle  || Idle  || Idle |> t1: "S2"
 (t1: "S2")
 *)
 Goal Reduce
-  (Finish
-    (Par (Par Idle Idle) Idle) t1)
+  [!t1]
   t1 END_FINISH
-  (Task t1).
+  [!t1].
 Proof.
-  eapply run_congruence.
-  simpl.
-  eapply end_finish.
+  apply end_finish.
+  unfold singleton.
+  apply child_eq.
 Qed.
 
 (*
@@ -703,12 +1180,14 @@ Qed.
 Idle
 *)
 Goal Reduce
-  (Task t1)
+  [!t1]
   t1 END_ASYNC
-  Idle.
+  [].
 Proof.
   eapply end_async.
+  apply leaf_def.
+  apply child_eq.
 Qed.
-
+End FX10.
 End Examples.
-*)
+
