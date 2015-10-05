@@ -432,13 +432,10 @@ Definition as_map (f:finish) : Map_TID.t task :=
 Definition from_map (m:Map_TID.t task) : finish :=
   Node (Map_TID.elements m).
 
-Definition put t f f' :=
-  from_map (Map_TID.add t f (as_map f')).
+Definition put (f:finish) (p:l_task) : finish :=
+  from_map (Map_TID.add (fst p) (snd p) (as_map f)).
 
-Definition put_leaf t f :=
-  put t Ready f.
-
-Definition remove t f :=
+Definition remove (f:finish) (t:tid) :=
   from_map (Map_TID.remove t (as_map f)).
 
 Module Semantics.
@@ -481,34 +478,36 @@ Proof.
     inversion H0.
 Qed.
 
-
 Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
   | begin_async:
     forall t',
     Leaf t f ->
     ~ In t' f ->
-    Reduce f t (BEGIN_ASYNC t') (put_leaf t' f)
+    Reduce f t (BEGIN_ASYNC t') (put f (t', Ready))
   | end_async:
     Leaf t f ->
-    Reduce f t END_ASYNC (remove t f)
+    Reduce f t END_ASYNC (remove f t)
   | begin_finish:
-    Reduce f t BEGIN_FINISH (put t (Blocked (mk_finish t)) f)
+    Reduce f t BEGIN_FINISH (put f (t, Blocked (mk_finish t)))
   | end_finish:
     Child t (Blocked (Node nil)) f ->
-    Reduce f t END_FINISH (put t Ready f)
+    Reduce f t END_FINISH (put f (t, Ready))
   | reduce_nested:
     forall t' o f' f'',
     Disjoint f o ->
     Child t' (Blocked f') f ->
     Reduce f' t o f'' ->
-    Reduce f t o (put t' (Blocked f'') f).
+    Reduce f t o (put f (t', Blocked f'')).
 
 End Semantics.
 
 Module FinishNotations.
 Notation "[]" := (Node nil) : finish_scope.
 Notation "[ p ]" :=  (Node ( (p  :: nil ) )) :  finish_scope.
-Infix " <| " :=  (fun (t:tid) (f:finish) => (t, Blocked f)) (at level 60, right associativity)  :  finish_scope.
+Infix " <| " :=  (fun (t:tid) (f:finish) => (t, Blocked f)) (at level 50, left associativity)  :  finish_scope.
 Notation "! t" :=  (t, Ready) (at level 60)   :  finish_scope.
 Notation " [ x | .. | y ] " := (Node ((cons x .. (cons y nil) ..) )) : finish_scope.
+Infix " |+ " :=  (put) (at level 60, right associativity)  :  finish_scope.
+Infix " |- " :=  (remove) (at level 60, right associativity)  :  finish_scope.
+
 End FinishNotations.

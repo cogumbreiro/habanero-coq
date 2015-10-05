@@ -58,13 +58,13 @@ Goal
   Reduce
   [ ! t1 ]
   t1 BEGIN_FINISH
-  (put t1 (Blocked [! t1]) [ ! t1 ])
+  (put [ ! t1 ] (t1 <| [! t1]) )
   .
 Proof.
   apply begin_finish.
 Qed.
 
-Goal put t1 (Blocked (mk_finish t1)) (mk_finish t1) = [ t1 <| [ ! t1 ] ] .
+Goal (mk_finish t1) |+ (t1 <| (mk_finish t1))  = [ t1 <| [ ! t1 ] ] .
 Proof.
   auto.
 Qed.
@@ -77,7 +77,7 @@ Let t2 := 2.
 Goal Reduce
   [ t1 <| [ ! t1 ] ]
   t1 (BEGIN_ASYNC t2)
-  (put t1 (Blocked [ ! t1 | ! t2 ])  [ t1 <| [ ! t1 ] ]).
+  ([ t1 <| [ ! t1 ] ] |+ (t1 <| [ ! t1 | ! t2 ])  ).
 Proof.
   apply reduce_nested with (f':=[!t1]).
   - solve_disjoint.
@@ -98,7 +98,7 @@ Let t3 := 3.
 Goal Reduce
   [ t1 <| [ !t2 | !t1 ] ]
   t1 (BEGIN_ASYNC t3)
-  (put t1 (Blocked (put_leaf t3 [ !t2 | !t1 ])) [ t1 <| [ !t2 | !t1 ] ]).
+  ([ t1 <| [ !t2 | !t1 ] ] |+ (t1  <| ([ !t2 | !t1 ] |+ (!t3) )) ).
 Proof.
   apply reduce_nested with ([ !t2 | !t1 ]).
   + solve_disjoint.
@@ -112,15 +112,14 @@ Qed.
 
 (** Test the output of test. *)
 Goal
-  (put_leaf t3 [ !t2 | !t1 ]) = 
-  [ !t1 | !t2 | !t3 ].
+  ([ !t2 | !t1 ] |+ (!t3)) = [ !t1 | !t2 | !t3 ].
 auto.
 Qed.
 
 
 (** Test the simplification of this expression. *)
 Goal 
-  (put t1 (Blocked (put_leaf t3 [ !t2 | !t1 ])) [ t1 <| [ !t2 | !t1 ] ])
+  ([ t1 <| [ !t2 | !t1 ] ] |+ (t1  <| ([ !t2 | !t1 ] |+ (!t3))) )
   = 
   [ t1 <| [  !t1 | !t2 | !t3 ] ].
 auto.
@@ -133,7 +132,7 @@ Qed.
 Goal Reduce
   [ t1 <| [  !t1 | !t2 | !t3 ] ]
   t1 END_ASYNC
-  (put t1 (Blocked (remove t1 [ !t1 | !t2 | !t3 ])) [ t1 <| [ !t1 | !t2 | !t3 ] ])
+  ([ t1 <| [ !t1 | !t2 | !t3 ] ] |+ (t1 <| ([ !t1 | !t2 | !t3 ] |- t1 )) )
   .
 Proof.
   apply reduce_nested with ([  !t1 | !t2 | !t3 ]).
@@ -145,7 +144,7 @@ Proof.
 Qed.
 
 Goal
-  (put t1 (Blocked (remove t1 [ !t1 | !t2 | !t3 ])) [ t1 <| [ !t1 | !t2 | !t3 ] ])
+  ([ t1 <| [ !t1 | !t2 | !t3 ] ] |+ (t1 <| ([ !t1 | !t2 | !t3 ] |- t1)) )
   = 
   [ t1 <| [ !t2 | !t3 ] ].
 auto.
@@ -159,7 +158,7 @@ Qed.
 Goal Reduce
   [ t1 <| [ !t2 | !t3 ] ]
   t2 END_ASYNC
-  (put t1 (Blocked (remove t2 [ !t2 | !t3 ])) [ t1 <| [ !t2 | !t3 ] ])
+  ([ t1 <| [ !t2 | !t3 ] ] |+ (t1 <| ([ !t2 | !t3 ] |- t2)) )
   .
 Proof.
   apply reduce_nested with ([ !t2 | !t3 ]).
@@ -170,7 +169,8 @@ Proof.
     apply child_eq.
 Qed.
 
-Goal (put t1 (Blocked (remove t2 [ !t2 | !t3 ])) [ t1 <| [ !t2 | !t3 ] ])
+Goal
+ ([ t1 <| [ !t2 | !t3 ] ] |+ (t1 <| ([ !t2 | !t3 ] |- t2)) )
  = 
  [ t1 <| [ !t3 ] ].
 auto.
@@ -184,7 +184,7 @@ Idle |> t1: "S2"
 Goal Reduce
   [ t1 <| [ !t3 ] ]
   t3 END_ASYNC
-  (put t1 (Blocked (remove t3 [ !t3 ])) [ t1 <| [ !t3 ] ])
+  ([ t1 <| [ !t3 ] ] |+ t1 <| ([ !t3 ] |- t3) ) 
   .
 Proof.
   apply reduce_nested with ([ !t3 ]).
@@ -196,7 +196,7 @@ Proof.
 Qed.
 
 Goal
-  put t1 (Blocked(remove t3 [ !t3 ])) [ t1 <| [ !t3 ] ]
+  ([ t1 <| [ !t3 ] ] |+ t1 <| ([ !t3 ] |- t3) ) 
   = 
   [t1 <| []].
 auto.
