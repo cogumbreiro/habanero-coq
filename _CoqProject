@@ -12,5 +12,7 @@ src/Phasers/SubjectReduction.v
 src/Phasers/Typesystem.v
 src/ReverseSemaphore.v
 src/Progress.v
-src/AsyncFinish.v
+src/AsyncFinish/Lang.v
+src/AsyncFinish/LangExtra.v
+src/AsyncFinish/Examples.v
 
