@@ -1,4 +1,3 @@
-Require Import HJ.Phasers.Lang.
 Require Import HJ.Vars.
 
 Require Import Coq.Lists.SetoidList.
@@ -488,6 +487,7 @@ Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
     Leaf t f ->
     Reduce f t END_ASYNC (remove f t)
   | begin_finish:
+    Leaf t f ->
     Reduce f t BEGIN_FINISH (put f (t, Blocked (mk_finish t)))
   | end_finish:
     Child t (Blocked (Node nil)) f ->

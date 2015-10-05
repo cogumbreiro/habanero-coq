@@ -79,6 +79,8 @@ Goal
   .
 Proof.
   apply begin_finish.
+  apply leaf_def.
+  apply child_eq.
 Qed.
 
 Goal (mk_finish t1) |+ (t1 <| (mk_finish t1))  = [ t1 <| [ ! t1 ] ] .
