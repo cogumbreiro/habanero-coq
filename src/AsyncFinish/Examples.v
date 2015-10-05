@@ -44,21 +44,38 @@ Ltac solve_disjoint :=
 Goal Node nil = [].
 auto. Qed.
 
-(* Making singleton works as expected. *)
+(**
+  Function [mk_finish] creates a finish scope, delimited by brackets,
+  with the given task [t1] marked as ready, which is denoted 
+  by the bang symbol [!]. *)
 Goal mk_finish t1 = [ ! t1 ].
 Proof.
   auto.
 Qed.
 
-(*
-(t1: "finish { async S3 f() } S2") -> (t1, begin_finish)
-(t1: "async S3 f()"> |> t1: "S2"
+(**
+  The FX10 language is not concerned with observing the behaviour of tasks,
+  it is instead focused with observing the interaction among procedures.
+
+  (t1: "finish { async S3 f() } S2") -> (t1, begin_finish)
+  (t1: "async S3 f()"> |> t1: "S2"
+
+  We represent finish scope by a mapping from task identifiers of type [tid] to
+  tasks of type [task]. A task [t] is either ready [!t] to execute or blocked
+  on finish scope [f], notation
+  [t <| f].
+  
+  Operator [put f (t, a)], notation [|+] updates the finish scope [f], by
+  setting task [t] to have a task body [a].
+  
+  For example, let task [t1] be ready in a finish scope. If task [t1]
+  issues a [BEGIN_FINISH], then we put task [t1] blocked on a new finish
+  state where [t1] itself is running. In HJ, the same can begin multiple
+  finish scopes.
 *)
 Goal
   Reduce
-  [ ! t1 ]
-  t1 BEGIN_FINISH
-  (put [ ! t1 ] (t1 <| [! t1]) )
+  [ ! t1 ] t1 BEGIN_FINISH ([ ! t1 ] |+ (t1 <| [! t1]) )
   .
 Proof.
   apply begin_finish.
@@ -77,7 +94,7 @@ Let t2 := 2.
 Goal Reduce
   [ t1 <| [ ! t1 ] ]
   t1 (BEGIN_ASYNC t2)
-  ([ t1 <| [ ! t1 ] ] |+ (t1 <| [ ! t1 | ! t2 ])  ).
+  ([ t1 <| [ ! t1 ] ] |+ t1 <| [ ! t1 | ! t2 ]  ).
 Proof.
   apply reduce_nested with (f':=[!t1]).
   - solve_disjoint.
