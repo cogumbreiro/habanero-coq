@@ -234,6 +234,25 @@ Proof.
   eauto using lt_def, child_cons_perm.
 Qed.
 
+Lemma lt_inv_cons:
+  forall f p l,
+  f < Node (p :: l) ->
+  (snd p = Blocked f) \/ f < (Node l).
+Proof.
+  intros.
+  inversion H.
+  destruct p as  (t', a).
+  destruct H0.
+  destruct H0.
+  * inversion H0.
+    intuition.
+  * right.
+    apply lt_def with (t).
+    apply child_def.
+    simpl.
+    auto.
+Qed.
+
 Inductive Some (P: finish -> Prop) (f:finish) : Prop :=
   | some_ok:
     P f ->
@@ -264,6 +283,37 @@ Proof.
   - apply some_ok.
     auto.
   - eauto using some_parent, lt_cons.
+Qed.
+
+Lemma some_inv_nil:
+  forall P,
+  Some P (Node nil) ->
+  P (Node nil).
+Proof.
+  intros.
+  inversion H.
+  - assumption.
+  - apply lt_leaf_absurd in H1.
+    inversion H1.
+Qed.
+
+Lemma some_inv_cons:
+  forall P p l,
+  Some P (Node (p :: l)) ->
+  (P (Node (p::l))) \/
+  (exists f, snd p = Blocked f /\ Some P f) \/ Some P (Node l).
+Proof.
+  intros.
+  inversion H.
+  - intuition.
+  - right.
+    apply lt_inv_cons  in H1.
+    destruct H1.
+    + left.
+      exists f'.
+      intuition.
+    + right.
+      eauto using some_parent.
 Qed.
 
 Inductive Lookup (t:tid) (a:task) (f:finish) : Prop :=
@@ -475,6 +525,38 @@ Proof.
   - assumption.
   - simpl in H0.
     inversion H0.
+Qed.
+
+Lemma disjoint_inv_cons_rhs:
+  forall p l o,
+  Disjoint (Node ((p :: l))) o ->
+  Disjoint (Node l) o.
+Proof.
+  intros.
+  inversion H.
+  + apply disjoint_ok.
+    intuition.
+    contradiction H0.
+    apply in_cons_rhs.
+    assumption.
+  + apply disjoint_skip.
+    assumption.
+Qed.
+
+Lemma disjoint_inv_cons_lhs:
+  forall t f l o,
+  Disjoint (Node (((t, Blocked f) :: l))) o ->
+  Disjoint f o.
+Proof.
+  intros.
+  inversion H.
+  + apply disjoint_ok.
+    intuition.
+    contradiction H0.
+    apply in_cons.
+    assumption.
+  + apply disjoint_skip.
+    assumption.
 Qed.
 
 Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
