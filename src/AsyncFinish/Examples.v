@@ -96,7 +96,7 @@ Let t2 := 2.
 Goal Reduce
   [ t1 <| [ ! t1 ] ]
   t1 (BEGIN_ASYNC t2)
-  ([ t1 <| [ ! t1 ] ] |+ t1 <| [ ! t1 | ! t2 ]  ).
+  ([ t1 <| [ ! t1 ] ] |+ t1 <| ([ ! t1 ] |+ ! t2 )).
 Proof.
   apply reduce_nested with (f':=[!t1]).
   - solve_disjoint.
@@ -131,8 +131,8 @@ Qed.
 
 (** Test the output of test. *)
 Goal
-  ([ !t2 | !t1 ] |+ (!t3)) = [ !t1 | !t2 | !t3 ].
-auto.
+  ([ !t2 | !t1 ] |+ (!t3)) = [ !t3 | !t1 | !t2 ].
+  auto.
 Qed.
 
 
@@ -140,7 +140,7 @@ Qed.
 Goal 
   ([ t1 <| [ !t2 | !t1 ] ] |+ (t1  <| ([ !t2 | !t1 ] |+ (!t3))) )
   = 
-  [ t1 <| [  !t1 | !t2 | !t3 ] ].
+  [ t1 <| [  !t3 | !t1 | !t2 ] ].
 auto.
 Qed.
 

@@ -491,11 +491,11 @@ Definition as_map (f:finish) : Map_TID.t task :=
 Definition from_map (m:Map_TID.t task) : finish :=
   Node (Map_TID.elements m).
 
-Definition put (f:finish) (p:l_task) : finish :=
-  from_map (Map_TID.add (fst p) (snd p) (as_map f)).
-
 Definition remove (f:finish) (t:tid) :=
   from_map (Map_TID.remove t (as_map f)).
+
+Definition put (f:finish) (p:l_task) : finish :=
+  Node (p::(get_tasks (remove f (fst p) ))).
 
 Module Semantics.
 
