@@ -483,21 +483,26 @@ Proof.
     eauto using in_def.
 Qed.
 
+Module Semantics.
+
 (** Add task [t] to finish [f]. *)
 
-Definition as_map (f:finish) : Map_TID.t task :=
-  Map_TID_Props.of_list (get_tasks f).
-
-Definition from_map (m:Map_TID.t task) : finish :=
-  Node (Map_TID.elements m).
+Fixpoint remove_child (l:list l_task) (t:tid) :=
+  match l with
+  | (t', f) :: l => 
+    if TID.eq_dec t t'
+    then remove_child l t
+    else (t',f) :: remove_child l t
+  | nil => nil
+  end.
 
 Definition remove (f:finish) (t:tid) :=
-  from_map (Map_TID.remove t (as_map f)).
+  match f with
+  | Node l => Node (remove_child l t)
+  end.
 
 Definition put (f:finish) (p:l_task) : finish :=
   Node (p::(get_tasks (remove f (fst p) ))).
-
-Module Semantics.
 
 (**
   In async/finish all operations are blocking, because a task
@@ -594,6 +599,7 @@ Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
 End Semantics.
 
 Module FinishNotations.
+Import Semantics.
 Notation "[]" := (Node nil) : finish_scope.
 Notation "[ p ]" :=  (Node ( (p  :: nil ) )) :  finish_scope.
 Infix " <| " :=  (fun (t:tid) (f:finish) => (t, Blocked f)) (at level 50, left associativity)  :  finish_scope.
