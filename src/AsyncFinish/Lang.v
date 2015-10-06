@@ -2,7 +2,6 @@ Require Import HJ.Vars.
 
 Require Import Coq.Lists.SetoidList.
 
-
 Inductive task :=
   | Ready
   | Blocked : finish -> task
@@ -203,6 +202,17 @@ Inductive Leaf (t:tid) (f:finish) : Prop :=
   leaf_def:
     Child t Ready f ->
     Leaf t f.
+
+Lemma leaf_cons:
+  forall t l p,
+  Leaf t (Node l) ->
+  Leaf t (Node (p :: l)).
+Proof.
+  intros.
+  apply leaf_def.
+  inversion H.
+  auto using child_cons.
+Qed.
 
 Inductive Lt (f:finish) (f':finish) : Prop :=
   lt_def:
