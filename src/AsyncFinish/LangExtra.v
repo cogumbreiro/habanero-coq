@@ -19,6 +19,47 @@ Fixpoint NotIn (t:tid) (f:finish) : Prop :=
      ) l
   end.
 
+Lemma notin_cons:
+  forall t l p,
+  t <> fst p ->
+  match snd p with
+  | Ready => True
+  | Blocked f => NotIn t f
+  end ->
+  NotIn t (Node l) ->
+  NotIn t (Node (p :: l)).
+Proof.
+  intros.
+  simpl.
+  destruct p as (t', a).
+  split.
+  { simpl; auto. }
+  split.
+  - assumption.
+  - assumption.
+Qed.
+
+Lemma notin_cons_ready:
+  forall t t' l,
+  t <> t' ->
+  NotIn t (Node l) ->
+  NotIn t (Node ((t',Ready) :: l)).
+Proof.
+  intros.
+  apply notin_cons; (simpl in *; auto with *).
+Qed.
+
+Lemma notin_cons_blocked:
+  forall t t' f l,
+  t <> t' ->
+  NotIn t f ->
+  NotIn t (Node l) ->
+  NotIn t (Node ((t', Blocked f) :: l)).
+Proof.
+  intros.
+  apply notin_cons; (simpl in *; auto with *).
+Qed.
+
 Lemma notin_spec_1:
   forall f t,
   NotIn t f ->
@@ -54,62 +95,34 @@ Proof.
   intros.
   induction f using finish_ind_strong.
   - simpl. trivial.
-  - simpl.
-    split.
-    + destruct (TID.eq_dec t t0).
+  - assert (Hneq : t <> t0). {
+      destruct (TID.eq_dec t t0).
       subst.
       contradiction H.
       apply in_eq.
       assumption.
-    + split; trivial.
-      assert (Hr : (fix aux (l0 : list l_task) : Prop :=
-      match l0 with
-      | nil => True
-      | (t', a) :: l2 =>
-        t <> t' /\
-        aux l2 /\
-        match a with
-        | Ready => True
-        | Blocked f => NotIn t f
-        end
-      end) l = NotIn t (Node l)). {
-        auto.
-      }
-      rewrite Hr; clear Hr.
-      apply IHf.
+    }
+    apply notin_cons_ready;  auto.
+    apply IHf.
+    intuition.
+    contradiction H.
+    auto using in_cons_rhs.
+  - assert (Hneq : t <> t0). {
+      destruct (TID.eq_dec t t0).
+      subst.
+      contradiction H.
+      apply in_eq.
+      assumption.
+    }
+    apply notin_cons_blocked; auto.
+    + apply IHf.
+      intuition.
+      contradiction H.
+      auto using in_cons.
+    + apply IHf0.
       intuition.
       contradiction H.
       auto using in_cons_rhs.
-  - simpl.
-    split.
-    + destruct (TID.eq_dec t t0).
-      subst.
-      contradiction H.
-      apply in_eq.
-      assumption.
-    + split.
-      * assert (Hr : (fix aux (l0 : list l_task) : Prop :=
-        match l0 with
-        | nil => True
-        | (t', a) :: l2 =>
-          t <> t' /\
-          aux l2 /\
-          match a with
-          | Ready => True
-          | Blocked f => NotIn t f
-          end
-        end) l = NotIn t (Node l)). {
-          auto.
-        }
-        rewrite Hr; clear Hr.
-        apply IHf0.
-        intuition.
-        contradiction H.
-        auto using in_cons_rhs.
-      * apply IHf.
-        intuition.
-        contradiction H.
-        auto using in_cons.
 Qed.
 
 Theorem notin_spec:
@@ -117,6 +130,21 @@ Theorem notin_spec:
   ~ In t f <-> NotIn t f.
 Proof.
   split; auto using notin_spec_1, notin_spec_2.
+Qed.
+
+Lemma disjoint_inv_cons_name:
+  forall t t' a l,
+  Semantics.Disjoint (Node (((t, a) :: l))) (Semantics.BEGIN_ASYNC t') ->
+  t <> t'.
+Proof.
+  intros.
+  inversion H.
+  + subst.
+    apply notin_spec in H1.
+    simpl in H1.
+    intuition.
+  + simpl in H0.
+    inversion H0.
 Qed.
 
 (*
