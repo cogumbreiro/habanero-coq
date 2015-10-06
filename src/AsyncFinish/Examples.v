@@ -4,7 +4,7 @@ Require Import HJ.AsyncFinish.LangExtra.
 
 
 Module Examples.
-Module FX10.
+Module FX10Example.
 Import Semantics.
 
 (**
@@ -131,7 +131,7 @@ Qed.
 
 (** Test the output of test. *)
 Goal
-  ([ !t2 | !t1 ] |+ (!t3)) = [ !t3 | !t1 | !t2 ].
+  ([ !t2 | !t1 ] |+ (!t3)) = [ !t3 | !t2 | !t1 ].
   auto.
 Qed.
 
@@ -140,7 +140,7 @@ Qed.
 Goal 
   ([ t1 <| [ !t2 | !t1 ] ] |+ (t1  <| ([ !t2 | !t1 ] |+ (!t3))) )
   = 
-  [ t1 <| [  !t3 | !t1 | !t2 ] ].
+  [ t1 <| [  !t3 | !t2 | !t1 ] ].
 auto.
 Qed.
 
@@ -249,6 +249,154 @@ Proof.
   apply leaf_def.
   apply child_eq.
 Qed.
+End FX10Example.
+
+Module FX10.
+
+Definition fid := nat.
+
+Inductive expression :=
+  | constant:  nat -> expression
+  | load: phid -> expression.
+
+Inductive statement :=
+  | snil 
+  | seq: instruction -> statement -> statement
+with instruction :=
+  | skip
+  | store: nat -> expression -> instruction
+  | while: nat -> statement -> instruction
+  | async: statement -> instruction
+  | begin_finish
+  | end_finish
+  | call: fid -> instruction.
+
+Definition program := Map_PHID.t statement.
+Definition taskmap := Map_TID.t statement.
+Definition heap := Map_PHID.t nat.
+Inductive state := mk_state {
+  get_finish: Lang.finish;
+  get_taskmap: taskmap;
+  get_heap:  heap;
+  get_program: program
+}.
+
+Section StateOps.
+
+Variable s:state.
+Definition set_finish (f:Lang.finish) : state :=
+  mk_state f s.(get_taskmap) s.(get_heap) s.(get_program).
+
+Require Import Coq.Init.Datatypes.
+
+Definition heap_load (h:phid) :=
+  match Map_PHID.find h s.(get_heap) with
+  | None => 0
+  | Some n => n
+  end.
+
+Definition eval (e:expression) :=
+  match e with
+  | constant n => n
+  | load h => S (heap_load h)
+  end.
+
+Definition heap_store (h:phid) (n:nat) : state :=
+  mk_state s.(get_finish) s.(get_taskmap) (Map_PHID.add h n s.(get_heap)) s.(get_program).
+
+Definition remove_task (t:tid) : state :=
+  mk_state s.(get_finish) (Map_TID.remove t s.(get_taskmap)) s.(get_heap) s.(get_program).
+
+Definition update_statement (t:tid) (s':statement) : state :=
+  mk_state s.(get_finish) (Map_TID.add t s' s.(get_taskmap)) s.(get_heap) s.(get_program).
+
+Definition get_function (h:phid) : statement :=
+  match Map_PHID.find h s.(get_program) with
+  | None => snil
+  | Some s => s
+  end.
+
+End StateOps.
+
+Section OS.
+Variable S:state.
+
+Inductive GetStatement (t:tid) (s':statement) : Prop :=
+    get_sequence_def:
+      Map_TID.MapsTo t s' S.(get_taskmap) ->
+      GetStatement t s'.
+
+Definition FReduce := Semantics.Reduce S.(get_finish).
+
+Fixpoint concat (s1:statement) (s2:statement) : statement :=
+  match s1 with
+  | snil => s2
+  | seq i s1' => seq i (concat s1' s2)
+  end.
+
+
+Inductive Reduce: state -> Prop :=
+  | reduce_snil:
+    forall t f',
+    GetStatement t snil ->
+    FReduce t Semantics.END_ASYNC f' ->
+    let S' := (remove_task S t) in
+    Reduce (set_finish S' f')
+
+  | reduce_skip:
+    forall t s,
+    GetStatement t (seq skip s) ->
+    Reduce (update_statement S t s)
+
+  | reduce_store:
+    forall t h s e,
+    GetStatement t (seq (store h e) s) ->
+    let n := eval S e in
+    let S' := heap_store S h n in
+    Reduce (update_statement S' t s)
+
+  | reduce_while_end:
+    forall t s1 s2 h,
+    GetStatement t (seq (while h s1) s2) ->
+    heap_load S h = 0 ->
+    Reduce (update_statement S t s2)
+  
+  | reduce_while_loop:
+    forall s1 s2 h t,
+    GetStatement t (seq (while h s1) s2) ->
+    heap_load S h <> 0 ->
+    let s3 := concat s1 (seq (while h s1) s2) in
+    Reduce (update_statement S t s3)
+  
+  | reduce_async:
+    forall t1 t2 f' s1 s2,
+    GetStatement t1 (seq (async s1) s2) ->
+    ~ Map_TID.In t2 S.(get_taskmap) ->
+    FReduce t1 (Semantics.BEGIN_ASYNC t2) f' ->
+    let S' := update_statement (update_statement S t2 s2) t1 s1 in
+    Reduce (set_finish S' f')
+
+  | reduce_begin_finish:
+    forall s t f',
+    GetStatement t (seq begin_finish s) ->
+    FReduce t Semantics.BEGIN_FINISH f' ->
+    let S' := update_statement S t s in
+    Reduce (set_finish S f')
+    
+  | reduce_end_finish:
+    forall s t f',
+    GetStatement t (seq end_finish s) ->
+    FReduce t Semantics.END_FINISH f' ->
+    let S' := update_statement S t s in
+    Reduce (set_finish S f')
+
+  | reduce_call:
+    forall s t h,
+    GetStatement t (seq (call h) s) ->
+    let s' := concat (get_function S h) s in
+    Reduce (update_statement S t s').
+End OS.
+
 End FX10.
 End Examples.
 
