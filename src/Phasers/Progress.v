@@ -286,6 +286,7 @@ Proof.
   - exists (mapi t signal pm).
     auto using reduce_signal_all.
   - contradiction H1; auto.
+  - eauto using P.can_reduce_def, reduce_drop_all.
   - inversion H0; subst; clear H0.
     clear H1.
     rename t0 into t'.

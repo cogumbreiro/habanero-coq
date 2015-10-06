@@ -77,6 +77,8 @@ Definition SignalCap (v:taskview) :=
 
 Definition phaser := Map_TID.t taskview.
 
+Definition drop : tid -> phaser -> phaser := @Map_TID.remove taskview.
+
 Definition Await (ph:phaser) (n:nat) :=
   forall t v,
   Map_TID.MapsTo t v ph ->
@@ -107,6 +109,7 @@ Inductive op : Type :=
   | PH_DROP : phid -> op
   | SIGNAL_ALL : op
   | WAIT_ALL : op
+  | DROP_ALL : op
   | ASYNC : list phased -> tid -> op.
 
 Definition phasermap := Map_PHID.t phaser.
@@ -139,39 +142,44 @@ Definition apply (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
 Definition mapi (t:tid) (f:taskview->taskview) : phasermap -> phasermap :=
   Map_PHID.mapi (fun p ph => apply t f ph).
 
-Inductive Reduce : phasermap -> tid -> op -> phasermap -> Prop :=
+Definition drop_all (t:tid) : phasermap -> phasermap :=
+  Map_PHID.mapi (fun _ ph => drop t ph).
+
+Inductive Reduce (m:phasermap) (t:tid): op -> phasermap -> Prop :=
   | reduce_new:
-    forall pm t p,
-    ~ Map_PHID.In p pm ->
+    forall p,
+    ~ Map_PHID.In p m ->
     (* --------------- *)
-    Reduce pm t (PH_NEW p) (Map_PHID.add p (newPhaser t) pm)
+    Reduce m t (PH_NEW p) (Map_PHID.add p (newPhaser t) m)
 
   | reduce_signal:
-    forall pm t p ph,
-    Map_PHID.MapsTo p ph pm ->
+    forall p ph,
+    Map_PHID.MapsTo p ph m ->
     (* --------------- *)
-    Reduce pm t (PH_SIGNAL p) (Map_PHID.add p (apply t signal ph) pm)
+    Reduce m t (PH_SIGNAL p) (Map_PHID.add p (apply t signal ph) m)
 
   | reduce_drop:
-    forall pm t p ph,
-    Map_PHID.MapsTo p ph pm ->
+    forall p ph,
+    Map_PHID.MapsTo p ph m ->
     (* --------------- *)
-    Reduce pm t (PH_DROP p) (Map_PHID.add p (Map_TID.remove t ph) pm)
+    Reduce m t (PH_DROP p) (Map_PHID.add p (drop t ph) m)
 
  | reduce_signal_all:
-    forall m t,
     (* --------------- *)
     Reduce m t SIGNAL_ALL (mapi t signal m)
 
  | reduce_wait_all:
-    forall m t,
     (* check if it can synchronize on every phaser *)
     (forall p ph, Map_PHID.MapsTo p ph m -> Sync ph t) ->
     (* --------------- *)
     Reduce m t WAIT_ALL (mapi t wait m)
 
+ | reduce_drop_all:
+    (* --------------- *)
+    Reduce m t DROP_ALL (drop_all t m)
+
  | reduce_async:
-    forall m t ps t' m',
+    forall ps t' m',
     Async m t ps t' m' ->
     Reduce m t (ASYNC ps t') m'.
 
