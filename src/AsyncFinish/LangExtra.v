@@ -39,6 +39,22 @@ Proof.
   - assumption.
 Qed.
 
+Lemma notin_inv:
+  forall t l p,
+  NotIn t (Node (p :: l)) ->
+  t <> fst p /\
+  match snd p with
+  | Ready => True
+  | Blocked f => NotIn t f
+  end /\
+  NotIn t (Node l).
+Proof.
+  intros.
+  destruct p.
+  simpl in H.
+  intuition.
+Qed.
+
 Lemma notin_cons_ready:
   forall t t' l,
   t <> t' ->
