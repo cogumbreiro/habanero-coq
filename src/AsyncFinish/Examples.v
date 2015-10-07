@@ -4,7 +4,7 @@ Require Import HJ.AsyncFinish.LangExtra.
 
 
 Module Examples.
-Module FX10Example.
+Module Example1.
 Import Semantics.
 
 (**
@@ -73,7 +73,7 @@ Qed.
   state where [t1] itself is running. In HJ, the same can begin multiple
   finish scopes.
 *)
-Goal
+Example R1 :
   Reduce
   [ ! t1 ] t1 BEGIN_FINISH ([ ! t1 ] |+ (t1 <| [! t1]) )
   .
@@ -93,7 +93,7 @@ Let t2 := 2.
 (t1: "async S3 f()"> |> t1: "S2" -> (t1, begin_async t2)
 [(t2: "S3") || (t1: "f()") |> t1: "S2"]
 *)
-Goal Reduce
+Example R2: Reduce
   [ t1 <| [ ! t1 ] ]
   t1 (BEGIN_ASYNC t2)
   ([ t1 <| [ ! t1 ] ] |+ t1 <| ([ ! t1 ] |+ ! t2 )).
@@ -249,7 +249,7 @@ Proof.
   apply leaf_def.
   apply child_eq.
 Qed.
-End FX10Example.
+End Example1.
 
 Module FX10.
 
@@ -257,29 +257,42 @@ Definition fid := nat.
 
 Inductive expression :=
   | constant:  nat -> expression
-  | load: phid -> expression.
+  | arr_load: phid -> expression.
 
 Inductive statement :=
   | snil 
   | seq: instruction -> statement -> statement
 with instruction :=
   | skip
-  | store: nat -> expression -> instruction
+  | arr_store: nat -> expression -> instruction
   | while: nat -> statement -> instruction
   | async: statement -> instruction
   | begin_finish
   | end_finish
   | call: fid -> instruction.
 
+Fixpoint from_list (l:list instruction) : statement :=
+  match l with
+  | cons i l => seq i (from_list l)
+  | nil => snil
+  end.
+
 Definition program := Map_PHID.t statement.
+Definition mk_program := @Map_PHID.empty statement.
+
 Definition taskmap := Map_TID.t statement.
+Definition mk_taskmap (t:tid) (s:statement) := Map_TID.add t s (@Map_TID.empty statement).
 Definition heap := Map_PHID.t nat.
+Definition mk_heap := @Map_PHID.empty nat.
 Inductive state := mk_state {
   get_finish: Lang.finish;
   get_taskmap: taskmap;
   get_heap:  heap;
   get_program: program
 }.
+
+Definition run (t:tid) (s:statement) : state :=
+  mk_state (mk_finish t) (mk_taskmap t s) mk_heap mk_program.
 
 Section StateOps.
 
@@ -298,7 +311,7 @@ Definition heap_load (h:phid) :=
 Definition eval (e:expression) :=
   match e with
   | constant n => n
-  | load h => S (heap_load h)
+  | arr_load h => S (heap_load h)
   end.
 
 Definition heap_store (h:phid) (n:nat) : state :=
@@ -322,7 +335,7 @@ Section OS.
 Variable S:state.
 
 Inductive GetStatement (t:tid) (s':statement) : Prop :=
-    get_sequence_def:
+    get_statement_def:
       Map_TID.MapsTo t s' S.(get_taskmap) ->
       GetStatement t s'.
 
@@ -350,7 +363,7 @@ Inductive Reduce: state -> Prop :=
 
   | reduce_store:
     forall t h s e,
-    GetStatement t (seq (store h e) s) ->
+    GetStatement t (seq (arr_store h e) s) ->
     let n := eval S e in
     let S' := heap_store S h n in
     Reduce (update_statement S' t s)
@@ -370,7 +383,7 @@ Inductive Reduce: state -> Prop :=
   
   | reduce_async:
     forall t1 t2 f' s1 s2,
-    GetStatement t1 (seq (async s1) s2) ->
+    GetStatement t1 (seq (async s2) s1) ->
     ~ Map_TID.In t2 S.(get_taskmap) ->
     FReduce t1 (Semantics.BEGIN_ASYNC t2) f' ->
     let S' := update_statement (update_statement S t2 s2) t1 s1 in
@@ -381,7 +394,7 @@ Inductive Reduce: state -> Prop :=
     GetStatement t (seq begin_finish s) ->
     FReduce t Semantics.BEGIN_FINISH f' ->
     let S' := update_statement S t s in
-    Reduce (set_finish S f')
+    Reduce (set_finish S' f')
     
   | reduce_end_finish:
     forall s t f',
@@ -396,6 +409,100 @@ Inductive Reduce: state -> Prop :=
     let s' := concat (get_function S h) s in
     Reduce (update_statement S t s').
 End OS.
+
+Module Example1_1.
+(**
+Original FX10 example:
+
+              (t1: "finish { async S3 f() } S2") -> (t1, begin_finish)
+                (t1: "async S3 f()"> |> t1: "S2" -> (t1, begin_async t2)
+           (t2: "S3") || (t1: "f()") |> t1: "S2" -> (... evaluates function)
+      (t2: "S3") || (t1: "async S5") |> t1: "S2" -> (t2, begin_async t3) 
+(t2: "S3") || (t1: "") || (t3: "S5") |> t1: "S2" -> (t1, end_async)
+            (t2: "S3") || (t3: "S5") |> t1: "S2" -> (t2, end_async)
+                          (t3: "S5") |> t1: "S2" -> (t3, end_async)
+                                Idle |> t1: "S2" -> (t3, end_finish)
+                                      (t1: "S2") -> (t1, end_async)
+                                            Idle
+
+*)
+Let t1:= 1.
+Let S3 := snil.
+Let f := 0.
+Let S2 := skip.
+
+Let S1 : statement  := (from_list (
+  begin_finish :: 
+  async S3 ::
+  call f :: S2 :: nil) % list ).
+
+Let S1_1 := from_list (
+  async S3 ::
+  call f :: S2 :: nil) % list.
+
+Let S0 := run t1 S1.
+
+(*   [ ! t1 ] t1 BEGIN_FINISH ([ ! t1 ] |+ (t1 <| [! t1]))  *)
+Import FinishNotations.
+Open Scope finish_scope.
+Module F := HJ.AsyncFinish.Lang.Semantics.
+
+(* 
+  (t1: "begin_finish; async S3; f(); end_finish; S2")
+  ->
+  t1 <| [ (t1: "async S3; f(); end_finish; S2") ]
+*)
+Goal Reduce S0 (set_finish
+  (* Update the body of task t1: *)
+  (update_statement S0 t1 S1_1)
+  (* Update the finish configuration: *)
+  ([ ! t1 ] |+ (t1 <| [! t1]))).
+Proof.
+  intros.
+  apply reduce_begin_finish with (s:=S1_1) (t:=t1).
+  - apply get_statement_def.
+    simpl.
+    unfold mk_taskmap.
+    rewrite Map_TID_Facts.add_mapsto_iff.
+    intuition.
+  - unfold FReduce.
+    apply Example1.R1.
+Qed.
+
+(* 
+  t1 <| [ (t1: "async S3; f(); end_finish; S2") ]
+  ->
+  t1 <| [ (t1: "f(); end_finish; S2") | (t2: "S3") ]
+*)
+
+Let t2 := 2.
+
+Let s1_2 := from_list (
+  call f :: S2 :: nil) % list.
+
+Ltac solve_tid_notin := rewrite Map_TID_Facts.mem_in_iff;
+    compute;
+    intuition.
+
+Goal
+  let S0_1 := (set_finish (update_statement S0 t1 S1_1) ([t1 <| [! t1] ])) in
+
+  Reduce S0_1
+  (let S' := update_statement (update_statement S0_1 t2 S3) t1 s1_2 in
+   let f' := ([ t1 <| [ ! t1 ] ] |+ t1 <| ([ ! t1 ] |+ ! t2 )) in
+    set_finish S' f' )
+.
+Proof.
+  apply reduce_async.
+  - apply get_statement_def.
+    simpl.
+    rewrite Map_TID_Facts.add_mapsto_iff.
+    intuition.
+  - solve_tid_notin.
+  - apply Example1.R2.
+Qed.
+
+End Example1_1.
 
 End FX10.
 End Examples.
