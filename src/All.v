@@ -1,5 +1,5 @@
-Require HJ.AsyncFinish.
-Module AF := HJ.AsyncFinish.
+Require HJ.AsyncFinish.Lang.
+Module F := HJ.AsyncFinish.Lang.
 Require HJ.Phasers.Lang.
 Module P := HJ.Phasers.Lang.
 Require Import HJ.Vars.
@@ -7,15 +7,15 @@ Require Import HJ.Vars.
 Definition finish_state := Map_TID.t (list P.phasermap).
 
 Inductive state := mk_state {
-  get_finish: AF.finish;
+  get_finish: F.finish;
   get_fstate: finish_state
 }.
 
 Module Semantics.
 
 Require Import HJ.Phasers.Lang.
-Import HJ.AsyncFinish.Semantics.
-Module AF := HJ.AsyncFinish.Semantics.
+Import F.Semantics.
+Module FS := F.Semantics.
 
 Inductive op := 
   | BEGIN_ASYNC : list phased -> tid -> op
@@ -33,15 +33,15 @@ Definition set_phasermaps (t:tid) (l:list phasermap) (s:state) : finish_state :=
 
 Inductive packet :=
   | only_p: P.op -> packet
-  | only_f: AF.op -> packet
-  | both: P.op -> AF.op -> packet.
+  | only_f: FS.op -> packet
+  | both: P.op -> FS.op -> packet.
 
 Definition translate (o:op) : packet :=
   match o with
-  | BEGIN_ASYNC ps t => both (P.ASYNC ps t) (AF.BEGIN_ASYNC t)
-  | END_ASYNC => only_f AF.END_ASYNC (* TODO: both (P.DROP_ALL) (AF.END_ASYNC) *)
-  | BEGIN_FINISH => only_f AF.BEGIN_FINISH
-  | END_FINISH => only_f AF.END_FINISH
+  | BEGIN_ASYNC ps t => both (P.ASYNC ps t) (FS.BEGIN_ASYNC t)
+  | END_ASYNC => both (P.DROP_ALL) (FS.END_ASYNC)
+  | BEGIN_FINISH => only_f FS.BEGIN_FINISH
+  | END_FINISH => only_f FS.END_FINISH
   | PH_NEW p => only_p (P.PH_NEW p)
   | PH_SIGNAL p => only_p (P.PH_SIGNAL p)
   | PH_DROP p => only_p (P.PH_DROP p)
@@ -51,8 +51,8 @@ Definition translate (o:op) : packet :=
 
 Variable GetPhasermap : tid -> phasermap -> state -> Prop.
 Variable set_phasermap : state -> tid -> phasermap -> state.
-Variable set_finish : state -> AF.finish -> state.
-Variable update : state -> AF.finish -> tid -> phasermap -> state.
+Variable set_finish : state -> F.finish -> state.
+Variable update : state -> F.finish -> tid -> phasermap -> state.
 Inductive Reduce (s:state) (t:tid) (o:op) : state -> Prop :=
   | reduce_p:
     forall m m' o',
@@ -63,13 +63,13 @@ Inductive Reduce (s:state) (t:tid) (o:op) : state -> Prop :=
   | reduce_f:
     forall f' o',
     translate o = only_f o' ->
-    AF.Reduce (get_finish s) t o' f' ->
+    FS.Reduce (get_finish s) t o' f' ->
     Reduce s t o (set_finish s f')
   | reduce_both:
     forall m m' o' f' o'',
     translate o = both o' o'' ->
     GetPhasermap t m s ->
     P.Reduce m t o' m' ->
-    AF.Reduce (get_finish s) t o'' f' ->
+    FS.Reduce (get_finish s) t o'' f' ->
     Reduce s t o (update s f' t m').
 
