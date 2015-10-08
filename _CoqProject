@@ -15,4 +15,5 @@ src/Progress.v
 src/AsyncFinish/Lang.v
 src/AsyncFinish/LangExtra.v
 src/AsyncFinish/Examples.v
+src/AsyncFinish/Typesystem.v
 

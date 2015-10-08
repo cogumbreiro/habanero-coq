@@ -57,6 +57,7 @@ Proof.
   apply nonempty_def with (t:=t).
   eapply in_eq.
 Qed.
+
 (*
 Lemma progress_easy:
   forall (f:finish),
