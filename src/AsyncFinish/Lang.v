@@ -154,22 +154,7 @@ Proof.
   rewrite Map_TID_Extra.eq_key_unfold.
   intuition.
 Qed.
-(*
-Lemma child_inv_cons_nodupa:
-  forall t f f' l,
-  NoDupA (Map_TID.eq_key (elt:=finish)) ((t,f') :: l) ->
-  Child t f (Node ((t, f') :: l)) ->
-  f' = f.
-Proof.
-  intros.
-  apply child_inv_cons in H0.
-  destruct H0; auto.
-  inversion H.
-  subst.
-  contradiction H3.
-  eauto using child_to_ina, ina_eq_key_subst.
-Qed.
-*)
+
 Lemma child_neq:
   forall t f t' f' l,
   t <> t' ->
