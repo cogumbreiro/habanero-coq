@@ -3,6 +3,7 @@ Import Lang.Semantics.
 Require Import HJ.Vars.
 Require Import Coq.Init.Datatypes.
 Require Import Coq.Lists.List.
+Require Import Aniceto.List.
 
 Let find_child_aux (t:tid) (p:l_task) := if TID.eq_dec (fst p) t then true else false.
 
@@ -11,63 +12,6 @@ Definition find_child (l:list l_task) (t:tid) : option task :=
   | Some (_, a) => Some a
   | None  => None
   end.
-
-Section FindProps.
-
-Variable A: Type.
-Variable f: A -> bool.
-
-Lemma find_some_impl_existsb:
-  forall l x,
-  find f l = Some x -> existsb f l = true.
-Proof.
-  intros.
-  induction l; simpl in *.
-  { inversion H. }
-  destruct (f a).
-  - trivial.
-  - auto.
-Qed.
-
-Lemma existsb_impl_find_some:
-  forall l,
-  existsb f l = true ->
-  exists x, find f l = Some x.
-Proof.
-  intros.
-  induction l.
-  { inversion H. }
-  simpl in *.
-  destruct (f a).
-  - exists a. trivial.
-  - simpl in H.
-    auto.
-Qed.
-
-Lemma find_existsb_spec_1:
-  forall l,
-  (exists x, find f l = Some x) <-> existsb f l = true.
-Proof.
-  intros.
-  split.
-  - intros.
-    destruct H.
-    eauto using find_some_impl_existsb.
-  - apply existsb_impl_find_some.
-Qed.
-
-Lemma find_inv_eq:
-  forall x l,
-  f x = true ->
-  find f (x :: l) = Some x.
-Proof.
-  intros.
-  simpl.
-  rewrite H.
-  trivial.
-Qed.
-
-End FindProps.
 
 Require Import HJ.AsyncFinish.Typesystem.
 Require Import Coq.Lists.SetoidList.
