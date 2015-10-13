@@ -49,7 +49,16 @@ Definition translate (o:op) : packet :=
   | WAIT_ALL => only_p (P.WAIT_ALL)
   end.
 
-Variable GetPhasermap : tid -> phasermap -> state -> Prop.
+Variable IEFPath: F.finish -> tid -> list tid -> Prop.
+Variable PathToPhaser: list tid -> phasermap -> Prop.
+
+Inductive GetPhasermap: tid -> phasermap -> state -> Prop :=
+  get_phasermap_def:
+    forall t m s p,
+    IEFPath (get_finish s) t p ->
+    PathToPhaser p m ->
+    GetPhasermap t m s.
+
 Variable set_phasermap : state -> tid -> phasermap -> state.
 Variable set_finish : state -> F.finish -> state.
 Variable update : state -> F.finish -> tid -> phasermap -> state.
