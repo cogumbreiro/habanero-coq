@@ -1,9 +1,14 @@
+Require Import Coq.Lists.List.
+Require Import Aniceto.List.
+Require Coq.Program.Wf.
+
 Require Import HJ.AsyncFinish.Lang.
+Require HJ.AsyncFinish.Lang.
+Module L := HJ.AsyncFinish.Lang.
+
 Import Lang.Semantics.
 Require Import HJ.Vars.
 Require Import Coq.Init.Datatypes.
-Require Import Coq.Lists.List.
-Require Import Aniceto.List.
 
 Let find_child_aux (t:tid) (p:l_task) := if TID.eq_dec (fst p) t then true else false.
 
@@ -65,7 +70,7 @@ Qed.
 
 Lemma find_child_spec_1:
   forall l t a,
-  IsMap l ->
+  IsMap (Node l) ->
   Child t a (Node l) ->
   find_child l t = Some a.
 Proof.
@@ -82,8 +87,9 @@ Proof.
     + destruct a as (t', a').
       destruct (TID.eq_dec t' t).
       * inversion H.
+        inversion H3.
         subst.
-        contradiction H4.
+        contradiction H6.
         rewrite InA_altdef.
         rewrite Exists_exists.
         exists (t, a0).
@@ -96,7 +102,7 @@ Proof.
         } 
         rewrite Heq.
         apply IHl.
-        { inversion H. assumption. }
+        { inversion H. inversion H3. auto using is_map_def. }
         { apply child_def. auto. }
 Qed.
 
@@ -123,13 +129,30 @@ Qed.
 
 Lemma find_child_spec:
   forall l t a,
-  IsMap l ->
+  IsMap (Node l) ->
   (find_child l t = Some a <-> Child t a (Node l)).
 Proof.
   intros.
   split.
   - apply find_child_spec_2.
   - auto using find_child_spec_1.
+Qed.
+
+Lemma find_child_incl:
+  forall t p l,
+  find_child ((p :: l)) t = None ->
+  find_child l t = None.
+Proof.
+  intros.
+  unfold find_child in *.
+  remember (find _ (p::l)).
+  symmetry in Heqo.
+  destruct o.
+  - destruct l0.
+    inversion H.
+  - apply find_none_incl in Heqo.
+    rewrite Heqo.
+    trivial.
 Qed.
 
 Section IEF.
@@ -154,6 +177,168 @@ Fixpoint accum_finish (accum:list tid) (f:finish) : option (list tid) :=
     ) l
   end.
 
+
+(*
+Lemma accum_finish_cons:
+  forall f f' t a r,
+  check f = false ->
+  accum_finish a f' = Some r ->
+  Child t (Blocked  f') f ->
+  (forall p l, f = Node (p::l) -> check (Node l) = false) ->
+(*  (forall l, f = Node ((t, (Blocked f'))::l) ->  *)
+  IsMap f ->
+  accum_finish (t :: a) f = Some r.
+Proof.
+  intros f.
+  induction f using finish_ind_strong.
+  - intros.
+    apply child_leaf_absurd in H1.
+    inversion H1.
+  - intros.
+    unfold accum_finish.
+    rewrite H.
+    assert (accum_finish (t0 :: a) (Node l) = Some r). {
+      apply IHf with (f':=f'); auto.
+      - eauto.
+      - 
+    }
+    unfold accum_finish in *.
+    apply IHf.
+    assert (He :  check (Node ((t, Ready) :: l)) = false). {
+      auto.
+    }
+    rewrite He.
+    rewrite H.
+    simpl.
+    unfo
+    
+    assert (accum_finish (t :: a) (Node ((t0, Ready) :: l)) = accum_finish (t :: a) (Node l))
+(*  simpl.*)
+(*  rewrite H.*)
+  induction l.
+  - apply child_leaf_absurd in H1.
+    inversion H1.
+  - destruct a0 as (t', [|f'']).
+    + 
+Qed.
+*)
+
+Section AccumFinishInv.
+Variable t:tid.
+Variable l:list l_task.
+Variable p:l_task.
+Variable RW1 : check (Node (p::l)) = false.
+Variable RW2 : check (Node l) = false.
+Variable a: list tid.
+
+Variable RW3:
+  match (snd p) with
+  | Ready => True
+  | Blocked f=> accum_finish ((fst p)::a) f = None
+  end.
+
+Lemma accum_rw_cons_tl:
+  accum_finish a (Node (p::l)) = accum_finish a (Node l).
+Proof.
+  intros.
+  destruct p as (t', [|f']).
+  - simpl in RW3.
+    simpl.
+    rewrite RW1.
+    rewrite RW2.
+    trivial.
+  - simpl in RW3.
+    simpl.
+    rewrite RW1.
+    rewrite RW2.
+    rewrite RW3.
+    trivial.
+Qed.
+End AccumFinishInv.
+
+Lemma accum_rw_cons_tl_ready:
+  forall  a t l,
+  check (Node ((t, Ready) :: l)) = false ->
+  check (Node l) = false ->
+  accum_finish a (Node ((t,Ready)::l)) = accum_finish a (Node l).
+Proof.
+  intros.
+  apply accum_rw_cons_tl; auto.
+  simpl.
+  trivial.
+Qed.
+
+Section AccumFinishInv2.
+Variable t:tid.
+Variable l:list l_task.
+Variable t':tid.
+Variable f:finish.
+Variable RW1 : check (Node (((t', Blocked f)::l))) = false.
+Variable RW2 : check (Node l) = false.
+Variable a: list tid.
+Variable r: list tid.
+Variable RW3: accum_finish (t'::a) f = Some r.
+
+Lemma accum_rw_cons_hd:
+  accum_finish a (Node ((t', Blocked f)::l)) = Some r.
+Proof.
+  intros.
+  simpl.
+  rewrite RW1.
+  rewrite RW3.
+  trivial.
+Qed.
+End AccumFinishInv2.
+(*
+Lemma accum_spec_1:
+  forall a f r,
+  accum_finish a f = Some r ->
+  Accum a f r.
+Proof.
+  intros.
+  induction f using finish_ind_strong.
+  - simpl in H.
+    remember (check _).
+    destruct b.
+    + inversion H; subst.
+      auto using accum_check_true.
+    + inversion H.
+  - simpl in H.
+    remember (check _).
+    symmetry in Heqb.
+    destruct b.
+    + inversion H; subst.
+      auto using accum_check_true.
+    + apply accum_check_false; auto.
+      
+      
+  destruct f.
+  simpl in H.
+  remember (check _).
+  destruct b.
+  { (* easy case *)
+    inversion H; subst.
+    auto using accum_check_true.
+  }
+  apply accum_check_false; auto.
+  induction l.
+  - inversion H.
+  - destruct a as (t, [|f']).
+    + apply accum_cons.
+      apply IHl; auto.
+      symmetry in Heqb.
+      symmetry.
+      eauto.
+    + destruct (accum_finish _ f').
+      
+      apply accum_cons.
+      apply IHl; auto.
+      * symmetry in Heqb.
+        symmetry.
+        eauto.
+      *  
+Qed.
+*)
 End IEF.
 
 Definition child_mem (t:tid) (f:finish) := 
@@ -162,19 +347,158 @@ Definition child_mem (t:tid) (f:finish) :=
   | _ => false
   end.
 
-Inductive In (t:tid) (f:finish) : Prop :=
+Lemma child_mem_false_inv:
+  forall t p l,
+  child_mem t (Node ((p :: l))) = false ->
+  child_mem t (Node l) = false.
+Proof.
+  intros.
+  unfold child_mem in *.
+  remember ( find_child (get_tasks (Node (p :: l))) t).
+  symmetry in Heqo.
+  destruct o.
+  - inversion H.
+  - apply find_child_incl in Heqo.
+    simpl.
+    rewrite Heqo.
+    trivial.
+Qed.
+
+Inductive ChildIn (t:tid) (f:finish) : Prop :=
   in_def:
     forall a,
     Child t a f ->
-    In t f.
+    ChildIn t f.
 
-Lemma in_impl_child_mem:
-  forall t l,
-  IsMap l ->
-  In t (Node l) ->
-  child_mem t (Node l) = true.
+
+Section NG.
+
+Variable check : finish -> bool.
+
+Inductive Path : list tid -> finish -> Prop :=
+  | path_nil:
+    forall f,
+    check f = true ->
+    Path nil f
+  | path_cons:
+    forall t l f f',
+    Path l f' ->
+    check f = false ->
+    Child t (Blocked f') f ->
+    Path (t::l) f.
+
+Inductive Accum : list tid -> finish -> list tid -> Prop :=
+  | accum_check_true: 
+    forall f a,
+    check f = true ->
+    Accum a f a
+  | accum_check_false:
+    forall a fs l,
+    check (Node fs) = false ->
+    AccumChild a fs l ->
+    Accum a (Node fs) l
+with AccumChild : list tid -> list l_task -> list tid -> Prop :=
+  | accum_ok:
+    forall a t f fs l,
+    Accum (t::a) f l ->
+    AccumChild a ((t, Blocked f)::fs) l
+  | accum_cons:
+    forall t a x fs l,
+    AccumChild a fs l ->
+    AccumChild a ((t, x)::fs) l.
+(*
+Variable check_incl:
+forall p fs, check (Node (p::fs)) = false -> check (Node fs) = false.
+*)
+Require Import Coq.Bool.Sumbool.
+
+Fixpoint size (f:finish) := 
+  S (
+  match f with
+  | Node l =>
+    (fix aux (l:list l_task) :=
+      match l with
+      | cons (t, Blocked f') l => S (size f') + aux l
+      | cons (t, Ready) l => S (aux l)
+      | nil => 0
+      end
+    ) l
+  end).
+
+Definition ChildOf f := {f' : finish | L.Lt f' f }.
+
+Definition SubSet {A} l := {l' : list A | incl l' l}.  
+
+Fixpoint get_children (f:finish) : list (tid * finish) :=
+  match f with
+  | Node l =>
+    (fix aux (l:list l_task) :=
+      match l with
+      | ((t, Blocked f') :: l) => (t, f') :: (aux l)
+      | (t, Ready) :: l => aux l
+      | nil => nil
+      end) l
+  end.
+
+Lemma get_children_spec_1:
+  forall t f f',
+  List.In (t, f) (get_children f') ->
+  Child t (Blocked f) f'.
 Proof.
   intros.
+  destruct f'.
+  simpl in H.
+  induction l as [|(t', [|f''])].
+  - inversion H.
+  - auto using child_cons_perm.
+  - destruct H.
+    + inversion H; subst; clear H.
+      auto using child_eq.
+    + auto using child_cons_perm.
+Qed.
+
+Lemma get_children_spec_2:
+  forall t f f',
+  Child t (Blocked f) f' ->
+  List.In (t, f) (get_children f').
+Proof.
+  intros.
+  destruct H.
+  destruct f'.
+  simpl in *.
+  induction l as [|(t', [|f''])].
+  - inversion H.
+  - inversion H.
+    + inversion H0.
+    + auto.
+  - inversion H.
+    + inversion H0.
+      subst.
+      apply List.in_eq.
+    + auto using List.in_cons.
+Qed.
+
+Lemma get_children_forall:
+  forall f,
+  Forall (fun (p:(tid*finish)) => Child (fst p) (Blocked (snd p)) f) (get_children f).
+Proof.
+  intros.
+  apply Forall_forall.
+  intros.
+  destruct x as (t, f').
+  simpl in *.
+  apply get_children_spec_1.
+  assumption.
+Qed.
+
+Lemma in_impl_child_mem:
+  forall t f,
+  IsMap f ->
+  ChildIn t f ->
+  child_mem t f = true.
+Proof.
+  intros.
+  destruct f.
   inversion H0.
   unfold child_mem.
   assert (Heq  : find_child (get_tasks (Node l)) t = Some a). {
@@ -185,18 +509,45 @@ Proof.
 Qed.
 
 Lemma child_mem_impl_in:
-  forall t l,
-  IsMap l ->
-  child_mem t (Node l) = true ->
-  In t (Node l).
+  forall f  t,
+  child_mem t f = true ->
+  ChildIn t f.
 Proof.
   intros.
+  destruct f.
   unfold child_mem in *.
   remember (find_child  _ _) as  o.
   symmetry in Heqo.
   destruct o.
   - eauto using in_def, find_child_spec_2.
-  - inversion H0.
+  - inversion H.
+Qed.
+
+Lemma not_in_impl_child_mem:
+  forall f t,
+  ~ ChildIn t f ->
+  child_mem t f = false.
+Proof.
+  intros.
+  remember (child_mem _ _).
+  symmetry in Heqb.
+  destruct b.
+  - contradiction H. auto using child_mem_impl_in.
+  - trivial. 
+Qed.
+
+Lemma not_child_mem_impl_in:
+  forall f  t,
+  IsMap f ->
+  child_mem t f = false ->
+  ~ ChildIn t f.
+Proof.
+  intros.
+  unfold not.
+  intros.
+  apply in_impl_child_mem in H1; auto.
+  rewrite H0 in H1.
+  inversion H1.
 Qed.
 
 Definition ief_base (t:tid) : finish -> option (list tid) :=
@@ -235,49 +586,159 @@ Inductive IEFBase (t:tid) : finish -> list tid -> Prop :=
   | ief_base_eq:
     forall a f,
     Child t a f ->
-    IEFBase t f (t :: nil)
+    IEFBase t f nil
   | ief_base_cons:
     forall f f' t' l,
     IEFBase t f' l ->
     Child t' (Blocked f') f  ->
+    ~ ChildIn t f ->
     IEFBase t f (t'::l).
 
-Lemma ief_base_spec_1:
-  forall l' l t,
-  IEFBase t (Node l') l ->
-  IsMap l' ->
-  ief_base t (Node l') = Some l.
+Lemma ief_base_leaf:
+  forall t f,
+  Valid f ->
+  IEFBase t f nil ->
+  ief_base t f = Some nil.
+Proof.
+  intros.
+  destruct f.
+  inversion H0.
+  subst.
+  unfold ief_base.
+  simpl.
+  assert (Hin : ChildIn t (Node l)). {
+   eauto using in_def.
+  }
+  apply in_impl_child_mem in Hin.
+  + rewrite Hin.
+    trivial.
+  + auto using valid_impl_is_map.
+Qed.
+
+Let ief_base_inv_1:
+  forall t t' l,
+  IsMap (Node ((t', Ready) :: l)) ->
+  ~ ChildIn t (Node ((t', Ready) :: l)) ->
+  ief_base t (Node ((t', Ready) :: l)) = ief_base t (Node l).
 Proof.
   intros.
   unfold ief_base.
-  induction H0.
-  - inversion H.
-    apply child_leaf_absurd in H0.
-    inversion H0.
-    subst.
-    apply child_leaf_absurd in H1.
+  apply not_in_impl_child_mem in H0; auto.
+  apply accum_rw_cons_tl; auto.
+  - eauto using child_mem_false_inv.
+  - simpl; trivial.
+Qed.
+
+Lemma ief_base_leaf_absurd:
+  forall t l,
+  ~ IEFBase t (Node nil) l.
+Proof.
+  intros.
+  unfold not.
+  intros.
+  inversion H; (
+    subst;
+    eauto using child_leaf_absurd).
+Qed.
+
+Lemma ief_base_impl_in:
+  forall t f l,
+  IEFBase t f l ->
+  In t f.
+Proof.
+  intros.
+  induction H.
+  - eauto using in_child.
+  - eauto using in_trans, lt_def.
+Qed.
+
+Let ief_base_tl_ready:
+  forall t t' l,
+  ~ ChildIn t (Node ((t', Ready) :: l)) ->
+  ief_base t (Node ((t', Ready) :: l)) = ief_base t (Node l).
+Proof.
+  intros.
+  assert (Hc : child_mem t (Node ((t', Ready) :: l)) = false). {
+    auto using not_in_impl_child_mem.
+  }
+  eauto using accum_rw_cons_tl_ready, child_mem_false_inv.
+Qed.
+
+Let ief_base_base_case:
+  forall f l t,
+  Valid f ->
+  IEFBase t f l ->
+  ChildIn t f ->
+  IsMap f ->
+  ief_base t f = Some nil.
+Proof.
+  intros.
+  unfold ief_base.
+  auto using accum_finish_base, in_impl_child_mem.
+Qed.
+
+Let ief_base_some_cons:
+  forall t f f' t' l,
+  ief_base t f' = Some l ->
+  child_mem t f = false ->
+  Child t' (Blocked f') f ->
+  ief_base t f = Some (t' :: l).
+Proof.
+  intros.
+  destruct f.
+(*  unfold ief_base.
+  simpl.
+  rewrite H0.*)
+  induction l0.
+  - apply child_leaf_absurd in H1.
     inversion H1.
- - inversion H.
-   + subst.
-    destruct f.
-    simpl.
-    assert (child_mem t (Node l) = true). {
-      assert (In t (Node l)). {
-        eauto using in_def.
+  - assert (ief_base t (Node (a :: l0)) = ief_base t (Node l0)). {
+      unfold ief_base.
+      
+    }
+  destruct a as (t'', a).
+    apply child_inv_cons in H1.
+    destruct H1 as [(?,?)|?].
+    + subst.
+      assert (Hc : child_mem t (Node l0) = false). {
+        eauto using child_mem_false_inv. 
       }
-      apply in_impl_child_mem; auto.
-    unfold accum_finish.
-    destruct f.
-    simpl.
-  
+      apply IHl0 in Hc; auto.
+      * rewrite Hc.
+        
+      apply child_cons.
+    destruct a as (t'', [|f'']).
+    + assert (Hc : child_mem t (Node l0) = false). {
+        eauto using child_mem_false_inv. 
+      }
+      apply IHl0 in Hc; auto.
+      apply child_cons.
+    
+Qed.
+
+
+Lemma ief_base_spec_1:
+  forall f l t,
+  Valid f ->
+  IEFBase t f l ->
+  ief_base t f = Some l.
+Proof.
   intros f.
   induction f using finish_ind_strong.
   - intros.
-    inversion H.
-    subst.
-    destruct H0.
-  inversion H.
-  - subst.
+    apply ief_base_leaf_absurd in H0.
+    inversion H0.
+  - intros.
+    inversion H0.
+    + subst.
+      auto using ief_base_leaf.
+    + subst.
+      assert (RW : ief_base t0 (Node ((t, Ready) :: l)) = ief_base t0 (Node l)). {
+        auto using ief_base_tl_ready.
+      }
+      rewrite RW.
+      apply ief_base_base_case in H1.
+      * 
 Qed.
 
 Definition get_ief_aux (t:tid) (f:finish) :=
