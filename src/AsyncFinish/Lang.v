@@ -393,6 +393,27 @@ Inductive In (t:tid) (f:finish) : Prop :=
     Lookup t a f ->
     In t f.
 
+Lemma in_child:
+  forall t a f,
+  Child t a f ->
+  In t f.
+Proof.
+  intros.
+  eauto using in_def, lookup_def, some_ok.
+Qed.
+
+Lemma in_trans:
+  forall t f f',
+  In t f' ->
+  f' < f ->
+  In t f.
+Proof.
+  intros.
+  inversion H.
+  inversion H1.
+  eauto using in_def, lookup_def, some_parent.
+Qed.
+
 Lemma in_eq:
   forall t f l,
   In t (Node ((t, f) :: l)).
