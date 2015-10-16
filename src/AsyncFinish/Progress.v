@@ -157,7 +157,7 @@ Qed.
 Lemma find_flat:
   forall (f:finish),
   Nonempty f ->
-  Some Flat f.
+  Any Flat f.
 Proof.
   intros.
   induction f using finish_ind_strong.
@@ -166,17 +166,17 @@ Proof.
   - clear H.
     destruct (nonempty_dec (Node l)).
     + apply IHf in n; clear IHf.
-      auto using some_cons_rhs, flat_cons, some_ok, enabled_ready.
+      auto using any_cons_rhs, flat_cons, any_ok, enabled_ready.
     + inversion e.
       subst.
-      auto using some_ok, flat_cons, flat_nil, enabled_ready.
+      auto using any_ok, flat_cons, flat_nil, enabled_ready.
   - destruct f  as (l').
     destruct l'.
-    + auto using some_cons, some_ok, flat_nil, enabled_leaf.
+    + auto using any_cons, any_ok, flat_nil, enabled_leaf.
     + assert (Hx : Nonempty (Node (p :: l'))). {
         apply nonempty_cons.
       }
-      auto using some_cons, some_ok.
+      auto using any_cons, any_ok.
 Qed.
 
 Require HJ.AsyncFinish.Lang. 
@@ -272,18 +272,18 @@ Proof.
     eauto using reduce_nested, child_cons.
 Qed.
 
-Lemma reduce_some:
+Lemma reduce_any:
   forall (f f':finish) (t:tid) (o:op),
   Disjoint f o ->
-  Some (fun (f':finish) => exists f'', Reduce f' t o f'') f ->
+  Any (fun (f':finish) => exists f'', Reduce f' t o f'') f ->
   exists f', Reduce f t o f'.
 Proof.
   intros.
   remember (fun f'0 : finish => exists f'' : finish, Reduce f'0 t o f'') as F.
   induction f using finish_ind_strong.
-  - apply some_inv_nil in H0.
+  - apply any_inv_nil in H0.
     subst; assumption.
-  - apply some_inv_cons in H0.
+  - apply any_inv_cons in H0.
     destruct H0 as [?|[(f'',(?,?))|?]].
     + rewrite HeqF in H0.
       assumption.
@@ -294,7 +294,7 @@ Proof.
       destruct Hy as (f'', Hy).
       destruct f''.
       eauto using reduce_cons.
-  - apply some_inv_cons in H0.
+  - apply any_inv_cons in H0.
     destruct H0 as [?|[(f'',(?,?))|?]].
     + rewrite HeqF in H0.
       assumption.
@@ -326,7 +326,7 @@ Inductive EnclosingFinish (t:tid) (f:finish) : Prop :=
     EnclosingFinish t f.
 
 Definition GlobalValid (t:tid) (o:op) : finish -> Prop :=
-  Some (fun (f:finish) => EnclosingFinish t f -> Valid f t o).
+  Any (fun (f:finish) => EnclosingFinish t f -> Valid f t o).
 
 (*
 Inductive MapsTo: list tid -> finish -> finish -> Prop :=
