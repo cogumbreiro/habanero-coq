@@ -159,6 +159,116 @@ Section IEF.
 
 Variable check: finish -> bool.
 
+Fixpoint get_children (f:finish) : list (tid * finish) :=
+  match f with
+  | Node l =>
+    (fix aux (l:list l_task) :=
+      match l with
+      | ((t, Blocked f') :: l) => (t, f') :: (aux l)
+      | (t, Ready) :: l => aux l
+      | nil => nil
+      end) l
+  end.
+
+Lemma get_children_spec_1:
+  forall t f f',
+  List.In (t, f) (get_children f') ->
+  Child t (Blocked f) f'.
+Proof.
+  intros.
+  destruct f'.
+  simpl in H.
+  induction l as [|(t', [|f''])].
+  - inversion H.
+  - auto using child_cons_perm.
+  - destruct H.
+    + inversion H; subst; clear H.
+      auto using child_eq.
+    + auto using child_cons_perm.
+Qed.
+
+Lemma get_children_spec_2:
+  forall t f f',
+  Child t (Blocked f) f' ->
+  List.In (t, f) (get_children f').
+Proof.
+  intros.
+  destruct H.
+  destruct f'.
+  simpl in *.
+  induction l as [|(t', [|f''])].
+  - inversion H.
+  - inversion H.
+    + inversion H0.
+    + auto.
+  - inversion H.
+    + inversion H0.
+      subst.
+      apply List.in_eq.
+    + auto using List.in_cons.
+Qed.
+
+Lemma get_children_spec:
+  forall t f f',
+  Child t (Blocked f) f' <-> List.In (t, f) (get_children f').
+Proof.
+  intros.
+  split.
+  apply get_children_spec_2.
+  apply get_children_spec_1.
+Qed.
+
+Lemma get_children_forall:
+  forall f,
+  Forall (fun (p:(tid*finish)) => Child (fst p) (Blocked (snd p)) f) (get_children f).
+Proof.
+  intros.
+  apply Forall_forall.
+  intros.
+  destruct x as (t, f').
+  simpl in *.
+  apply get_children_spec_1.
+  assumption.
+Qed.
+
+Definition ChildrenOf (f:finish) : list (tid * finish) -> Prop := Forall (fun (p:(tid*finish)) => Child (fst p) (Blocked (snd p)) f).
+
+Lemma children_of_cons {f} {p} {l}:
+  ChildrenOf f (p::l) ->
+  ChildrenOf f l.
+Proof.
+  intros.
+  unfold ChildrenOf in *.
+  inversion H.
+  assumption.
+Qed.
+
+Definition children_of f := {x : list (tid * finish) | ChildrenOf f x }.
+
+Program Definition get_blocked (f:finish) : children_of f := get_children f.
+Next Obligation.
+  unfold ChildrenOf.
+  apply get_children_forall.
+Qed.
+
+Fixpoint size (f:finish) := 
+  S (
+  match f with
+  | Node l =>
+    (fix aux (l:list l_task) :=
+      match l with
+      | cons (t, Blocked f') l => S (size f') + aux l
+      | cons (t, Ready) l => S (aux l)
+      | nil => 0
+      end
+    ) l
+  end).
+
+Definition l_size (f:finish) (l:children_of f) :=
+  match l with
+  | exist l _ => length l
+  end.
+
 Fixpoint accum_finish (accum:list tid) (f:finish) : option (list tid) :=
   if check f then Some accum
   else
@@ -177,6 +287,141 @@ Fixpoint accum_finish (accum:list tid) (f:finish) : option (list tid) :=
     ) l
   end.
 
+Inductive Path : list tid -> finish -> Prop :=
+  | path_nil:
+    forall f,
+    check f = true ->
+    Path nil f
+  | path_cons:
+    forall t l f f',
+    Path l f' ->
+    check f = false ->
+    Child t (Blocked f') f ->
+    Path (t::l) f.
+
+Inductive SubFinish : finish -> finish -> Prop :=
+  sub_finish_def:
+    forall f t f',
+    Child t (Blocked f) f' ->
+    SubFinish f f'.
+
+Lemma sub_finish_eq:
+  forall (f:finish) (t:tid) (l:list l_task),
+  SubFinish f (Node ((t,Blocked f)::l)).
+Proof.
+  intros.
+  eauto using sub_finish_def, child_eq.
+Qed.
+
+Section LT_IND.
+
+Hypothesis P : finish -> Prop.
+Hypothesis Htrans: forall f f', P f -> SubFinish f f' -> P f'.
+Hypothesis Hnil: P (Node nil).
+Hypothesis Hcons: forall t l, P (Node l) -> P (Node ((t, Ready)::l)).
+
+Fixpoint sub_finish_ind (f:finish) : P f :=
+match f with
+| Node l =>
+    (fix aux (l:list l_task) : P (Node l) :=
+    match l as x return P (Node x) with 
+    | nil => Hnil
+    | (t,Ready) :: l => Hcons t l (aux l)
+    | (t, Blocked f') :: l => Htrans f' (Node ((t, Blocked f')::l)) (sub_finish_ind f') (sub_finish_eq f' t l)
+    end) l
+end.
+
+End LT_IND.
+
+Lemma sub_finish_absurd_nil:
+  forall f,
+  ~ SubFinish f (Node nil).
+Proof.
+  unfold not.
+  intros.
+  inversion H.
+  subst.
+  apply child_leaf_absurd in H0.
+  assumption.
+Qed.
+
+Lemma sub_finish_cons_ready:
+  forall f t l,
+  SubFinish f (Node l) ->
+  SubFinish f (Node ((t, Ready)::l)).
+Admitted.
+
+Lemma sub_finish_inv_cons_ready:
+  forall f t l,
+  SubFinish f (Node ((t, Ready)::l)) ->
+  SubFinish f (Node l).
+Admitted.
+
+Lemma path_cons_ready:
+  forall p t l,
+  Path p (Node l) ->
+  Path p (Node ((t, Ready)::l)).
+Admitted.
+  
+Variable check_contract:
+  forall p l,
+  check (Node (p :: l)) = false ->
+  check (Node l) = false.
+  
+Lemma accum_finish_contract:
+  forall t l r,
+  accum_finish nil (Node ((t, Ready) :: l)) = Some r ->
+  accum_finish nil (Node l) = Some r.
+Admitted.
+
+Lemma accum_to_path:
+  forall f r,
+  accum_finish nil f = Some r ->
+  Path r f.
+Proof.
+  intros f.
+  induction f using sub_finish_ind.
+  - intros.
+    inversion H.
+    subst.
+    destruct f2.
+    simpl in H0.
+    remember (check _).
+    destruct b.
+    + inversion H0.
+      subst.
+      symmetry in Heqb.
+      auto using path_nil.
+    + destruct r.
+      {  }
+  - intros.
+    simpl in H.
+    remember (check _).
+    destruct b.
+    + inversion H.
+      subst.
+      auto using path_nil.
+    + inversion H.
+  - intros.
+    simpl in H.
+    remember (check _).
+    destruct b.
+    + inversion H.
+      subst.
+      auto using path_nil.
+    + apply path_cons_ready.
+      destruct l as [|p].
+      * inversion H.
+      * apply IHf.
+        simpl.
+        assert (He : check (Node (p :: l)) = false). {
+          symmetry in Heqb.
+          eauto using check_contract.
+        }
+        rewrite He.
+        auto.
+Qed.    
+    
 
 (*
 Lemma accum_finish_cons:
@@ -289,14 +534,34 @@ Proof.
   trivial.
 Qed.
 End AccumFinishInv2.
-(*
+
+Inductive Accum : list tid -> finish -> list tid -> Prop :=
+  | accum_check_true: 
+    forall f a,
+    check f = true ->
+    Accum a f a
+  | accum_check_false:
+    forall a fs l,
+    check (Node fs) = false ->
+    AccumChild a fs l ->
+    Accum a (Node fs) l
+with AccumChild : list tid -> list l_task -> list tid -> Prop :=
+  | accum_ok:
+    forall a t f fs l,
+    Accum (t::a) f l ->
+    AccumChild a ((t, Blocked f)::fs) l
+  | accum_cons:
+    forall t a x fs l,
+    AccumChild a fs l ->
+    AccumChild a ((t, x)::fs) l.
+
 Lemma accum_spec_1:
   forall a f r,
   accum_finish a f = Some r ->
   Accum a f r.
 Proof.
   intros.
-  induction f using finish_ind_strong.
+  induction f using finish_ind_strong2 (*with (Q:=fun (x:l_task) => x = x*).
   - simpl in H.
     remember (check _).
     destruct b.
@@ -371,125 +636,18 @@ Inductive ChildIn (t:tid) (f:finish) : Prop :=
     ChildIn t f.
 
 
-Section NG.
 
-Variable check : finish -> bool.
-
-Inductive Path : list tid -> finish -> Prop :=
-  | path_nil:
-    forall f,
-    check f = true ->
-    Path nil f
-  | path_cons:
-    forall t l f f',
-    Path l f' ->
-    check f = false ->
-    Child t (Blocked f') f ->
-    Path (t::l) f.
-
-Inductive Accum : list tid -> finish -> list tid -> Prop :=
-  | accum_check_true: 
-    forall f a,
-    check f = true ->
-    Accum a f a
-  | accum_check_false:
-    forall a fs l,
-    check (Node fs) = false ->
-    AccumChild a fs l ->
-    Accum a (Node fs) l
-with AccumChild : list tid -> list l_task -> list tid -> Prop :=
-  | accum_ok:
-    forall a t f fs l,
-    Accum (t::a) f l ->
-    AccumChild a ((t, Blocked f)::fs) l
-  | accum_cons:
-    forall t a x fs l,
-    AccumChild a fs l ->
-    AccumChild a ((t, x)::fs) l.
 (*
 Variable check_incl:
 forall p fs, check (Node (p::fs)) = false -> check (Node fs) = false.
 *)
 Require Import Coq.Bool.Sumbool.
 
-Fixpoint size (f:finish) := 
-  S (
-  match f with
-  | Node l =>
-    (fix aux (l:list l_task) :=
-      match l with
-      | cons (t, Blocked f') l => S (size f') + aux l
-      | cons (t, Ready) l => S (aux l)
-      | nil => 0
-      end
-    ) l
-  end).
 
 Definition ChildOf f := {f' : finish | L.Lt f' f }.
 
 Definition SubSet {A} l := {l' : list A | incl l' l}.  
 
-Fixpoint get_children (f:finish) : list (tid * finish) :=
-  match f with
-  | Node l =>
-    (fix aux (l:list l_task) :=
-      match l with
-      | ((t, Blocked f') :: l) => (t, f') :: (aux l)
-      | (t, Ready) :: l => aux l
-      | nil => nil
-      end) l
-  end.
-
-Lemma get_children_spec_1:
-  forall t f f',
-  List.In (t, f) (get_children f') ->
-  Child t (Blocked f) f'.
-Proof.
-  intros.
-  destruct f'.
-  simpl in H.
-  induction l as [|(t', [|f''])].
-  - inversion H.
-  - auto using child_cons_perm.
-  - destruct H.
-    + inversion H; subst; clear H.
-      auto using child_eq.
-    + auto using child_cons_perm.
-Qed.
-
-Lemma get_children_spec_2:
-  forall t f f',
-  Child t (Blocked f) f' ->
-  List.In (t, f) (get_children f').
-Proof.
-  intros.
-  destruct H.
-  destruct f'.
-  simpl in *.
-  induction l as [|(t', [|f''])].
-  - inversion H.
-  - inversion H.
-    + inversion H0.
-    + auto.
-  - inversion H.
-    + inversion H0.
-      subst.
-      apply List.in_eq.
-    + auto using List.in_cons.
-Qed.
-
-Lemma get_children_forall:
-  forall f,
-  Forall (fun (p:(tid*finish)) => Child (fst p) (Blocked (snd p)) f) (get_children f).
-Proof.
-  intros.
-  apply Forall_forall.
-  intros.
-  destruct x as (t, f').
-  simpl in *.
-  apply get_children_spec_1.
-  assumption.
-Qed.
 
 Lemma in_impl_child_mem:
   forall t f,
