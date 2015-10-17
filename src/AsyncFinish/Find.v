@@ -1,8 +1,10 @@
 Require Import Coq.Lists.List.
+Require Import Coq.Relations.Relation_Operators.
 
 Require Import Aniceto.List.
 
 Require Import HJ.AsyncFinish.Lang.
+Import RelNotations.
 
 Section Find.
   Variable check: finish -> bool.
@@ -75,7 +77,7 @@ Section Find.
 
   Let summation_size_get_children:
     forall f,
-    summation size (get_children f) < size f.
+    (summation size (get_children f) < size f) % nat.
   Proof.
     intros.
     induction f using finish_ind_strong.
@@ -181,33 +183,65 @@ Section Find.
     auto.
   Qed.
 
-  Require Import Coq.Relations.Relation_Operators.
+  Local Open Scope finish_scope.
   
+  Lemma in_get_children_lt:
+    forall y x,
+    List.In y (get_children x) ->
+    y < x.
+  Proof.
+    intros.
+    induction x using finish_ind_strong.
+    - simpl in H.
+      inversion H.
+    - rewrite get_children_rw_cons_ready in *.
+      auto using lt_cons.
+    - destruct H.
+      + subst.
+        auto using lt_eq.
+      + auto using lt_cons.
+  Qed.
+
+  Lemma forall_get_children_lt:
+    forall f,
+    Forall (fun f'0 : finish => f'0 < f) (get_children f).
+  Proof.
+    intros.
+    apply Forall_forall.
+    intros.
+    auto using in_get_children_lt.
+  Qed.
+
+  Lemma forall_lt_flat_map_get_children:
+    forall f l,
+    Forall (fun f' => f' < f) l ->
+    Forall (fun f' => f' < f) (flat_map get_children l).
+  Proof.
+    intros.
+    rewrite Forall_forall in *.
+    intros.
+    apply in_flat_map in H0.
+    destruct H0 as (y, (Hin, Hg)).
+    apply in_get_children_lt in Hg.
+    apply H in Hin.
+    eauto using lt_trans.
+  Qed.
+
   Lemma find_generic_impl_lt:
     forall f l f',
-    Forall (fun f' => Lt f' f) l ->
+    Forall (fun f' => f' < f) l ->
     find_generic l = Some f' ->
-    Lt f' f.
+    f' < f.
   Proof.
-    intros f.
-    induction f using lt_ind.
-    - intros.
-      destruct l.
-      + rewrite find_generic_nil in H0; inversion H0.
-      + inversion H.
-        subst.
-        apply lt_leaf_absurd in H3.
-        inversion H3.
-    - intros.
-      apply lt_cons.
-      assert (Hx := IHf l0 f').
-      apply Hx; auto.
-      + rewrite Forall_forall in *.
-        intros.
-        eauto using lt_inv_cons_ready.
-    - intros.
-      unfold Lt.
-      apply t_trans.
+    intros.
+    functional induction (find_generic l).
+    - inversion H0; subst; clear H0.
+      apply find_some_spec in e.
+      destruct e as (Hx, _).
+      rewrite Forall_forall in H.
+      auto.
+    - inversion H0.
+    - auto using forall_lt_flat_map_get_children.
   Qed.
 
   Lemma find_generic_contract:
@@ -226,46 +260,61 @@ Section Find.
     trivial.
   Qed.
 
-  Lemma find_spec_1:
+  Lemma find_spec_lt:
     forall f f',
     find f = Some f' ->
     check f = false ->
-    Lt f' f /\ check f' = true.
+    f' < f /\ check f' = true.
   Proof.
-    intros f.
-    unfold find.
-    induction f using finish_ind_strong.
-    - intros.
+    intros.
+    split.
+    - unfold find in *.
       rewrite find_generic_equation in H.
       simpl in H.
-      rewrite H0 in H.
+      rewrite H0 in *.
+      remember (is_nil _).
+      destruct b.
+      { inversion H. }
+      simpl in H.
+      assert (Hx : get_children f ++ nil = get_children f) by auto with *.
+      rewrite Hx in *; clear Hx.
+      eauto using find_generic_impl_lt, forall_get_children_lt.
+    - eauto using find_impl_check.
+  Qed.
+
+  Lemma find_inv_check_true:
+    forall f,
+    check f = true ->
+    find f = Some f.
+  Proof.
+    intros.
+    unfold find.
+    rewrite find_generic_equation.
+    simpl.
+    rewrite H.
+    trivial.
+  Qed.
+
+  Lemma find_spec_le:
+    forall f f',
+    find f = Some f' ->
+    f' <= f /\ check f' = true.
+  Proof.
+    intros.
+    remember (check f).
+    destruct b.
+    - symmetry in Heqb.
+      assert (Hx := Heqb).
+      apply find_inv_check_true in Heqb.
+      rewrite Heqb in H.
       inversion H.
-    - intros.
-      assert (Lt f' (Node l) /\ check f' = true). {
-        apply IHf.
-        + apply find_generic_contract with (t); auto.
-          
-      }*)
-      rewrite find_generic_equation in H.
-      rewrite H in *.
-      remember (is_nil _).
-      destruct b.
-      { inversion H. }
-      apply IHf in H.
-      } 
-      rewrite find_generic_equation in H.
-      simpl List.find in H.
-      rewrite H0 in H.
-      remember (flat_map _ _) as l'.
-      assert (l' = get_children (Node l)). {
-        subst.
-        simpl.
-        auto with *.
-      }
-      rewrite H1 in *.
-      remember (is_nil _).
-      destruct b.
-      { inversion H. }
-      apply IHf in H.
+      subst.
+      split.
+      + auto using le_refl.
+      + assumption.
+    - assert (Hx : f' < f /\ check f' = true) by auto using find_spec_lt.
+      destruct Hx.
+      split; auto using lt_to_le.
+  Qed.
 End Find.
 
