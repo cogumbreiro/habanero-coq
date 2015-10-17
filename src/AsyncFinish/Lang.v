@@ -1,6 +1,7 @@
 Require Import HJ.Vars.
 
 Require Import Coq.Lists.SetoidList.
+Require Import Coq.Relations.Operators_Properties.
 
 Inductive task :=
   | Ready
@@ -84,11 +85,12 @@ Proof.
   intuition.
 Qed.
 
-Lemma child_leaf_absurd:
+Lemma child_absurd_nil:
   forall t f,
-  Child t f (Node nil) -> False.
+  ~ Child t f (Node nil).
 Proof.
   intros.
+  intuition.
   inversion H.
   simpl in *.
   inversion H0.
@@ -246,14 +248,17 @@ Inductive Ge (f:finish) (f':finish) : Prop :=
     clos_refl_trans finish (fun (f1:finish) (f2:finish) => Sub f2 f1) f f' ->
     Ge f f'.
 
-Notation "f < f'" := (Lt f f') : finish_scope.
+Module RelNotations.
+  Notation "f < f'" := (Lt f f') : finish_scope.
 
-Notation "f > f'" := (Gt f f') : finish_scope.
+  Notation "f > f'" := (Gt f f') : finish_scope.
 
-Notation "f <= f'" := (Le f f') : finish_scope.
+  Notation "f <= f'" := (Le f f') : finish_scope.
 
-Notation "f >= f'" := (Ge f f') : finish_scope.
+  Notation "f >= f'" := (Ge f f') : finish_scope.
+End RelNotations.
 
+Import RelNotations.
 Local Open Scope finish_scope.
 
 Lemma lt_to_gt:
@@ -377,6 +382,14 @@ Proof.
   eauto using rt_trans.
 Qed.
 
+Lemma le_refl:
+  forall f,
+  f <= f.
+Proof.
+  intros.
+  intuition.
+Qed.
+
 Lemma ge_inv:
   forall f f',
   f >= f' ->
@@ -449,7 +462,6 @@ Proof.
     eauto using rt_step, rt_trans.
 Qed.
 *)
-Require Import Coq.Relations.Operators_Properties.
 
 Lemma lt_inv_cons_ready:
   forall f t l,
@@ -469,27 +481,26 @@ Proof.
     + eauto using sub_inv_cons_ready, t_step.
     + auto using clos_t1n_trans.
 Qed.
-(*
-Section LT_IND.
+
+Section SUB_IND.
 
 Hypothesis P : finish -> Prop.
 Hypothesis Hnil: P (Node nil).
 Hypothesis Hcons: forall t l, P (Node l) -> P (Node ((t, Ready)::l)).
-Hypothesis Htrans: forall f f', P f -> f < f' -> P f'.
+Hypothesis Htrans: forall f f', P f -> Sub f f' -> P f'.
 
-Fixpoint lt_ind (f:finish) : P f :=
+Fixpoint sub_ind (f:finish) : P f :=
 match f with
 | Node l =>
     (fix aux (l:list l_task) : P (Node l) :=
     match l as x return P (Node x) with 
     | nil => Hnil
     | (t,Ready) :: l => Hcons t l (aux l)
-    | (t, Blocked f') :: l => Htrans f' (Node ((t, Blocked f')::l)) (lt_ind f') (lt_eq f' t l)
+    | (t, Blocked f') :: l => Htrans f' (Node ((t, Blocked f')::l)) (sub_ind f') (sub_eq f' t l)
     end) l
 end.
 
-End LT_IND.
-*)
+End SUB_IND.
 
 Lemma sub_absurd_nil:
   forall f,
@@ -498,7 +509,7 @@ Proof.
   intros.
   intuition.
   inversion H.
-  apply child_leaf_absurd in H0.
+  apply child_absurd_nil in H0.
   assumption.
 Qed.
 
@@ -580,50 +591,48 @@ Proof.
     simpl.
     auto.
 Qed.
-(*
+
 Lemma gt_inv_cons:
-  forall f p l,
-  Node (p :: l) > f  ->
-  (snd p = Blocked f) \/ (Node l) > f.
+  forall t a l f,
+  Node ((t, a) :: l) > f ->
+  a = Blocked f \/ (exists f', a = Blocked f' /\ f' > f) \/ Node l > f.
 Proof.
   intros.
-  inversion H.
-  rewrite clos_trans_tn1_iff in H0.
-  induction H0.
-  - apply sub_inv_cons in H0.
-    destruct H0.
-    + intuition.
-    + right.
-      auto using gt_def, t_step.
-  - assert (Hx : Node (p::l) > y). {
-      auto using gt_def, clos_tn1_trans.
-    }
-    apply IHclos_trans_n1 in Hx; clear H1 IHclos_trans_n1.
-    destruct Hx.
-    + intuition.
-    + 
+  intuition.
+  apply clos_trans_t1n in H0.
+  inversion H0.
+  - subst.
+    apply sub_inv_cons in H.
+    destruct H.
+    + left; auto.
+    + right; right. auto using gt_def, t_step.
+  - subst.
+    apply sub_inv_cons in H.
+    destruct H.
+    + simpl in H.
+      subst.
+      right; left.
+      exists y.
+      intuition.
+      eauto using clos_t1n_trans.
+    + right; right.
+      eauto using gt_def, t_step, t_trans, clos_t1n_trans.
 Qed.
-
 
 Lemma lt_inv_cons:
-  forall f p l,
-  f < Node (p :: l) ->
-  (snd p = Blocked f) \/ f < (Node l).
+  forall t a l f,
+  f < Node ((t, a) :: l) ->
+  a = Blocked f \/ (exists f', a = Blocked f' /\ f < f') \/ f < Node l.
 Proof.
   intros.
-  inversion H.
-  destruct p as  (t', a).
-  destruct H0.
-  destruct H0.
-  * inversion H0.
-    intuition.
-  * right.
-    apply lt_def with (t).
-    apply child_def.
-    simpl.
-    auto.
+  rewrite gt_lt_spec in *.
+  apply gt_inv_cons in H.
+  destruct H as [?| [(f',(?,?))| ?]]; intuition.
+  right; left.
+  exists f'.
+  rewrite gt_lt_spec.
+  intuition.
 Qed.
-*)
 
 Inductive Any (P: finish -> Prop) (f:finish) : Prop :=
   any_def:
@@ -722,7 +731,7 @@ Proof.
   inversion H; subst.
   inversion H0.
   apply le_inv_nil in H1; subst.
-  eauto using child_leaf_absurd.
+  eauto using child_absurd_nil.
 Qed.
 
 Lemma lookup_le:
@@ -793,6 +802,36 @@ Inductive Registered (t:tid) (f:finish) : Prop :=
     Child t a f ->
     Registered t f.
 
+Lemma registered_cons:
+  forall t l p,
+  Registered t (Node l) ->
+  Registered t (Node (p::l)).
+Proof.
+  intros.
+  inversion H.
+  eauto using child_cons, registered_def.
+Qed.
+
+Lemma registered_eq:
+  forall t l a,
+  Registered t (Node ((t,a)::l)).
+Proof.
+  intros.
+  eauto using registered_def, child_eq.
+Qed.
+
+
+Lemma registered_absurd_nil:
+  forall t,
+  ~ Registered t (Node nil).
+Proof.
+  intros.
+  intuition.
+  inversion H.
+  apply child_absurd_nil in H0.
+  assumption.
+Qed.
+
 Inductive In (t:tid) (f:finish) : Prop :=
   in_def:
     forall f',
@@ -810,7 +849,7 @@ Proof.
   eauto using in_def, lookup_def, any_ok.
 Qed.
 *)
-(*
+
 Lemma in_trans:
   forall t f f',
   In t f' ->
@@ -820,7 +859,7 @@ Proof.
   intros.
   inversion H.
   inversion H1.
-  eauto using in_def, lookup_def, any_parent.
+  eauto using in_def, lt_to_le, le_trans.
 Qed.
 
 Lemma in_eq:
@@ -828,9 +867,10 @@ Lemma in_eq:
   In t (Node ((t, f) :: l)).
 Proof.
   intros.
-  eauto using in_def, lookup_eq.
+  eauto using in_def, le_refl, registered_eq.
 Qed.
 
+(*
 Lemma in_cons:
   forall t f t' l,
   In t f ->
@@ -840,26 +880,35 @@ Proof.
   inversion H.
   eauto using in_def, lookup_cons.
 Qed.
+*)
 
-Lemma in_cons_rhs:
+Lemma in_cons:
   forall t p l,
   In t (Node l) ->
   In t (Node (p :: l)).
 Proof.
   intros.
   destruct H.
-  eauto using in_def, lookup_cons_rhs.
+  apply le_inv in H0; destruct H0.
+  - eauto using lt_to_le, in_def, lt_cons.
+  - subst.
+    eauto using in_def, le_refl, registered_cons.
 Qed.
 
-Lemma in_leaf_absurd:
+Lemma in_absurd_nil:
   forall t,
-  In t (Node nil) -> False.
+  ~ In t (Node nil).
 Proof.
   intros.
+  intuition.
   inversion H.
-  eauto using lookup_leaf_absurd.
+  apply le_inv_nil in H1.
+  subst.
+  apply registered_absurd_nil in H0.
+  assumption.
 Qed.
 
+(*
 Lemma in_inv_leaf:
   forall t t',
   In t (Node ((t',Blocked (Node nil))::nil)) ->
@@ -876,6 +925,7 @@ Proof.
       apply lookup_leaf_absurd in H1; inversion H1.
     + apply lookup_leaf_absurd in H0; inversion H0.
 Qed.
+*)
 
 Lemma in_inv_cons:
   forall t t' a l,
@@ -883,21 +933,34 @@ Lemma in_inv_cons:
   t = t' \/ (exists f, a = Blocked f /\ In t f) \/ In t (Node l).
 Proof.
   intros.
-  inversion H.
-  apply lookup_inv in H0.
-  destruct H0 as [(?,?)|[(f,(?,?))|?]].
-  - intuition.
-  - right.
-    left.
-    subst.
-    exists f.
-    intuition.
-    eauto using in_def.
-  - right.
-    right.
-    eauto using in_def.
+  destruct H.
+  apply le_inv in H0.
+  destruct H0.
+  - apply lt_inv_cons in H0.
+    destruct H0 as [?|[(f1, (?, ?))|?]].
+    + subst.
+      right; left.
+      exists f'.
+      intuition.
+      eauto using in_def, le_refl.
+    + subst.
+      right; left.
+      exists f1.
+      split; eauto using in_def, lt_to_le.
+    + right; right.
+      eauto using in_def, lt_to_le.
+  - subst.
+    inversion H.
+    destruct H0.
+    destruct H0.
+    + inversion H0.
+      subst; intuition.
+    + right; right.
+      apply in_def with (Node l); auto.
+      eauto using registered_def, child_def.
+      auto using le_refl.
 Qed.
-*)
+
 Module Semantics.
 
 (** Add task [t] to finish [f]. *)
@@ -967,7 +1030,7 @@ Proof.
   + apply disjoint_ok.
     intuition.
     contradiction H0.
-    apply in_cons_rhs.
+    apply in_cons.
     assumption.
   + apply disjoint_skip.
     assumption.
@@ -983,8 +1046,8 @@ Proof.
   + apply disjoint_ok.
     intuition.
     contradiction H0.
-    apply in_cons.
-    assumption.
+    subst.
+    eauto using in_trans, lt_eq.
   + apply disjoint_skip.
     assumption.
 Qed.

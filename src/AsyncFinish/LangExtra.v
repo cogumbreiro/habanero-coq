@@ -83,7 +83,7 @@ Lemma notin_spec_1:
 Proof.
   intros.
   induction f using finish_ind_strong.
-  - eauto using in_leaf_absurd.
+  - eauto using in_absurd_nil.
   - simpl in H.
     destruct H as (?, (?, _)).
     intuition.
@@ -122,7 +122,7 @@ Proof.
     apply IHf.
     intuition.
     contradiction H.
-    auto using in_cons_rhs.
+    auto using in_cons.
   - assert (Hneq : t <> t0). {
       destruct (TID.eq_dec t t0).
       subst.
@@ -134,11 +134,11 @@ Proof.
     + apply IHf.
       intuition.
       contradiction H.
-      auto using in_cons.
+      eauto using in_trans, lt_eq.
     + apply IHf0.
       intuition.
       contradiction H.
-      auto using in_cons_rhs.
+      auto using in_cons.
 Qed.
 
 Theorem notin_spec:
