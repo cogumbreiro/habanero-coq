@@ -82,9 +82,10 @@ Definition drop : tid -> phaser -> phaser := @Map_TID.remove taskview.
 Definition Await (ph:phaser) (n:nat) :=
   forall t v,
   Map_TID.MapsTo t v ph ->
+  SignalCap v ->
   v.(signal_phase) >= n.
 
-Inductive Sync : phaser -> nat -> Prop :=
+Inductive Sync : phaser -> tid -> Prop :=
   | sync_so:
     forall t v ph,
     Map_TID.MapsTo t v ph ->
