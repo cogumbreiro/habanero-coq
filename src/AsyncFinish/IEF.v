@@ -19,12 +19,12 @@ Inductive IEF (t:tid) (f:finish) : Prop :=
     ChildIn t f ->
     IEF t f.
 
-Inductive IEFPath (f:finish) (t:tid): list tid -> Prop :=
-  | ief_path_eq:
+Inductive FID (f:finish) (t:tid): fid -> Prop :=
+  | fid_nil:
      IEF t f ->
-     IEFPath f t nil
-   | ief_path_cons:
+     FID f t nil
+   | fid_cons:
      forall t' f' l,
-     IEFPath f' t l ->
+     FID f' t l ->
      Child t' (Blocked f') f ->
-     IEFPath f t (t'::l).
+     FID f t (t'::l) % list.

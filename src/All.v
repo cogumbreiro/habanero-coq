@@ -3,13 +3,23 @@ Module F := HJ.AsyncFinish.Lang.
 Require HJ.Phasers.Lang.
 Module P := HJ.Phasers.Lang.
 Require Import HJ.Vars.
+Require Import HJ.AsyncFinish.IEF.
 
-Definition finish_state := Map_TID.t (list P.phasermap).
+Notation fstate := (Map_FID.t P.phasermap).
 
 Inductive state := mk_state {
   get_finish: F.finish;
-  get_fstate: finish_state
+  get_fstate: fstate
 }.
+
+Definition set_fstate (s:state) (m:fstate)  :=
+  mk_state s.(get_finish) m.
+
+Definition put_phasermap (s:state) (f:fid) (m:P.phasermap) :  state :=
+  set_fstate s (Map_FID.add f m s.(get_fstate)).
+
+Definition set_finish (s:state) (f:F.finish) : state :=
+  mk_state f s.(get_fstate).
 
 Module Semantics.
 
@@ -27,9 +37,6 @@ Inductive op :=
   | PH_DROP : phid -> op
   | SIGNAL_ALL : op
   | WAIT_ALL : op.
-
-Definition set_phasermaps (t:tid) (l:list phasermap) (s:state) : finish_state :=
-  Map_TID.add t l s.(get_fstate).
 
 Inductive packet :=
   | only_p: P.op -> packet
@@ -49,36 +56,30 @@ Definition translate (o:op) : packet :=
   | WAIT_ALL => only_p (P.WAIT_ALL)
   end.
 
-Variable IEFPath: F.finish -> tid -> list tid -> Prop.
-Variable PathToPhaser: list tid -> phasermap -> Prop.
+Inductive PhasermapOf (s:state) (t:tid) (f:fid) (m:phasermap) : Prop :=
+  phasermap_of:
+    FID (get_finish s) t f ->
+    Map_FID.MapsTo f m s.(get_fstate) ->
+    PhasermapOf s t f m.
 
-Inductive GetPhasermap: tid -> phasermap -> state -> Prop :=
-  get_phasermap_def:
-    forall t m s p,
-    IEFPath (get_finish s) t p ->
-    PathToPhaser p m ->
-    GetPhasermap t m s.
-
-Variable set_phasermap : state -> tid -> phasermap -> state.
-Variable set_finish : state -> F.finish -> state.
-Variable update : state -> F.finish -> tid -> phasermap -> state.
 Inductive Reduce (s:state) (t:tid) (o:op) : state -> Prop :=
   | reduce_p:
-    forall m m' o',
-    GetPhasermap t m s ->
+    forall f m m' o',
+    PhasermapOf s t f m ->
     translate o = only_p o' ->
     P.Reduce m t o' m' ->
-    Reduce s t o (set_phasermap s t m')
+    Reduce s t o (put_phasermap s f m')
   | reduce_f:
     forall f' o',
     translate o = only_f o' ->
     FS.Reduce (get_finish s) t o' f' ->
     Reduce s t o (set_finish s f')
   | reduce_both:
-    forall m m' o' f' o'',
+    forall m i m' o' f' o'',
     translate o = both o' o'' ->
-    GetPhasermap t m s ->
+    PhasermapOf s t i m ->
     P.Reduce m t o' m' ->
     FS.Reduce (get_finish s) t o'' f' ->
-    Reduce s t o (update s f' t m').
-
+    Reduce s t o
+      (set_finish (put_phasermap s i m') f').
+End Semantics.
