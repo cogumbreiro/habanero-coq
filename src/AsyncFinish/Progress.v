@@ -3,6 +3,64 @@ Require Import Coq.Lists.SetoidList.
 Require Import HJ.Vars.
 Require Import HJ.AsyncFinish.Lang.
 
+Inductive Any (P: finish -> Prop) (f:finish) : Prop :=
+  any_def:
+    forall f',
+    f' <= f ->
+    P f' ->
+    Any P f.
+
+Lemma any_cons:
+  forall P f t l,
+  Any P f ->
+  Any P (Node ((t,(Blocked f))::l)).
+Proof.
+  intros.
+  inversion H.
+  apply any_def with (f').
+  - apply le_inv in H0.
+    destruct H0.
+    + apply lt_to_le.
+      remember (Node _) as y.
+      assert (f <  y). {
+        subst.
+        eauto using lt_eq.
+      }
+      eauto using lt_trans.
+    + subst.
+      apply lt_to_le.
+      auto using lt_eq.
+  - assumption.
+Qed.
+
+Lemma any_cons_rhs:
+  forall (P:finish->Prop) p l,
+  Any P (Node l) ->
+  ( (P (Node l)) ->  P (Node (p::l))) ->
+  Any P (Node (p::l)).
+Proof.
+  intros.
+  inversion H.
+  apply le_inv in H1.
+  destruct H1.
+  - eauto using any_def, lt_to_le, lt_cons.
+  - subst.
+    apply any_def with (Node (p :: l)); auto.
+    intuition.
+Qed.
+
+Lemma any_inv_nil:
+  forall P,
+  Any P (Node nil) ->
+  P (Node nil).
+Proof.
+  intros.
+  inversion H.
+  apply le_inv_nil in H0.
+  subst; assumption.
+Qed.
+
+
 (*
 Inductive ParentOf (t:tid) (t':tid) (f:finish) : Prop :=
   | parent_of_def:
