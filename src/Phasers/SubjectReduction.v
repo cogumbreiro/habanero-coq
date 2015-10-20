@@ -122,7 +122,7 @@ Proof.
           intuition.
         }
         rewrite Heq.
-        auto.
+        auto using ph_diff_def.
     + destruct H2 as [(?,?)|(?,?)].
       * subst.
         rewrite wait_delta_right; auto.
@@ -134,14 +134,14 @@ Proof.
           intuition.
         }
         rewrite Heq.
-        auto.
+        auto using ph_diff_def.
       * rewrite wait_delta_neq; repeat auto.
         assert (Heq: (
           (Z.of_nat (wait_phase v1) - Z.of_nat (wait_phase v2) + 0) =
           (Z.of_nat (wait_phase v1) - Z.of_nat (wait_phase v2))) % Z). {
           intuition.
         }
-        rewrite Heq; auto.
+        rewrite Heq; auto using ph_diff.
 Qed.
 
 Lemma in_neq:

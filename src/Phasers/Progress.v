@@ -102,9 +102,7 @@ Proof.
   unfold Smallest in *.
   destruct H as (Hin, H).
   assert (Hx := H t'); clear H.
-  assert (Hin' : List.In t' tids). {
-    eauto using in_tids.
-  }
+  assert (Hin' : List.In t' tids) by eauto using in_tids.
   apply Hx in Hin'; clear Hx.
   destruct Hin' as [(?,?)|?].
   - destruct (LE_total _ _ _ _ _ H0 H1 H2); repeat contradiction. (* absurd *)
@@ -130,31 +128,21 @@ Lemma Smallest_to_WaitPhase :
   (wait_phase v <= wait_phase v') % nat.
 Proof.
   intros.
-  assert (Hin :  Map_TID.In t ph). {
-    apply Map_TID_Extra.mapsto_to_in with (e:=v).
-    assumption.
-  }
-  assert (Hin' :  Map_TID.In t' ph). {
-    apply Map_TID_Extra.mapsto_to_in with (e:=v').
-    assumption.
-  }
-  assert (Hle : LE pm t t'). {
-    apply Smallest_to_LE with (p:=p) (ph:=ph); repeat auto.
-  }
+  assert (Hin: Map_TID.In t ph) by eauto using Map_TID_Extra.mapsto_to_in.
+  assert (Hin': Map_TID.In t' ph) by eauto using Map_TID_Extra.mapsto_to_in.
+  assert (Hle: LE pm t t') by eauto using Smallest_to_LE.
   remember ((Z.of_nat (wait_phase v)) - (Z.of_nat (wait_phase v'))) as z.
   assert (Hdiff : ph_diff ph t t' z). {
     subst.
     auto using ph_diff_def.
   }
-  assert (Hz: (z <= 0 \/ -z <= 0) % Z). {
-    omega.
-  }
+  assert (Hz: (z <= 0 \/ -z <= 0) % Z) by omega.
   destruct Hz.
   - omega.
   - subst.
     remember (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v')) as z.
-    assert (Hd: pm_diff pm t t' z). { eauto using pm_diff_def. }
-    assert ((z <= 0) % Z). { eauto using LE_to_pm_diff. }
+    assert (Hd: pm_diff pm t t' z) by eauto using pm_diff_def.
+    assert ((z <= 0) % Z) by eauto using LE_to_pm_diff.
     intuition.
 Qed.
 
@@ -213,8 +201,7 @@ Proof.
     apply Forall_forall.
     intros.
     unfold IsA, tids in *.
-    apply pm_tids_spec.
-    assumption.
+    auto using pm_tids_spec_1.
   }
   assert (Hsmall := has_smallest _ H Hisa).
   destruct Hsmall as (t, Hsmall).
