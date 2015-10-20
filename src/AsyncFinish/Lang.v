@@ -446,23 +446,6 @@ Proof.
   eauto using t_trans.
 Qed.
 
-(*
-Lemma le_cons:
-  forall f f' t l,
-  f <= f' ->
-  f <= Node ((t, Blocked f') :: l).
-Proof.
-  intros.
-  intuition.
-  inversion H0.
-  - subst.
-  apply rt_step.
-  apply sub_def with (t).
-  
-    eauto using rt_step, rt_trans.
-Qed.
-*)
-
 Lemma lt_inv_cons_ready:
   forall f t l,
   f < (Node ((t, Ready) :: l)) ->
@@ -481,26 +464,6 @@ Proof.
     + eauto using sub_inv_cons_ready, t_step.
     + auto using clos_t1n_trans.
 Qed.
-
-Section SUB_IND.
-
-Hypothesis P : finish -> Prop.
-Hypothesis Hnil: P (Node nil).
-Hypothesis Hcons: forall t l, P (Node l) -> P (Node ((t, Ready)::l)).
-Hypothesis Htrans: forall f f', P f -> Sub f f' -> P f'.
-
-Fixpoint sub_ind (f:finish) : P f :=
-match f with
-| Node l =>
-    (fix aux (l:list l_task) : P (Node l) :=
-    match l as x return P (Node x) with 
-    | nil => Hnil
-    | (t,Ready) :: l => Hcons t l (aux l)
-    | (t, Blocked f') :: l => Htrans f' (Node ((t, Blocked f')::l)) (sub_ind f') (sub_eq f' t l)
-    end) l
-end.
-
-End SUB_IND.
 
 Lemma sub_absurd_nil:
   forall f,
@@ -634,168 +597,6 @@ Proof.
   intuition.
 Qed.
 
-Inductive Any (P: finish -> Prop) (f:finish) : Prop :=
-  any_def:
-    forall f',
-    f' <= f ->
-    P f' ->
-    Any P f.
-
-Lemma any_cons:
-  forall P f t l,
-  Any P f ->
-  Any P (Node ((t,(Blocked f))::l)).
-Proof.
-  intros.
-  inversion H.
-  apply any_def with (f').
-  - apply le_inv in H0.
-    destruct H0.
-    + apply lt_to_le.
-      remember (Node _) as y.
-      assert (f <  y). {
-        subst.
-        eauto using lt_eq.
-      }
-      eauto using lt_trans.
-    + subst.
-      apply lt_to_le.
-      auto using lt_eq.
-  - assumption.
-Qed.
-
-Lemma any_cons_rhs:
-  forall (P:finish->Prop) p l,
-  Any P (Node l) ->
-  ( (P (Node l)) ->  P (Node (p::l))) ->
-  Any P (Node (p::l)).
-Proof.
-  intros.
-  inversion H.
-  apply le_inv in H1.
-  destruct H1.
-  - eauto using any_def, lt_to_le, lt_cons.
-  - subst.
-    apply any_def with (Node (p :: l)); auto.
-    intuition.
-Qed.
-
-Lemma any_inv_nil:
-  forall P,
-  Any P (Node nil) ->
-  P (Node nil).
-Proof.
-  intros.
-  inversion H.
-  apply le_inv_nil in H0.
-  subst; assumption.
-Qed.
-(*
-Lemma any_inv_cons:
-  forall P p l,
-  Any P (Node (p :: l)) ->
-  (exists f',  f' < Node (p :: l) /\ P f') \/ False.
-(*  (P (Node (p::l))) \/
-  (exists f, snd p = Blocked f /\ Any P f) \/ Any P (Node l).*)
-Proof.
-  intros.
-  inversion H.
-  apply le_inv in H0.
-  destruct H0.
-  - left; exists f'; intuition.
-  - subst.
-    right.
-  - intuition.
-  - right.
-    apply lt_inv_cons  in H1.
-    destruct H1.
-    + left.
-      exists f'.
-      intuition.
-    + right.
-      eauto using any_parent.
-Qed.
-*)
-Inductive Lookup (t:tid) (a:task) (f:finish) : Prop :=
-  lookup_def:
-    forall f',
-    Child t a f' ->
-    f' <= f ->
-    Lookup t a f.
-
-Lemma lookup_leaf_absurd:
-  forall t f,
-  Lookup t f (Node nil) -> False.
-Proof.
-  intros.
-  inversion H; subst.
-  inversion H0.
-  apply le_inv_nil in H1; subst.
-  eauto using child_absurd_nil.
-Qed.
-
-Lemma lookup_le:
-  forall t a f f',
-  Lookup t a f ->
-  f <= f' ->
-  Lookup t a f'.
-Proof.
-  intros.
-  inversion H.
-  eauto using lookup_def, le_trans.
-Qed.
-(*
-Lemma lookup_cons_rhs:
-  forall t a p l,
-  Lookup t a (Node l) ->
-  Lookup t a (Node (p :: l)).
-Proof.
-  intros.
-  inversion H; clear H.
-  auto using lookup_def, any_cons_rhs, child_cons.
-Qed.
-
-Lemma lookup_eq:
-  forall t a l,
-  Lookup t a (Node ((t, a) :: l)).
-Proof.
-  intros.
-  eauto using lookup_def, any_ok, child_eq.
-Qed.
-
-Lemma lookup_inv:
-  forall l a t a' t',
-  Lookup t a (Node ((t', a') :: l)) ->
-  (t' = t /\ a' = a) \/ (exists f', a' = Blocked f' /\ Lookup t a f') \/ Lookup t a (Node l).
-Proof.
-  intros.
-  destruct H.
-  inversion H.
-  - destruct H0.
-    inversion H0.
-    + inversion H1.
-      left.
-      intuition.
-    + right.
-      right.
-      eauto using child_def, lookup_def, any_ok.
-  - inversion H1.
-    apply child_inv_cons in H2.
-    destruct H2 as [(?,?)|?].
-    + subst.
-      right.
-      left.
-      exists f'.
-      intuition.
-      auto using lookup_def.
-    + right; right.
-      assert (f' < (Node l)). {
-        eauto using lt_def.
-      }
-      eauto using lookup_def, any_parent.
-Qed.
-*)
-
 Inductive Registered (t:tid) (f:finish) : Prop :=
   registered_def:
     forall a,
@@ -839,17 +640,6 @@ Inductive In (t:tid) (f:finish) : Prop :=
     f' <= f ->
     In t f.
 
-(*
-Lemma in_child:
-  forall t a f,
-  Child t a f ->
-  In t f.
-Proof.
-  intros.
-  eauto using in_def, lookup_def, any_ok.
-Qed.
-*)
-
 Lemma in_trans:
   forall t f f',
   In t f' ->
@@ -869,18 +659,6 @@ Proof.
   intros.
   eauto using in_def, le_refl, registered_eq.
 Qed.
-
-(*
-Lemma in_cons:
-  forall t f t' l,
-  In t f ->
-  In t (Node ((t', (Blocked f)) :: l)).
-Proof.
-  intros.
-  inversion H.
-  eauto using in_def, lookup_cons.
-Qed.
-*)
 
 Lemma in_cons:
   forall t p l,
@@ -907,25 +685,6 @@ Proof.
   apply registered_absurd_nil in H0.
   assumption.
 Qed.
-
-(*
-Lemma in_inv_leaf:
-  forall t t',
-  In t (Node ((t',Blocked (Node nil))::nil)) ->
-  t = t'.
-Proof.
-  intros.
-  inversion H.
-  apply lookup_inv in H0.
-  destruct H0.
-  - intuition.
-  - destruct H0 as  [(?,(?,?))|?].
-    + inversion H0.
-      subst.
-      apply lookup_leaf_absurd in H1; inversion H1.
-    + apply lookup_leaf_absurd in H0; inversion H0.
-Qed.
-*)
 
 Lemma in_inv_cons:
   forall t t' a l,
