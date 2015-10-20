@@ -629,11 +629,6 @@ Proof.
     trivial.
 Qed.
 
-Inductive ChildIn (t:tid) (f:finish) : Prop :=
-  in_def:
-    forall a,
-    Child t a f ->
-    ChildIn t f.
 
 
 
