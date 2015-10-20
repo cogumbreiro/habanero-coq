@@ -1,3 +1,4 @@
+(* begin hide *)
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Relations.Relations.
 Require Import Coq.Lists.List.
@@ -9,6 +10,15 @@ Require Import HJ.Phasers.Lang.
 
 Open Local Scope Z.
 
+(* end hide *)
+
+Section PhDiff.
+
+(**
+  The task displacement over phasers is given by predicate [ph_diff] that given
+  a phaser [ph], a task [t1], and a task [t2] yields some displacement [z].
+  *)
+
 Inductive ph_diff : phaser -> tid -> tid -> Z -> Prop :=
   ph_diff_def:
     forall t1 t2 v1 v2 ph,
@@ -16,7 +26,11 @@ Inductive ph_diff : phaser -> tid -> tid -> Z -> Prop :=
     Map_TID.MapsTo t2 v2 ph ->
     ph_diff ph t1 t2 ((Z_of_nat (wait_phase v1)) - (Z_of_nat (wait_phase v2)))%Z.
 
+(* begin hide *)
 Hint Resolve ph_diff_def.
+(* end hide *)
+
+(** Function [get_ph_diff] implements  predicate [ph_diff]. *)
 
 Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z :=
   match Map_TID.find t1 ph with
@@ -28,6 +42,8 @@ Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z :=
       end
     | _ => None
   end.
+
+(* begin hide *)
 
 Lemma get_ph_diff_spec_1:
   forall ph t1 t2 z,
@@ -63,6 +79,10 @@ Proof.
   auto.
 Qed.
 
+(* end hide *)
+
+(** The main result for [ph_diff] is the proof of correctness. *)
+
 Lemma get_ph_diff_spec:
   forall ph t1 t2 z,
   get_ph_diff ph t1 t2 = Some z <-> ph_diff ph t1 t2 z.
@@ -72,6 +92,8 @@ Proof.
   - apply get_ph_diff_spec_1.
   - apply get_ph_diff_spec_2.
 Qed.
+
+(* begin hide *)
 
 Lemma get_ph_diff_spec_none:
   forall ph t1 t2,
@@ -133,6 +155,10 @@ Proof.
   trivial.
 Qed.
 
+(* end hide *)
+
+(** The reflexive task displacement over a phaser is zero. *)
+
 Lemma ph_diff_refl:
   forall t ph,
   Map_TID.In t ph ->
@@ -141,11 +167,13 @@ Proof.
   intros.
   apply Map_TID_Extra.in_to_mapsto in H.
   destruct H as (v, H).
-  assert (ph_diff ph t t (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v))). { auto. }
+  assert (ph_diff ph t t (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v))) by auto.
   assert ((Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v)) = 0). { intuition. }
   rewrite H1 in *.
   assumption.
 Qed.
+
+(** The displacement between two tasks over a phaser is symmetric. *)
 
 Lemma ph_diff_symm:
   forall ph t t' z,
@@ -161,6 +189,8 @@ Proof.
   subst.
   auto.
 Qed.
+
+(* begin hide *)
 
 Lemma ph_diff_inv:
   forall ph t t' z,
@@ -209,6 +239,13 @@ Proof.
   eauto using ph_diff_fun.
 Qed.
 
+(* end hide *)
+
+(**
+  Any two tasks mentioned in a phaser are related with [ph_diff], that is
+  there is a displacement between them.
+  *)
+
 Lemma ph_diff_total:
   forall ph t t',
   Map_TID.In t ph ->
@@ -224,12 +261,18 @@ Proof.
   auto.
 Qed.
 
+(**
+  We are now ready to define a less-than operator over a phaser.
+  *)
+
 Inductive ph_le : phaser -> tid -> tid -> Prop :=
   ph_le_def :
     forall ph t1 t2 z,
     ph_diff ph t1 t2 z ->
     (z <= 0)%Z ->
     ph_le ph t1 t2.
+
+(* begin hide *)
 
 Hint Resolve ph_le_def.
 
@@ -275,15 +318,16 @@ Next Obligation.
 Qed.
 End GET_PH_LE.
 
+(* end hide *)
+
 Lemma ph_le_refl:
   forall t ph,
   Map_TID.In t ph ->
   ph_le ph t t.
 Proof.
   intros.
-  apply ph_le_def with (z:=0%Z).
+  apply ph_le_def with (z:=0%Z); intuition.
   auto using ph_diff_refl.
-  intuition.
 Qed.
 
 Lemma ph_le_inv:
@@ -350,6 +394,7 @@ Proof.
     }
     inversion H1.
 Qed.
+End PhDiff.
 
 Section PM_DIFF.
 Variable pm:phasermap.
