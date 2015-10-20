@@ -126,7 +126,7 @@ Proof.
   - destruct g.
     left.
     destruct a.
-    eauto.
+    eauto using ph_le_def.
 Qed.
 
 Section PM_DIFF.
@@ -173,7 +173,7 @@ Proof.
     assert (Hx : Map_PHID.MapsTo p ph pm_le). {
       apply pm_le_spec.
       intuition.
-      eauto.
+      eauto using ph_le_def.
     }
     assert (absurd: exists k, Map_PHID.In (elt:=phaser) k pm_le). {
       exists p.
