@@ -285,7 +285,7 @@ Definition mk_taskmap (t:tid) (s:statement) := Map_TID.add t s (@Map_TID.empty s
 Definition heap := Map_PHID.t nat.
 Definition mk_heap := @Map_PHID.empty nat.
 Inductive state := mk_state {
-  get_finish: Lang.finish;
+  get_finish: finish;
   get_taskmap: taskmap;
   get_heap:  heap;
   get_program: program
@@ -297,7 +297,7 @@ Definition run (t:tid) (s:statement) : state :=
 Section StateOps.
 
 Variable s:state.
-Definition set_finish (f:Lang.finish) : state :=
+Definition set_finish (f:finish) : state :=
   mk_state f s.(get_taskmap) s.(get_heap) s.(get_program).
 
 Require Import Coq.Init.Datatypes.
@@ -445,7 +445,7 @@ Let S0 := run t1 S1.
 (*   [ ! t1 ] t1 BEGIN_FINISH ([ ! t1 ] |+ (t1 <| [! t1]))  *)
 Import FinishNotations.
 Open Scope finish_scope.
-Module F := HJ.AsyncFinish.Lang.Semantics.
+Module F := HJ.AsyncFinish.Semantics.
 
 (* 
   (t1: "begin_finish; async S3; f(); end_finish; S2")

@@ -4,7 +4,7 @@ Require Import Aniceto.Graphs.Bipartite.Bipartite.
 Require Import Aniceto.Graphs.Graph.
 
 
-Import RelNotations.
+Import FinishNotations.
 Local Open Scope finish_scope.
 
 Inductive ChildIn (t:tid) (f:finish) : Prop :=

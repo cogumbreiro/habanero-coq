@@ -4,7 +4,6 @@ Require Import Coq.Relations.Relation_Operators.
 Require Import Aniceto.List.
 
 Require Import HJ.AsyncFinish.Lang.
-Import RelNotations.
 
 Section Find.
   Variable check: finish -> bool.
@@ -183,6 +182,7 @@ Section Find.
     auto.
   Qed.
 
+  Import FinishNotations.
   Local Open Scope finish_scope.
   
   Lemma in_get_children_lt:
