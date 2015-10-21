@@ -9,21 +9,12 @@ Require Import HJ.Phasers.LEDec.
 Require HJ.Phasers.Rel.
 Require Import HJ.Phasers.TransDiff.
 Require HJ.Progress.
+Require Import HJ.Phasers.Typesystem.
 
 Module S := HJ.Phasers.Lang.
 Module P := HJ.Progress.
 
 Open Local Scope Z.
-
-Let diff (pm:phasermap) (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).
-
-(**
-  Our notion of a valid phaser map is such that
-  the transitive difference is a function, which means that
-  any [t1 - ... - t2] yields the the same difference [z].
-*)
-
-Definition Valid (pm:phasermap) := TransDiffFun tid (diff pm).
 
 Section HAS_SMALLEST.
 Variable pm: phasermap.

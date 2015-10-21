@@ -2,6 +2,7 @@ Require Import HJ.Phasers.Progress.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.TransDiff.
 Require Import HJ.Phasers.PhaseDiff.
+Require Import HJ.Phasers.Typesystem.
 Require Import HJ.Vars.
 
 Require Import Aniceto.Graphs.Graph.

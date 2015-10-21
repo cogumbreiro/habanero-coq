@@ -50,3 +50,19 @@ Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
     NoDupA eq_phid ps ->
     Forall (CanRegister t pm) ps ->
     Check pm t (ASYNC ps t').
+
+Section Valid.
+Require Import Coq.ZArith.BinInt.
+Require Import HJ.Phasers.PhaseDiff.
+Require Import HJ.Phasers.TransDiff.
+
+Definition diff (pm:phasermap) (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).
+
+(**
+  Our notion of a valid phaser map is such that
+  the transitive difference is a function, which means that
+  any [t1 - ... - t2] yields the the same difference [z].
+*)
+
+Definition Valid (pm:phasermap) := TransDiffFun tid (diff pm).
+End Valid.
