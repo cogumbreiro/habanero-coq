@@ -10,6 +10,7 @@ Require HJ.Phasers.Rel.
 Require Import HJ.Phasers.TransDiff.
 Require HJ.Progress.
 
+Module S := HJ.Phasers.Lang.
 Module P := HJ.Progress.
 
 Open Local Scope Z.
@@ -253,7 +254,7 @@ Qed.
 Lemma progress_unblocking_simple:
   forall pm t i,
   Valid pm ->
-  Check t i pm ->
+  Check pm t i ->
   i <> WAIT_ALL ->
   P.CanReduce (Reduce pm) t i.
 Proof.
@@ -281,8 +282,8 @@ Proof.
       induction l.
       + exists pm.
         auto using async_nil.
-      + inversion H8; subst; clear H8.
-        inversion H6; subst; clear H6.
+      + inversion H6; subst; clear H6.
+        inversion H5; subst; clear H5.
         apply IHl in H7; auto; clear IHl.
         destruct H7 as (pm', Ha).
         destruct a as (p, r).
@@ -310,7 +311,7 @@ Variable reqs_spec_1:
 Variable reqs_spec_2:
   forall t i,
   Map_TID.MapsTo t i reqs ->
-  Check t i pm.
+  Check pm t i.
 
 Let tids := pm_tids pm.  
 
@@ -381,7 +382,7 @@ Proof.
   assert (Hin : In t pm). {
     eauto using in_def, Map_TID_Extra.mapsto_to_in.
   }
-  assert (Hcheck : Check t WAIT_ALL pm). {
+  assert (Hcheck : Check pm t WAIT_ALL). {
     apply reqs_spec_2.
     apply reqs_spec_1 in Hin.
     destruct Hin as (?, Hmt).
@@ -525,8 +526,10 @@ Proof.
     + trivial.
   - auto using progress_blocking.
 Qed.
-
 End PROGRESS.
+
+Set Implicit Arguments.
+
 
 Module PhProg.
 Require Import HJ.Phasers.Lang.
@@ -539,7 +542,7 @@ Section  XP.
 Variable pm:phasermap.
 Variable is_valid: Valid pm.
 Variable reqs : Map_TID.t op.
-Let Check' (t:tid) (o:op) := Check t o pm.
+Let Check' (t:tid) (o:op) := Check pm  t o.
 Let In' (t:tid) := In t pm.
 Variable reqs_spec :
   HJ.Progress.RequestSpec.request_spec reqs
@@ -577,3 +580,34 @@ Proof.
 Qed.
 End XP.
 End PhProg.
+
+(*
+Section State.
+Structure pstate := mk_pstate {
+  get_state : phasermap;
+  get_requests: Map_TID.t op;
+  RequestsSpec: forall t : tid,
+  In t get_state <-> Map_TID.In t get_requests;
+  ValidRequests: forall t i,
+        Map_TID.MapsTo t i get_requests -> Check t i get_state;
+  IsValid: Valid get_state
+}.
+
+Definition Reduce s t o s':= Map_TID.MapsTo t o (get_requests s) /\
+    S.Reduce (get_state s) t o s'.
+
+Definition Nonempty s := ~ Map_TID.Empty (get_requests s).
+
+Theorem s_progress:
+  forall (s:pstate),
+  Nonempty s ->
+  exists t i,
+  P.CanReduce (Reduce s) t i.
+Proof.
+  intros.
+  Check PhProg.progress (IsValid s).
+  destruct (progress (get_requests s) (get_state s) (IsValid s) (RequestsSpec s) (ValidRequests s)).
+  inversion H.
+  
+Qed.
+*)

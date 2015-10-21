@@ -15,40 +15,38 @@ Inductive CanRegister: tid -> phasermap -> phased -> Prop :=
 
 Definition eq_phid (p p':phased) := (fst p) = (fst p').
 
-Inductive Check: tid -> op -> phasermap -> Prop :=
+Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
   | check_ph_new:
-    forall t p pm,
+    forall p,
     ~ Map_PHID.In p pm ->
-    Check t (PH_NEW p) pm
+    Check pm t (PH_NEW p)
 
   | check_ph_signal:
-    forall t p ph pm,
+    forall p ph,
     Map_PHID.MapsTo p ph pm ->
     Map_TID.In t ph ->
-    Check t (PH_SIGNAL p) pm
+    Check pm t (PH_SIGNAL p)
   
   | check_ph_drop:
-    forall t p ph pm,
+    forall p ph,
     Map_PHID.MapsTo p ph pm ->
     Map_TID.In t ph ->
-    Check t (PH_DROP p) pm
+    Check pm t (PH_DROP p)
 
   | check_signal_all:
-    forall t pm,
-    Check t SIGNAL_ALL pm
+    Check pm t SIGNAL_ALL
 
   | check_wait_all:
-    forall t pm,
     (forall p ph,
       Map_PHID.MapsTo p ph pm ->
       forall v,
       Map_TID.MapsTo t v ph ->
       v.(wait_phase) < v.(signal_phase)) ->
-    Check t WAIT_ALL pm
+    Check pm t WAIT_ALL
 
   | check_async:
-    forall t t' ps pm,
+    forall t' ps,
     ~ Lang.In t' pm ->
     NoDupA eq_phid ps ->
     Forall (CanRegister t pm) ps ->
-    Check t (ASYNC ps t') pm.
+    Check pm t (ASYNC ps t').
