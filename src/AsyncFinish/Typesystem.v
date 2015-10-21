@@ -83,4 +83,35 @@ Proof.
       inversion H4.
       assumption.
 Qed.
+
+Inductive Registered (t:tid) (f:finish) : Prop :=
+  | registered_def:
+    forall a,
+    Child t a f ->
+    Registered t f.
+
+Inductive Typesystem (f:finish) (t:tid) : op -> Prop :=
+  | check_begin_async:
+    forall t',
+    Leaf t f ->
+    ~ In t' f ->
+    Typesystem f t (BEGIN_ASYNC t')
+  | check_end_async:
+    Leaf t f ->
+    Typesystem f t END_ASYNC
+  | check_begin_finish:
+    Leaf t f ->
+    Typesystem f t BEGIN_FINISH
+  | check_end_finish:
+    forall f',
+    ~ Registered t f' -> (* the task executed its body *)
+    Child t (Blocked f') f ->
+    Typesystem f t END_FINISH.
+
+Inductive Check (f:finish) (t:tid) (o:op): Prop :=
+  valid_def:
+    Typesystem f t o ->
+    Disjoint f o ->
+    Check f t o.
+
     
