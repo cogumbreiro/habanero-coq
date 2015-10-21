@@ -3,6 +3,10 @@ Require Import Coq.Lists.SetoidList.
 Require Import HJ.Vars.
 Require Import HJ.AsyncFinish.Lang.
 
+Import FinishNotations.
+
+Open Local Scope finish_scope.
+
 Inductive Any (P: finish -> Prop) (f:finish) : Prop :=
   any_def:
     forall f',
@@ -103,7 +107,7 @@ Lemma nonempty_leaf_absurd:
 Proof.
   intros.
   inversion H; subst; clear H.
-  eauto using in_leaf_absurd.
+  apply in_absurd_nil in H0; trivial.
 Qed.
 
 Lemma nonempty_cons:
@@ -196,7 +200,7 @@ Lemma flat_nil:
 Proof.
   apply flat_def.
   intros.
-  apply child_leaf_absurd in H.
+  apply child_absurd_nil in H.
   inversion H.
 Qed.
 
@@ -224,21 +228,20 @@ Proof.
   - clear H.
     destruct (nonempty_dec (Node l)).
     + apply IHf in n; clear IHf.
-      auto using any_cons_rhs, flat_cons, any_ok, enabled_ready.
+      auto using any_cons_rhs, flat_cons, enabled_ready.
     + inversion e.
       subst.
-      auto using any_ok, flat_cons, flat_nil, enabled_ready.
+      eauto using any_cons_rhs, any_def, le_refl, flat_nil, flat_cons, enabled_ready.
   - destruct f  as (l').
     destruct l'.
-    + auto using any_cons, any_ok, flat_nil, enabled_leaf.
+    + eauto using any_cons, any_def, le_refl, flat_nil.
     + assert (Hx : Nonempty (Node (p :: l'))). {
         apply nonempty_cons.
       }
-      auto using any_cons, any_ok.
+      eauto using any_cons, any_def.
 Qed.
 
-Require HJ.AsyncFinish.Lang. 
-Import Semantics.
+Require Import HJ.AsyncFinish.Semantics. 
 
 Inductive Registered (t:tid) (f:finish) : Prop :=
   | registered_def:
@@ -268,7 +271,7 @@ Inductive Valid (f:finish) (t:tid) (o:op): Prop :=
   valid_def:
     Typesystem f t o ->
     Disjoint f o ->
-    Valid  f t o.
+    Valid f t o.
 
 Lemma flat_reduces:
   forall f t o,
