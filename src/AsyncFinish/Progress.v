@@ -421,7 +421,7 @@ Proof.
   inversion H0.
 Qed.
 
-Lemma blocked_ready:
+Lemma blocked_nil_impl_end_finish:
   forall f t o,
   Valid  f ->
   Child t (Blocked []) f ->
@@ -433,6 +433,36 @@ Proof.
   inversion H2; (try (apply child_impl_nleaf in H4; auto; tauto)).
   trivial.
 Qed.
+
+Lemma blocked_nil_impl_redex:
+  forall f t,
+  Valid  f ->
+  Child t (Blocked []) f ->
+  exists f', Reduce f t END_FINISH f'.
+Proof.
+  intros.
+  exists (f |+ !t).
+  auto using end_finish.
+Qed.
+
+Lemma blocked_redex:
+  forall f t o,
+  Nonempty f ->
+  Flat f ->
+  Check f t o ->
+  exists f', Reduce f t o f'.
+Proof.
+  intros.
+  destruct H1.
+  inversion H1; subst.
+  - exists (f |+ !t').
+    auto using begin_async.
+  - exists (f |- t).
+    auto using end_async.
+  - exists (f |+ t <| !f ). 
+    
+Qed.
+
 
 (* XXXXXXXXXXXXXXXXXXXXXXXXXXX 
 Lemma reduce_any:
