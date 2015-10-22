@@ -283,14 +283,14 @@ Proof.
   inversion H0; subst.
   - exists (Node (p :: l) |+ !t').
     apply begin_async.
-    + auto using leaf_cons.
+    + auto using child_cons.
     + apply disjoint_inv_begin_async in H.
       rewrite E.notin_spec in *.
       assumption.
   - exists (Node (p::l) |- t).
-    auto using end_async, leaf_cons.
+    auto using end_async, child_cons.
   - exists (Node (p::l) |+ t <| [!t]).
-    auto using begin_finish, leaf_cons.
+    auto using begin_finish, child_cons.
   - exists (Node (p::l) |+ !t).
     auto using end_finish, child_cons.
   - exists (put (Node (p::l)) (t', Blocked f'')).
@@ -323,7 +323,7 @@ Lemma flat_reduce:
   forall f,
   Nonempty f ->
   Flat f ->
-  (exists t, Child (t <| []) f) \/ (forall t, Registered t f -> Leaf t f).
+  (exists t, Child (t <| []) f) \/ (forall t, Registered t f -> Child (!t) f).
 Proof.
   intros.
   induction f using finish_ind_strong.
@@ -337,7 +337,7 @@ Proof.
       assert (Hx := H2).
       apply child_inv_cons_nil in H2.
       inversion H2; subst.
-      auto using leaf_def.
+      assumption.
     + assert (Hx : Flat (Node (p :: l))) by eauto using flat_inv_cons.
       assert (Hy : Nonempty (Node (p :: l)) ) by auto using nonempty_cons.
       apply IHf in Hy; auto.
@@ -351,9 +351,9 @@ Proof.
         destruct H2.
         {
           subst.
-          auto using leaf_eq.
+          auto using child_eq.
         }
-        auto using leaf_cons.
+        auto using child_cons.
   - clear IHf.
     assert (f = []). {
       remember (Node (_::_)) as f'.
@@ -401,14 +401,14 @@ Proof.
     auto.
 Qed.
 
-Lemma child_impl_nleaf:
+Let child_impl_nleaf:
   forall t f,
   Valid f ->
   Child (t <| []) f ->
-  ~ Leaf t f.
+  ~ Child (!t) f.
 Proof.
   intros.
-  unfold not; intros Hx; inversion Hx.
+  unfold not; intros Hx.
   apply child_fun with (a:=Ready) in H0; auto.
   inversion H0.
 Qed.

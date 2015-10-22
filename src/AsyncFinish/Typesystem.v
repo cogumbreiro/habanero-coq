@@ -26,20 +26,22 @@ Proof.
   auto using is_map_def.
 Qed.
 
+Import Syntax.Notations.
+
 Inductive Valid: finish -> Prop :=
   | valid_nil:
-    Valid (Node nil)
+    Valid []
   | valid_cons_ready:
     forall t l,
     Valid (Node l) ->
     ~ In t (Node l) ->
-    Valid (Node ((t,Ready)::l))
+    Valid (Node ((!t)::l))
   | valid_cons_blocked:
     forall t f l,
     Valid f ->
     Valid (Node l) ->
     ~ In t (Node l) ->
-    Valid (Node ((t,Blocked f)::l)).
+    Valid (Node ((t <| f)::l)).
 
 Require Import HJ.AsyncFinish.LangExtra.
 
@@ -98,19 +100,19 @@ Qed.
 Inductive Typesystem (f:finish) (t:tid) : op -> Prop :=
   | check_begin_async:
     forall t',
-    Leaf t f ->
+    Child (!t) f ->
     ~ In t' f ->
     Typesystem f t (BEGIN_ASYNC t')
   | check_end_async:
-    Leaf t f ->
+    Child (!t) f ->
     Typesystem f t END_ASYNC
   | check_begin_finish:
-    Leaf t f ->
+    Child (!t) f ->
     Typesystem f t BEGIN_FINISH
   | check_end_finish:
     forall f',
     ~ Registered t f' -> (* the task executed its body *)
-    Child (t, (Blocked f')) f ->
+    Child (t <| f') f ->
     Typesystem f t END_FINISH.
 
 Inductive Check (f:finish) (t:tid) (o:op): Prop :=

@@ -79,7 +79,6 @@ Example R1 :
   .
 Proof.
   apply begin_finish.
-  apply leaf_def.
   apply child_eq.
 Qed.
 
@@ -102,7 +101,7 @@ Proof.
   - solve_disjoint.
   - eapply child_eq.
   - eapply begin_async.
-    eapply leaf_def, child_eq.
+    eapply child_eq.
     solve_notin.
 Qed.
 
@@ -123,7 +122,6 @@ Proof.
   + solve_disjoint.
   + eapply child_eq.
   + eapply begin_async.
-    eapply leaf_def.
     eapply child_cons.
     eapply child_eq.
     solve_notin.
@@ -158,7 +156,6 @@ Proof.
   - solve_disjoint.
   - apply child_eq.
   - apply end_async.
-    apply leaf_def.
     apply child_eq.
 Qed.
 
@@ -184,7 +181,6 @@ Proof.
   - solve_disjoint.
   - apply child_eq.
   - apply end_async.
-    apply leaf_def.
     apply child_eq.
 Qed.
 
@@ -210,7 +206,6 @@ Proof.
   - solve_disjoint.
   - apply child_eq.
   - apply end_async.
-    apply leaf_def.
     apply child_eq.
 Qed.
 
@@ -246,7 +241,6 @@ Goal Reduce
   [].
 Proof.
   eapply end_async.
-  apply leaf_def.
   apply child_eq.
 Qed.
 End Example1.

@@ -175,30 +175,6 @@ Proof.
   - assumption.
 Qed.
 
-Inductive Leaf (t:tid) (f:finish) : Prop :=
-  leaf_def:
-    Child (t, Ready) f ->
-    Leaf t f.
-
-Lemma leaf_cons:
-  forall t l p,
-  Leaf t (Node l) ->
-  Leaf t (Node (p :: l)).
-Proof.
-  intros.
-  apply leaf_def.
-  inversion H.
-  auto using child_cons.
-Qed.
-
-Lemma leaf_eq:
-  forall t l,
-  Leaf t (Node ((t,Ready)::l)).
-Proof.
-  intros.
-  auto using leaf_def, child_eq.
-Qed.
-
 Inductive Sub (f:finish) (f':finish) : Prop :=
   sub_def:
     forall t,

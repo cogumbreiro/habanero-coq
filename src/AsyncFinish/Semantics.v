@@ -242,14 +242,14 @@ Import Syntax.Notations.
 Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
   | begin_async:
     forall t',
-    Leaf t f ->
+    Child (!t) f ->
     ~ In t' f ->
     Reduce f t (BEGIN_ASYNC t') (f |+ ! t')
   | end_async:
-    Leaf t f ->
+    Child (!t) f ->
     Reduce f t END_ASYNC (f |- t)
   | begin_finish:
-    Leaf t f ->
+    Child (!t) f ->
     Reduce f t BEGIN_FINISH (f |+ t <| [!t])
   | end_finish:
     Child (t <| []) f ->
