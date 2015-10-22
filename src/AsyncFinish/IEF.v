@@ -7,16 +7,10 @@ Require Import Aniceto.Graphs.Graph.
 Import FinishNotations.
 Local Open Scope finish_scope.
 
-Inductive ChildIn (t:tid) (f:finish) : Prop :=
-  in_def:
-    forall a,
-    Child (t, a) f ->
-    ChildIn t f.
-
 Inductive IEF (t:tid) (f:finish) : Prop :=
   enclosing_def:
-    (forall c, Sub c f -> ~ ChildIn t c) ->
-    ChildIn t f ->
+    (forall c, Sub c f -> ~ Registered t c) ->
+    Registered t f ->
     IEF t f.
 
 Inductive FID (f:finish) (t:tid): fid -> Prop :=
