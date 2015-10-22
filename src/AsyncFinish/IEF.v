@@ -10,7 +10,7 @@ Local Open Scope finish_scope.
 Inductive ChildIn (t:tid) (f:finish) : Prop :=
   in_def:
     forall a,
-    Child t a f ->
+    Child (t, a) f ->
     ChildIn t f.
 
 Inductive IEF (t:tid) (f:finish) : Prop :=
@@ -26,5 +26,5 @@ Inductive FID (f:finish) (t:tid): fid -> Prop :=
    | fid_cons:
      forall t' f' l,
      FID f' t l ->
-     Child t' (Blocked f') f ->
+     Child (t' <| f') f ->
      FID f t (t'::l) % list.

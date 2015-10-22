@@ -139,7 +139,7 @@ Inductive Enabled: task -> Prop :=
 
 Inductive Flat (f:finish) : Prop :=
   flat_def:
-    (forall t a, Child t a f -> Enabled a) ->
+    (forall t a, Child (t, a) f -> Enabled a) ->
     Flat f.
 
 Lemma flat_cons:
@@ -156,11 +156,14 @@ Proof.
   destruct (TID.eq_dec t0 t).
   - subst.
     apply child_inv_cons in H2.
-    destruct H2 as  [(?,?)|?].
-    + subst; assumption.
+    destruct H2 as [?|?].
+    + inversion H2; subst; assumption.
     + eauto using H1.
-  - apply child_neq in H2; auto.
-    eauto using H0.
+  - assert ((t0, a0) <> (t, a)). {
+      intuition.
+      inversion H3; subst; contradiction n; trivial.
+    }
+    eauto using child_neq.
 Qed.
 
 Lemma flat_nil:
@@ -244,28 +247,25 @@ Inductive Valid (f:finish) (t:tid) (o:op): Prop :=
 *)
 Lemma flat_reduces:
   forall f t o,
-  Check f t o ->
   Flat f ->
+  Check f t o ->
   exists f', Reduce f t o f'.
 Proof.
   intros.
-  inversion H.
-  inversion H1.
-  - subst.
-    exists (put f (t', Ready)).
-    apply begin_async; auto.
-  - exists (remove f t).
-    apply end_async; auto.
-  - subst.
-    exists (put f (t, Blocked (mk_finish t))).
+  destruct H0.
+  inversion H0; subst.
+  - exists (f |+ !t').
+    auto using begin_async.
+  - exists (f |- t).
+    auto using end_async.
+  - exists (f |+ t <| [!t]).
     auto using begin_finish.
-  - subst.
-    exists (put f (t, Ready)).
+  - exists (f |+ !t).
     apply end_finish.
-    inversion H0.
-    assert (Hx := H4).
-    apply H5 in H4.
-    inversion H4.
+    inversion H.
+    assert (Hx := H3).
+    apply H4 in Hx.
+    inversion Hx.
     subst.
     assumption.
 Qed.
@@ -280,25 +280,20 @@ Lemma reduce_cons:
   exists f', Reduce (Node (p :: l)) t o f'.
 Proof.
   intros.
-  inversion H0.
-  - subst.
-    exists (put (Node (p::l)) (t', Ready)).
+  inversion H0; subst.
+  - exists (Node (p :: l) |+ !t').
     apply begin_async.
     + auto using leaf_cons.
     + apply disjoint_inv_begin_async in H.
       rewrite E.notin_spec in *.
       assumption.
-  - subst.
-    exists (remove (Node (p::l)) t).
+  - exists (Node (p::l) |- t).
     auto using end_async, leaf_cons.
-  - subst.
-    exists (put (Node (p::l)) (t, Blocked (mk_finish t))).
+  - exists (Node (p::l) |+ t <| [!t]).
     auto using begin_finish, leaf_cons.
-  - subst.
-    exists ((put (Node (p::l)) (t, Ready))).
+  - exists (Node (p::l) |+ !t).
     auto using end_finish, child_cons.
-  - subst.
-    exists (put (Node (p::l)) (t', Blocked f'')).
+  - exists (put (Node (p::l)) (t', Blocked f'')).
     eauto using reduce_nested, child_cons.
 Qed.
 
@@ -311,16 +306,13 @@ Admitted.
 Lemma flat_inv_blocked:
   forall t f f',
   Flat f' ->
-  Child t (Blocked f) f' ->
+  Child (t <| f) f' ->
   f = [].
 Proof.
   intros.
   inversion H.
   assert (Hx: Enabled (Blocked f)). {
-    assert (Child t (Blocked f) f'). {
-      subst.
-      auto using child_eq.
-    }
+    compute in *;
     eauto.
   }
   inversion Hx.
@@ -331,7 +323,7 @@ Lemma flat_reduce:
   forall f,
   Nonempty f ->
   Flat f ->
-  (exists t, Child t (Blocked []) f) \/ (forall t, Registered t f -> Leaf t f).
+  (exists t, Child (t <| []) f) \/ (forall t, Registered t f -> Leaf t f).
 Proof.
   intros.
   induction f using finish_ind_strong.
@@ -344,7 +336,7 @@ Proof.
       inversion H1.
       assert (Hx := H2).
       apply child_inv_cons_nil in H2.
-      destruct H2; subst.
+      inversion H2; subst.
       auto using leaf_def.
     + assert (Hx : Flat (Node (p :: l))) by eauto using flat_inv_cons.
       assert (Hy : Nonempty (Node (p :: l)) ) by auto using nonempty_cons.
@@ -365,7 +357,7 @@ Proof.
   - clear IHf.
     assert (f = []). {
       remember (Node (_::_)) as f'.
-      assert (Child t (Blocked f) f'). {
+      assert (Child (t <| f) f'). {
         subst.
         auto using child_eq.
       }
@@ -380,8 +372,8 @@ Qed.
 Lemma child_fun:
   forall t f a a',
   Valid f ->
-  Child t a f ->
-  Child t a' f ->
+  Child (t, a) f ->
+  Child (t, a') f ->
   a = a'.
 Proof.
   intros.
@@ -412,11 +404,11 @@ Qed.
 Lemma child_impl_nleaf:
   forall t f,
   Valid f ->
-  Child t (Blocked []) f ->
+  Child (t <| []) f ->
   ~ Leaf t f.
 Proof.
   intros.
-  intuition.
+  unfold not; intros Hx; inversion Hx.
   apply child_fun with (a:=Ready) in H0; auto.
   inversion H0.
 Qed.
@@ -424,7 +416,7 @@ Qed.
 Lemma blocked_nil_impl_end_finish:
   forall f t o,
   Valid  f ->
-  Child t (Blocked []) f ->
+  Child (t <| []) f ->
   Check f t o ->
   o = END_FINISH.
 Proof.
@@ -437,30 +429,12 @@ Qed.
 Lemma blocked_nil_impl_redex:
   forall f t,
   Valid  f ->
-  Child t (Blocked []) f ->
+  Child (t <| []) f ->
   exists f', Reduce f t END_FINISH f'.
 Proof.
   intros.
   exists (f |+ !t).
   auto using end_finish.
-Qed.
-
-Lemma blocked_redex:
-  forall f t o,
-  Nonempty f ->
-  Flat f ->
-  Check f t o ->
-  exists f', Reduce f t o f'.
-Proof.
-  intros.
-  destruct H1.
-  inversion H1; subst.
-  - exists (f |+ !t').
-    auto using begin_async.
-  - exists (f |- t).
-    auto using end_async.
-  - exists (f |+ t <| !f ). 
-    
 Qed.
 
 

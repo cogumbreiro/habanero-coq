@@ -58,14 +58,14 @@ end.
 
 End STRONG_IND.
 
-Inductive Child (t:tid) (a:task) (f:finish) : Prop := 
+Inductive Child (p:l_task) (f:finish) : Prop := 
   child_def:
-    List.In (t, a) (get_tasks f) ->
-    Child t a f.
+    List.In p (get_tasks f) ->
+    Child p f.
 
 Lemma child_eq:
-  forall t a l,
-  Child t a (Node ((t, a) :: l)).
+  forall p l,
+  Child p (Node (p :: l)).
 Proof.
   intros.
   eapply child_def.
@@ -74,9 +74,9 @@ Proof.
 Qed.
 
 Lemma child_cons:
-  forall t f l p,
-  Child t f (Node l) ->
-  Child t f (Node (p :: l)).
+  forall p l p',
+  Child p (Node l) ->
+  Child p (Node (p' :: l)).
 Proof.
   intros.
   eapply child_def.
@@ -86,20 +86,17 @@ Proof.
 Qed.
 
 Lemma child_absurd_nil:
-  forall t f,
-  ~ Child t f (Node nil).
+  forall p,
+  ~ Child p (Node nil).
 Proof.
   intros.
   intuition.
-  inversion H.
-  simpl in *.
-  inversion H0.
 Qed.
 
 Lemma child_inv_cons:
-  forall t t' f f' l,
-  Child t f (Node ((t', f') :: l)) ->
-  (t' = t /\ f' = f) \/ Child t f (Node l).
+  forall p p' l,
+  Child p (Node (p' :: l)) ->
+  p' = p \/ Child p (Node l).
 Proof.
   intros.
   inversion H.
@@ -110,9 +107,9 @@ Proof.
 Qed.
 
 Lemma child_inv_cons_nil:
-  forall t f t' f',
-  Child t' f' (Node ((t, f) :: nil)) ->
-  t' = t /\ f' = f.
+  forall p p',
+  Child p (Node (p' :: nil)) ->
+  p' = p.
 Proof.
   intros.
   inversion H.
@@ -121,14 +118,14 @@ Proof.
 Qed.
 
 Lemma child_to_ina:
-  forall  t f l,
-  Child t f (Node l) -> 
-  InA (Map_TID.eq_key (elt:=task)) (t, f) l.
+  forall p l,
+  Child p (Node l) -> 
+  InA (Map_TID.eq_key (elt:=task)) p l.
 Proof.
   intros.
   destruct H.
   apply InA_alt.
-  exists (t,f).
+  exists p.
   intuition.
 Qed.
 
@@ -149,64 +146,38 @@ Proof.
 Qed.
 
 Lemma child_neq:
-  forall t f t' f' l,
-  t <> t' ->
-  Child t f (Node ((t', f') :: l)) ->
-  Child t f (Node l).
+  forall p p' l,
+  p <> p' ->
+  Child p (Node (p' :: l)) ->
+  Child p (Node l).
 Proof.
   intros.
   inversion H0.
   destruct H1.
   - (* absurd *)
-    inversion H1; contradiction H.
-    auto.
+    subst.
+    contradiction H; trivial.
   - auto using child_def.
 Qed.
 
-Lemma child_cons_perm:
-  forall l t f p,
-  Child t f (Node l) ->
-  Child t f (Node (p :: l)).
+Lemma child_inv_cons_neq:
+  forall p p' l,
+  p' <> p ->
+  Child p (Node (p' :: l)) ->
+  Child p (Node l).
 Proof.
   intros.
-  apply child_def.
-  simpl.
-  right.
-  inversion H.
-  auto.
-Qed.
-
-Lemma child_inv_cons_blocked_ready:
-  forall t f t' l,
-  Child t (Blocked f) (Node ((t', Ready) :: l)) ->
-  Child t (Blocked f) (Node l).
-Proof.
-  intros.
-  inversion H.
+  inversion H0.
   apply child_def.
   simpl in *.
-  destruct H0.
-  - inversion H0.
-  - assumption.
-Qed.
-
-Lemma child_inv_cons_ready_blocked:
-  forall t f t' l,
-  Child t Ready (Node ((t', Blocked f) :: l)) ->
-  Child t Ready (Node l).
-Proof.
-  intros.
-  inversion H.
-  apply child_def.
-  simpl in *.
-  destruct H0.
-  - inversion H0.
+  destruct H1.
+  - contradiction H; assumption.
   - assumption.
 Qed.
 
 Inductive Leaf (t:tid) (f:finish) : Prop :=
   leaf_def:
-    Child t Ready f ->
+    Child (t, Ready) f ->
     Leaf t f.
 
 Lemma leaf_cons:
@@ -231,13 +202,13 @@ Qed.
 Inductive Sub (f:finish) (f':finish) : Prop :=
   sub_def:
     forall t,
-    Child t (Blocked f) f' ->
+    Child (t, (Blocked f)) f' ->
     Sub f f'.
 
 Module Notations.
   Notation "[]" := (Node nil) : finish_scope.
   Notation "[ p ]" :=  (Node ( (p  :: nil ) )) :  finish_scope.
-  Infix " <| " :=  (fun (t:tid) (f:finish) => (t, Blocked f)) (at level 50, left associativity)  :  finish_scope.
+  Notation " t <| f" :=  ((t, Blocked f)) (at level 50, left associativity)  :  finish_scope.
   Notation "! t" :=  (t, Ready) (at level 60)   :  finish_scope.
   Notation " [ x | .. | y ] " := (Node ((cons x .. (cons y nil) ..) )) : finish_scope.
 End Notations.

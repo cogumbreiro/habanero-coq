@@ -6,7 +6,7 @@ Require Import Coq.Lists.List.
 Inductive Registered (t:tid) (f:finish) : Prop :=
   registered_def:
     forall a,
-    Child t a f ->
+    Child (t, a) f ->
     Registered t f.
 
 Lemma registered_cons:
@@ -46,9 +46,10 @@ Proof.
   intros.
   inversion H.
   apply child_inv_cons in H0.
-  destruct H0 as [(?,?)|?]; intuition.
-  right.
-  eauto using registered_def.
+  destruct H0 as [Hx|?].
+  - inversion Hx; subst; clear Hx.
+    intuition.
+  - eauto using registered_def.
 Qed.
 
 Import Rel.
@@ -251,12 +252,12 @@ Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
     Leaf t f ->
     Reduce f t BEGIN_FINISH (f |+ t <| [!t])
   | end_finish:
-    Child t (Blocked []) f ->
+    Child (t <| []) f ->
     Reduce f t END_FINISH (f |+ !t)
   | reduce_nested:
     forall t' o f' f'',
     Disjoint f o ->
-    Child t' (Blocked f') f ->
+    Child (t' <| f') f ->
     Reduce f' t o f'' ->
     Reduce f t o (f |+ t' <| f'').
 

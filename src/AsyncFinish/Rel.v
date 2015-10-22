@@ -191,7 +191,11 @@ Lemma sub_inv_cons_ready:
 Proof.
   intros.
   inversion H.
-  eauto using sub_def, child_inv_cons_blocked_ready.
+  assert ((t,Ready) <> (t0, Blocked f)). {
+    intuition.
+    inversion H1.
+  }
+  eauto using sub_def, child_neq.
 Qed.
 
 Lemma sub_eq:
@@ -284,7 +288,7 @@ Lemma sub_cons:
 Proof.
   intros.
   inversion H.
-  eauto using sub_def, child_cons_perm.
+  eauto using sub_def, child_cons.
 Qed.
 
 Lemma gt_cons:
