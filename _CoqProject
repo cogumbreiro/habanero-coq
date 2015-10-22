@@ -13,10 +13,14 @@ src/Phasers/Typesystem.v
 src/ReverseSemaphore.v
 src/Progress.v
 src/AsyncFinish/Lang.v
+src/AsyncFinish/Syntax.v
+src/AsyncFinish/Rel.v
+src/AsyncFinish/Semantics.v
 src/AsyncFinish/IEF.v
 src/AsyncFinish/Find.v
 src/AsyncFinish/LangExtra.v
 src/AsyncFinish/Examples.v
 src/AsyncFinish/Typesystem.v
-src/All.v
+src/AsyncFinish/Progress.v
+#src/All.v
 
