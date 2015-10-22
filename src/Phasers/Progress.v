@@ -1,3 +1,5 @@
+Set Implicit Arguments.
+
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Lists.SetoidList.
@@ -50,7 +52,7 @@ Theorem has_smallest:
   Smallest t ts.
 Proof.
   intros.
-  destruct (wtid_has_smallest _ H H0) as (x, Hx).
+  destruct (wtid_has_smallest H H0) as (x, Hx).
   unfold Rel.Smallest in *.
   unfold Rel.Unrelated in *.
   unfold wtid_le in *.
@@ -195,7 +197,7 @@ Proof.
     unfold IsA, tids in *.
     auto using pm_tids_spec_1.
   }
-  assert (Hsmall := has_smallest _ H Hisa).
+  assert (Hsmall := has_smallest H Hisa).
   destruct Hsmall as (t, Hsmall).
   exists t.
   intuition.
@@ -350,20 +352,6 @@ Proof.
   tauto.
 Qed.
 
-Lemma wait_all_dec:
-  forall i,
-  { i = WAIT_ALL } + { i <> WAIT_ALL }.
-Proof.
-  intros.
-  remember (eq_wait_all i).
-  symmetry in Heqb.
-  destruct b.
-  - rewrite eq_wait_all_true in *.
-    auto.
-  - rewrite eq_wait_all_false in *.
-    auto.
-Qed.
-
 Lemma all_sig:
   (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
   AllSignalled pm.
@@ -388,9 +376,23 @@ Proof.
  eauto using Hin.
 Qed.
 
+Lemma nonempty_to_tids_not_nil:
+  ~ Map_TID.Empty reqs ->
+  tids <> nil.
+Proof.
+  intros.
+  apply Map_TID_Extra.nonempty_in in H.
+  destruct H as (t, Hin).
+  intuition.
+  apply reqs_spec_1 in Hin.
+  unfold tids in *.
+  apply pm_tids_spec_2 in Hin.
+  rewrite H in *.
+  inversion Hin.
+Qed.
 
 Lemma progress_blocking:
-  tids <> nil ->
+  ~ Map_TID.Empty reqs ->
   (forall t o, Map_TID.MapsTo t o reqs -> negb (eq_wait_all o) = false) ->
   exists t i,  Map_TID.MapsTo t i reqs /\ P.CanReduce (Reduce pm) t i.
 Proof.
@@ -402,7 +404,10 @@ Proof.
     rewrite negb_eq_wait_all in *.
     assumption.
   }
-  destruct (has_unblocked _ pm_spec AllSig H) as (t, (Hin, Hred)).
+  assert (Hnil : tids <> nil). {
+    auto using nonempty_to_tids_not_nil.
+  }
+  destruct (has_unblocked pm_spec AllSig Hnil) as (t, (Hin, Hred)).
   exists t.
   assert (In t pm). {
     auto using pm_tids_spec_1.
@@ -422,23 +427,6 @@ Proof.
   intuition.
 Qed.
 
-Theorem progress_wait_all_notin:
-  forall t,
-  ~ In t pm ->
-  exists pm', Reduce pm t WAIT_ALL pm'.
-Proof.
-  intros.
-  exists (mapi t wait pm).
-  eapply reduce_wait_all.
-  intros.
-  destruct (Map_TID_Extra.in_dec tid_eq_rw t ph).
-  - assert (In t pm). {
-      eauto using in_def.
-    }
-    contradiction H1.
-  - auto using sync_skip.
-Qed.
-
 Lemma tids_nonempty:
   forall t,
   In t pm -> tids <> nil.
@@ -450,57 +438,8 @@ Proof.
   assumption.
 Qed.
 
-Theorem progress_blocked':
-  ~ Map_TID.Empty reqs ->
-  (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
-  exists t o,
-  Map_TID.MapsTo t o reqs /\ P.CanReduce (Reduce pm) t o.
-Proof.
-  intros.
-  assert (AllSig: AllSignalled pm). {
-    auto using all_sig.
-  }
-  assert (Hmt: exists t, Map_TID.In t reqs). {
-    apply Map_TID_Extra.nonempty_in; auto.
-  }
-  destruct Hmt as (t, Hin).
-  assert (Hn: tids <> nil). {
-    apply reqs_spec_1 in Hin.
-    eauto using tids_nonempty.
-  }
-  rename t into t'.
-  clear Hin.
-  destruct (has_unblocked _ pm_spec AllSig Hn) as (t, (Hin, Hred)).
-  exists t.
-  assert (In t pm). {
-      auto using pm_tids_spec_1.
-    }
-    exists WAIT_ALL.
-    assert (Map_TID.MapsTo t WAIT_ALL reqs). {
-      apply reqs_spec_1 in H1.
-      destruct H1 as (o, Hmt).
-      assert (Heq : o = WAIT_ALL). {
-        apply H0 in Hmt.
-        assumption.
-      }
-      subst.
-      auto.
-    }
-    intuition.
-Qed.
-(*
-Lemma progress_unblocking:
-  forall (t : tid) (o : op),
-  Check t o pm ->
-  eq_wait_all o = false -> exists s' : phasermap, Reduce pm t o s'.
-Proof.
-  intros.
-  rewrite eq_wait_all_false in *.
-  auto using progress_unblocking_simple.
-Qed.
-*)
 Theorem progress:
-  tids <> nil ->
+  ~ Map_TID.Empty reqs ->
   exists t i,
   Map_TID.MapsTo t i reqs /\
   P.CanReduce (Reduce pm) t i.
@@ -518,87 +457,3 @@ Proof.
   - auto using progress_blocking.
 Qed.
 End PROGRESS.
-
-Set Implicit Arguments.
-
-
-Module PhProg.
-Require Import HJ.Phasers.Lang.
-Require Import HJ.Phasers.PhaseDiff.
-Require Import HJ.Phasers.Typesystem.
-Require Import HJ.Progress.
-Module R := HJ.Progress.Request.
-
-Section  XP.
-Variable pm:phasermap.
-Variable is_valid: Valid pm.
-Variable reqs : Map_TID.t op.
-Let Check' (t:tid) (o:op) := Check pm  t o.
-Let In' (t:tid) := In t pm.
-Variable reqs_spec :
-  HJ.Progress.RequestSpec.request_spec reqs
-  Check'
-  In'.
-
-Lemma pm_prog:
-  @P.progress_spec op reqs Check' phasermap (Reduce pm) eq_wait_all.
-Proof.
-  intros.
-  refine (
-    @P.mk_progress_spec op reqs Check' phasermap
-      (Reduce pm) eq_wait_all _ _ ); auto.
-  - intros.
-    rewrite eq_wait_all_false in *.
-    apply progress_unblocking_simple; auto.
-  - intros.
-    apply progress_blocked'; auto.
-    + apply (P.RequestSpec.reqs_in reqs_spec).
-    + apply (P.RequestSpec.reqs_check reqs_spec).
-    + intros.
-      apply H0 in H1.
-      rewrite eq_wait_all_true in *.
-      assumption.
-Defined.
-Import HJ.Progress.
-Lemma progress:
-  ~ Map_TID.Empty reqs ->
-  (** There is a task that can reduce. *)
-  exists t o,
-  Map_TID.MapsTo t o reqs /\ P.CanReduce (Reduce pm) t o.
-Proof.
-  intros.
-  eauto using main_progress, pm_prog. 
-Qed.
-End XP.
-End PhProg.
-
-(*
-Section State.
-Structure pstate := mk_pstate {
-  get_state : phasermap;
-  get_requests: Map_TID.t op;
-  RequestsSpec: forall t : tid,
-  In t get_state <-> Map_TID.In t get_requests;
-  ValidRequests: forall t i,
-        Map_TID.MapsTo t i get_requests -> Check t i get_state;
-  IsValid: Valid get_state
-}.
-
-Definition Reduce s t o s':= Map_TID.MapsTo t o (get_requests s) /\
-    S.Reduce (get_state s) t o s'.
-
-Definition Nonempty s := ~ Map_TID.Empty (get_requests s).
-
-Theorem s_progress:
-  forall (s:pstate),
-  Nonempty s ->
-  exists t i,
-  P.CanReduce (Reduce s) t i.
-Proof.
-  intros.
-  Check PhProg.progress (IsValid s).
-  destruct (progress (get_requests s) (get_state s) (IsValid s) (RequestsSpec s) (ValidRequests s)).
-  inversion H.
-  
-Qed.
-*)
