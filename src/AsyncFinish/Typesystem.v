@@ -15,6 +15,17 @@ Proof.
   auto using NoDupA_nil, is_map_def.
 Qed.
 
+Lemma is_map_inv_cons:
+  forall p l,
+  IsMap (Node (p :: l)) ->
+  IsMap (Node l).
+Proof.
+  intros.
+  inversion H; subst.
+  inversion H1; subst.
+  auto using is_map_def.
+Qed.
+
 Inductive Valid: finish -> Prop :=
   | valid_nil:
     Valid (Node nil)
@@ -83,12 +94,6 @@ Proof.
       inversion H4.
       assumption.
 Qed.
-
-Inductive Registered (t:tid) (f:finish) : Prop :=
-  | registered_def:
-    forall a,
-    Child t a f ->
-    Registered t f.
 
 Inductive Typesystem (f:finish) (t:tid) : op -> Prop :=
   | check_begin_async:
