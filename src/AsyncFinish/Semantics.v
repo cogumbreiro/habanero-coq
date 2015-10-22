@@ -27,7 +27,6 @@ Proof.
   eauto using registered_def, child_eq.
 Qed.
 
-
 Lemma registered_absurd_nil:
   forall t,
   ~ Registered t (Node nil).
@@ -37,6 +36,19 @@ Proof.
   inversion H.
   apply child_absurd_nil in H0.
   assumption.
+Qed.
+
+Lemma registered_inv_cons:
+  forall t t' a l,
+  Registered t (Node ((t', a) :: l)) ->
+  t = t' \/ Registered t (Node l).
+Proof.
+  intros.
+  inversion H.
+  apply child_inv_cons in H0.
+  destruct H0 as [(?,?)|?]; intuition.
+  right.
+  eauto using registered_def.
 Qed.
 
 Import Rel.

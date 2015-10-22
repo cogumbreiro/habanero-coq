@@ -220,6 +220,14 @@ Proof.
   auto using child_cons.
 Qed.
 
+Lemma leaf_eq:
+  forall t l,
+  Leaf t (Node ((t,Ready)::l)).
+Proof.
+  intros.
+  auto using leaf_def, child_eq.
+Qed.
+
 Inductive Sub (f:finish) (f':finish) : Prop :=
   sub_def:
     forall t,
