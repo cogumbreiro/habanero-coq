@@ -161,6 +161,11 @@ Definition remove (f:finish) (t:tid) :=
 Definition put (f:finish) (p:l_task) : finish :=
   Node (p::(get_tasks (remove f (fst p) ))).
 
+Module Notations.
+  Infix " |+ " :=  (put) (at level 60, right associativity)  :  finish_scope.
+  Infix " |- " :=  (remove) (at level 60, right associativity)  :  finish_scope.
+End Notations.
+
 (**
   In async/finish all operations are blocking, because a task
   might be stuck in a finish. *)
@@ -231,29 +236,27 @@ Proof.
     assumption.
 Qed.
 
+Import Notations.
+Import Syntax.Notations.
 Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
   | begin_async:
     forall t',
     Leaf t f ->
     ~ In t' f ->
-    Reduce f t (BEGIN_ASYNC t') (put f (t', Ready))
+    Reduce f t (BEGIN_ASYNC t') (f |+ ! t')
   | end_async:
     Leaf t f ->
-    Reduce f t END_ASYNC (remove f t)
+    Reduce f t END_ASYNC (f |- t)
   | begin_finish:
     Leaf t f ->
-    Reduce f t BEGIN_FINISH (put f (t, Blocked (mk_finish t)))
+    Reduce f t BEGIN_FINISH (f |+ t <| [!t])
   | end_finish:
-    Child t (Blocked (Node nil)) f ->
-    Reduce f t END_FINISH (put f (t, Ready))
+    Child t (Blocked []) f ->
+    Reduce f t END_FINISH (f |+ !t)
   | reduce_nested:
     forall t' o f' f'',
     Disjoint f o ->
     Child t' (Blocked f') f ->
     Reduce f' t o f'' ->
-    Reduce f t o (put f (t', Blocked f'')).
+    Reduce f t o (f |+ t' <| f'').
 
-Module Notations.
-  Infix " |+ " :=  (put) (at level 60, right associativity)  :  finish_scope.
-  Infix " |- " :=  (remove) (at level 60, right associativity)  :  finish_scope.
-End Notations.
