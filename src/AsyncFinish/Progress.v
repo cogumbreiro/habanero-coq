@@ -64,38 +64,6 @@ Proof.
   subst; assumption.
 Qed.
 
-
-(*
-Inductive ParentOf (t:tid) (t':tid) (f:finish) : Prop :=
-  | parent_of_def:
-    forall f' a,
-    Child t' a f' ->
-    Child t (Blocked f') f ->
-    ParentOf t t' f.
-
-Inductive AncestorOf (t:tid) (t':tid) (f:finish) : Prop :=
-  | ancestor_of_eq:
-    ParentOf t t' f ->
-    AncestorOf t t' f
-
-  | ancestor_of_cons:
-    forall t'' f',
-    AncestorOf t'' t' f' ->
-    Child t (Blocked f') f ->
-    AncestorOf t t' f.
-*)
-(*
-
-Module Progress.
-
-(**
-  Any unblocked 
-  The proof for this lemma is trivial, by inversion of proposition [Check].
-  *)
-
-Require Import HJ.Progress.
-*)
-
 Inductive Nonempty : finish -> Prop :=
   nonempty_def:
     forall t f,
@@ -241,8 +209,9 @@ Proof.
       eauto using any_cons, any_def.
 Qed.
 
-Require Import HJ.AsyncFinish.Semantics. 
-
+Require Import HJ.AsyncFinish.Semantics.
+Require Import HJ.AsyncFinish.Typesystem.
+(*
 Inductive Registered (t:tid) (f:finish) : Prop :=
   | registered_def:
     forall a,
@@ -272,10 +241,10 @@ Inductive Valid (f:finish) (t:tid) (o:op): Prop :=
     Typesystem f t o ->
     Disjoint f o ->
     Valid f t o.
-
+*)
 Lemma flat_reduces:
   forall f t o,
-  Valid f t o ->
+  Check f t o ->
   Flat f ->
   exists f', Reduce f t o f'.
 Proof.
@@ -333,6 +302,139 @@ Proof.
     eauto using reduce_nested, child_cons.
 Qed.
 
+Lemma flat_inv_cons:
+  forall p p' l,
+  Flat (Node (p :: p' :: l)) ->
+  Flat (Node (p' :: l)).
+Admitted.
+
+Lemma flat_inv_blocked:
+  forall t f f',
+  Flat f' ->
+  Child t (Blocked f) f' ->
+  f = [].
+Proof.
+  intros.
+  inversion H.
+  assert (Hx: Enabled (Blocked f)). {
+    assert (Child t (Blocked f) f'). {
+      subst.
+      auto using child_eq.
+    }
+    eauto.
+  }
+  inversion Hx.
+  trivial.
+Qed.
+
+Lemma flat_reduce:
+  forall f,
+  Nonempty f ->
+  Flat f ->
+  (exists t, Child t (Blocked []) f) \/ (forall t, Registered t f -> Leaf t f).
+Proof.
+  intros.
+  induction f using finish_ind_strong.
+  - inversion H.
+    apply in_absurd_nil in H1.
+    inversion H1.
+  - destruct l.
+    + right.
+      intros.
+      inversion H1.
+      assert (Hx := H2).
+      apply child_inv_cons_nil in H2.
+      destruct H2; subst.
+      auto using leaf_def.
+    + assert (Hx : Flat (Node (p :: l))) by eauto using flat_inv_cons.
+      assert (Hy : Nonempty (Node (p :: l)) ) by auto using nonempty_cons.
+      apply IHf in Hy; auto.
+      clear IHf Hx.
+      destruct Hy  as  [(t',?)|?].
+      * left; exists t'.
+        auto using child_cons.
+      * right.
+        intros.
+        apply registered_inv_cons in H2.
+        destruct H2.
+        {
+          subst.
+          auto using leaf_eq.
+        }
+        auto using leaf_cons.
+  - clear IHf.
+    assert (f = []). {
+      remember (Node (_::_)) as f'.
+      assert (Child t (Blocked f) f'). {
+        subst.
+        auto using child_eq.
+      }
+      eauto using flat_inv_blocked.
+    }
+    subst.
+    left.
+    exists t.
+    auto using child_eq.
+Qed.
+
+Lemma child_fun:
+  forall t f a a',
+  Valid f ->
+  Child t a f ->
+  Child t a' f ->
+  a = a'.
+Proof.
+  intros.
+  apply valid_impl_is_map in H.
+  inversion H.
+  subst.
+  destruct H0, H1.
+  simpl in *.
+  induction l.
+  { inversion H0. }
+  destruct H0, H1.
+  - destruct a0; inversion H0; inversion H1; subst; auto.
+  - destruct a0; inversion H0; subst; clear H0.
+    inversion H2.
+    subst.
+    contradiction H4.
+    apply Map_TID_Extra.eq_key_in_to_ina with (t) (a'); auto.
+  - destruct a0; inversion H1; subst; clear H1.
+    inversion H2.
+    subst.
+    contradiction H4.
+    apply Map_TID_Extra.eq_key_in_to_ina with (t) (a); auto.
+  - inversion H2; subst.
+    apply is_map_inv_cons in H.
+    auto.
+Qed.
+
+Lemma child_impl_nleaf:
+  forall t f,
+  Valid f ->
+  Child t (Blocked []) f ->
+  ~ Leaf t f.
+Proof.
+  intros.
+  intuition.
+  apply child_fun with (a:=Ready) in H0; auto.
+  inversion H0.
+Qed.
+
+Lemma blocked_ready:
+  forall f t o,
+  Valid  f ->
+  Child t (Blocked []) f ->
+  Check f t o ->
+  o = END_FINISH.
+Proof.
+  intros.
+  inversion H1.
+  inversion H2; (try (apply child_impl_nleaf in H4; auto; tauto)).
+  trivial.
+Qed.
+
+(* XXXXXXXXXXXXXXXXXXXXXXXXXXX 
 Lemma reduce_any:
   forall (f f':finish) (t:tid) (o:op),
   Disjoint f o ->
@@ -375,161 +477,5 @@ Proof.
       destruct f''.
       eauto using reduce_cons.
 Qed.
-
-Inductive EnclosingFinish (t:tid) (f:finish) : Prop :=
-  | enclosing_finish_ready:
-    Child t Ready f ->
-    EnclosingFinish t f
-  | enclosing_finish_blocked:
-    forall f',
-    ~ Registered t f' ->
-    Child t (Blocked f') f ->
-    EnclosingFinish t f.
-
-Definition GlobalValid (t:tid) (o:op) : finish -> Prop :=
-  Any (fun (f:finish) => EnclosingFinish t f -> Valid f t o).
-
-(*
-Inductive MapsTo: list tid -> finish -> finish -> Prop :=
-  | maps_to_child:
-    forall t f f',
-    Child t f f' ->
-    MapsTo (t::nil) f f'
-  | maps_to_ancestor:
-    forall l f fc t f',
-    MapsTo l f fc ->
-    Child t fc f' ->
-    MapsTo (t::l) f f'.
-
-Lemma maps_to_eq:
-  forall t f l,
-  MapsTo (t::nil) f (Node ((t, f) :: l)).
-Proof.
-  intros.
-  auto using maps_to_child, child_eq.
-Qed.
-
-Lemma maps_to_leaf_absurd:
-  forall l f,
-  MapsTo l f leaf -> False.
-Proof.
-  intros.
-  inversion H; (
-    subst;
-    eauto using child_leaf_absurd).
-Qed.
-
-Lemma maps_to_cons:
-  forall t f f' l l',
-  MapsTo l' f' f ->
-  MapsTo (cons t l') f' (Node ((t, f) :: l)).
-Proof.
-  intros.
-  eauto using maps_to_ancestor, child_eq.
-Qed.
-
-Lemma maps_to_cons_perm:
-  forall l' f p l,
-  MapsTo l' f (Node l) ->
-  MapsTo l' f (Node (p :: l)%list).
-Proof.
-  intros.
-  inversion H.
-  - subst.
-    auto using maps_to_child, child_cons_perm.
-  - subst.
-    eauto using maps_to_ancestor, child_cons_perm.
-Qed.
-
-Lemma maps_to_inv_child:
-  forall t f f',
-  MapsTo (t :: nil) f f' ->
-  Child t f f'.
-Proof.
-  intros.
-  inversion H.
-  - subst.
-    assumption.
-  - subst.
-    inversion H2.
-Qed.
-
-Lemma maps_to_inv_cons_nil:
-  forall t t' f f',
-  MapsTo (t::nil) f (Node ((t', f') :: nil)) ->
-  t' = t /\ f' = f.
-Proof.
-  intros.
-  inversion H.
-  - subst.
-    apply child_inv_cons_nil in H1.
-    destruct H1.
-    subst.
-    intuition.
-  - subst.
-    inversion H2.
-Qed.
-
-Lemma maps_to_inv_leaf:
-  forall l f t,
-  MapsTo l f (Node ((t, leaf):: nil))%list ->
-  l = (t::nil)%list /\ f = leaf.
-Proof.
-  intros.
-  inversion H.
-  - subst.
-    apply child_inv_cons_nil in H0.
-    destruct H0.
-    subst.
-    intuition.
-  - subst.
-    apply child_inv_cons_nil in H1.
-    destruct H1; subst.
-    apply maps_to_leaf_absurd in H0.
-    inversion H0.
-Qed.
-
-Inductive First : tid -> list tid -> Prop :=
-  | first_eq:
-    forall t,
-    First t (t :: nil)
-  | first_cons:
-    forall t l t',
-    First t l ->
-    First t (t' :: l)%list.
-
-Lemma first_inv_eq:
-  forall t t',
-  First t (t' :: nil) ->
-  t =  t'.
-Proof.
-  intros.
-  inversion H.
-  - auto.
-  - inversion H2.
-Qed.
-
-(*
-Lemma maps_to_inv_cons_nodupa:
-  forall t f l l' f',
-  NoDupA (Map_TID.eq_key (elt:=finish)) ((t, f) :: l) ->
-  MapsTo l' f' (Node ((t, f) :: l)) ->
-  First t l' ->
-  f = f' /\ l' = (t::nil).
-Proof.
-  intros.
-  inversion H.
-  subst.
-  inversion H0.
-  - subst.
-    apply first_inv_eq in H1.
-    subst.
-    apply child_inv_cons_nodupa in H2; auto.
-  - subst.
-    destruct l0.
-    { inversion H2. }
-    inversion H1.
-    subst.
-Qed.
 *)
-*)
+
