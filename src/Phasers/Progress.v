@@ -10,11 +10,9 @@ Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.LEDec.
 Require HJ.Phasers.Rel.
 Require Import HJ.Phasers.TransDiff.
-Require HJ.Progress.
 Require Import HJ.Phasers.Typesystem.
 
 Module S := HJ.Phasers.Lang.
-Module P := HJ.Progress.
 
 Open Local Scope Z.
 
@@ -188,7 +186,7 @@ Qed.
 Theorem has_unblocked:
   tids <> nil ->
   exists t, List.In t tids /\
-  P.CanReduce (Reduce pm) t WAIT_ALL.
+  exists m, Reduce pm t WAIT_ALL m.
 Proof.
   intros.
   assert (Hisa : Forall IsA tids). {
@@ -249,7 +247,7 @@ Lemma progress_unblocking_simple:
   Valid pm ->
   Check pm t i ->
   i <> WAIT_ALL ->
-  P.CanReduce (Reduce pm) t i.
+  exists m, Reduce pm t i m.
 Proof.
   intros.
   destruct i.
@@ -267,7 +265,8 @@ Proof.
   - exists (mapi t signal pm).
     auto using reduce_signal_all.
   - contradiction H1; auto.
-  - eauto using P.can_reduce_def, reduce_drop_all.
+  - exists (drop_all t pm).
+    auto using reduce_drop_all.
   - inversion H0; subst; clear H0.
     clear H1.
     rename t0 into t'.
@@ -290,13 +289,30 @@ Proof.
    auto using reduce_async.
 Qed.
 
+Structure state := {
+  get_requests : Map_TID.t op;
+  get_state : phasermap;
+  IsValid : Valid get_state;
+  reqs_spec_1: forall t, In t get_state -> Map_TID.In t get_requests;
+  reqs_spec_2: forall t, Map_TID.In t get_requests ->  In t get_state;
+  reqs_spec_3: forall t i, Map_TID.MapsTo t i get_requests -> Check get_state t i
+}.
 
+Inductive RReduce (s:state) (t:tid) (o:op) (m:phasermap) : Prop :=
+  r_reduce_def:
+    Map_TID.MapsTo t o (get_requests s) ->
+    Reduce (get_state s) t o m ->
+    RReduce s t o m.
+
+Variable s:state.
+
+(*
 Variable reqs: Map_TID.t op.
 Variable pm: phasermap.
 Variable pm_spec: Valid pm.
-
+*)
 Require Import HJ.Phasers.PhaseDiff.
-
+(*
 Variable reqs_spec_1:
   forall t,
   In t pm <-> Map_TID.In t reqs.
@@ -305,8 +321,11 @@ Variable reqs_spec_2:
   forall t i,
   Map_TID.MapsTo t i reqs ->
   Check pm t i.
-
+*)
+Notation pm := (get_state s).
+Notation reqs := (get_requests s).
 Let tids := pm_tids pm.  
+
 
 Definition eq_wait_all (i:op) :=
   match i with
@@ -314,7 +333,7 @@ Definition eq_wait_all (i:op) :=
     | _ => false
   end.
 
-Lemma eq_wait_all_true:
+Let eq_wait_all_true:
   forall i,
   eq_wait_all i = true <->
   i = WAIT_ALL.
@@ -327,7 +346,7 @@ Proof.
     try (inversion H || auto)).
 Qed.
 
-Lemma eq_wait_all_false:
+Let eq_wait_all_false:
   forall i,
   eq_wait_all i = false <->
   i <> WAIT_ALL.
@@ -362,7 +381,7 @@ Proof.
     eauto using in_def, Map_TID_Extra.mapsto_to_in.
   }
   assert (Hcheck : Check pm t WAIT_ALL). {
-    apply reqs_spec_2.
+    apply reqs_spec_3.
     apply reqs_spec_1 in Hin.
     destruct Hin as (?, Hmt).
     assert (Heq : x = WAIT_ALL). {
@@ -384,7 +403,7 @@ Proof.
   apply Map_TID_Extra.nonempty_in in H.
   destruct H as (t, Hin).
   intuition.
-  apply reqs_spec_1 in Hin.
+  apply reqs_spec_2 in Hin.
   unfold tids in *.
   apply pm_tids_spec_2 in Hin.
   rewrite H in *.
@@ -394,7 +413,7 @@ Qed.
 Lemma progress_blocking:
   ~ Map_TID.Empty reqs ->
   (forall t o, Map_TID.MapsTo t o reqs -> negb (eq_wait_all o) = false) ->
-  exists t i,  Map_TID.MapsTo t i reqs /\ P.CanReduce (Reduce pm) t i.
+  exists t i m, RReduce s t i m.
 Proof.
   intros.
   assert (AllSig: AllSignalled pm). {
@@ -407,12 +426,13 @@ Proof.
   assert (Hnil : tids <> nil). {
     auto using nonempty_to_tids_not_nil.
   }
-  destruct (has_unblocked pm_spec AllSig Hnil) as (t, (Hin, Hred)).
+  destruct (has_unblocked (IsValid s) AllSig Hnil) as (t, (Hin, (m, Hred))).
   exists t.
   assert (In t pm). {
     auto using pm_tids_spec_1.
   }
   exists WAIT_ALL.
+  exists m.
   assert (Map_TID.MapsTo t WAIT_ALL reqs). {
     apply reqs_spec_1 in H1.
     destruct H1 as (o, Hmt).
@@ -424,7 +444,7 @@ Proof.
     subst.
     auto.
   }
-  intuition.
+  auto using r_reduce_def.
 Qed.
 
 Lemma tids_nonempty:
@@ -440,20 +460,24 @@ Qed.
 
 Theorem progress:
   ~ Map_TID.Empty reqs ->
-  exists t i,
-  Map_TID.MapsTo t i reqs /\
-  P.CanReduce (Reduce pm) t i.
+  exists t i m,
+  RReduce s t i m.
 Proof.
   intros.
   destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:op) =>  negb (eq_wait_all o))); auto with *.
   - destruct e as (t, (o, (Hmt, Hneq))).
     exists t; exists o.
     intuition.
-    apply progress_unblocking_simple; auto.
-    rewrite <- eq_wait_all_false.
-    destruct (eq_wait_all o).
-    + inversion Hneq.
-    + trivial.
+    assert (R : exists m, Reduce pm t o m). {
+      apply Bool.negb_true_iff in Hneq.
+      rewrite eq_wait_all_false in Hneq.
+      auto using progress_unblocking_simple, IsValid, reqs_spec_3.
+    }
+    destruct R as (m, R).
+    exists m.
+    auto using r_reduce_def.
   - auto using progress_blocking.
 Qed.
 End PROGRESS.
+
+
