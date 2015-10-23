@@ -43,6 +43,38 @@ Inductive Valid: finish -> Prop :=
     ~ In t (Node l) ->
     Valid (Node ((t <| f)::l)).
 
+
+Lemma child_fun:
+  forall t f a a',
+  IsMap f ->
+  Child (t, a) f ->
+  Child (t, a') f ->
+  a = a'.
+Proof.
+  intros.
+  inversion H.
+  subst.
+  destruct H0, H1.
+  simpl in *.
+  induction l.
+  { inversion H0. }
+  destruct H0, H1.
+  - destruct a0; inversion H0; inversion H1; subst; auto.
+  - destruct a0; inversion H0; subst; clear H0.
+    inversion H2.
+    subst.
+    contradiction H4.
+    apply Map_TID_Extra.eq_key_in_to_ina with (t) (a'); auto.
+  - destruct a0; inversion H1; subst; clear H1.
+    inversion H2.
+    subst.
+    contradiction H4.
+    apply Map_TID_Extra.eq_key_in_to_ina with (t) (a); auto.
+  - inversion H2; subst.
+    apply is_map_inv_cons in H.
+    auto.
+Qed.
+
 Require Import HJ.AsyncFinish.LangExtra.
 
 Lemma in_to_ina:
