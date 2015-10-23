@@ -83,6 +83,7 @@ Inductive Enabled: task -> Prop :=
 Inductive Flat (f:finish) : Prop :=
   flat_def:
     (forall t a, Child (t, a) f -> Enabled a) ->
+    Nonempty f ->
     Flat f.
 
 Lemma flat_cons:
@@ -98,24 +99,29 @@ Proof.
   intros.
   destruct (TID.eq_dec t0 t).
   - subst.
-    apply child_inv_cons in H2.
-    destruct H2 as [?|?].
-    + inversion H2; subst; assumption.
+    apply child_inv_cons in H3.
+    destruct H3 as [?|?].
+    + inversion H3; subst; assumption.
     + eauto using H1.
   - assert ((t0, a0) <> (t, a)). {
       intuition.
-      inversion H3; subst; contradiction n; trivial.
+      inversion H4; subst; contradiction n; trivial.
     }
     eauto using child_neq.
+  - auto using nonempty_cons.
 Qed.
 
-Lemma flat_nil:
-  Flat (Node nil).
+Lemma flat_eq:
+  forall t a,
+  Enabled a ->
+  Flat [(t,a)].
 Proof.
-  apply flat_def.
   intros.
-  apply child_absurd_nil in H.
-  inversion H.
+  apply flat_def.
+  - intros.
+    apply child_inv_cons_nil in H0; inversion H0; subst.
+    assumption.
+  - auto using nonempty_cons.
 Qed.
 
 Lemma nonempty_dec:
@@ -130,7 +136,7 @@ Proof.
     apply nonempty_cons.
 Qed.
 
-Lemma find_flat:
+Lemma find_flat_alt:
   forall (f:finish),
   Nonempty f ->
   Any Flat f.
@@ -143,16 +149,22 @@ Proof.
     destruct (nonempty_dec (Node l)).
     + apply IHf in n; clear IHf.
       auto using any_cons_rhs, flat_cons, enabled_ready.
-    + inversion e.
-      subst.
-      eauto using any_cons_rhs, any_def, le_refl, flat_nil, flat_cons, enabled_ready.
-  - destruct f  as (l').
-    destruct l'.
-    + eauto using any_cons, any_def, le_refl, flat_nil.
-    + assert (Hx : Nonempty (Node (p :: l'))). {
-        apply nonempty_cons.
-      }
-      eauto using any_cons, any_def.
+    + inversion e; subst; clear e.
+      eauto using any_cons_rhs, any_def, le_refl, flat_eq, flat_cons, enabled_ready.
+  - destruct (nonempty_dec f).
+    { auto using any_cons. }
+    subst.
+    destruct (nonempty_dec (Node l)).
+    { apply IHf0 in n.
+      inversion n.
+      apply le_inv in H0.
+      destruct H0.
+      - eauto using any_cons_lt.
+      - subst.
+        eauto using any_eq, flat_cons, enabled_leaf.
+     }
+     inversion e; subst; clear e.
+     eauto using any_eq, flat_eq, enabled_leaf.
 Qed.
 
 Require Import HJ.AsyncFinish.Semantics.
