@@ -331,16 +331,64 @@ Module Progress.
         exists (m, f').
         eauto using reduce_both.
     Qed.
+
+    Let find_only_f (t:tid) (i:op) : bool :=
+      match translate i with
+      | only_f _ => true
+      | _ => false
+      end.
+      
+    Let find_only_f_to_some:
+      forall t i,
+      find_only_f t i = true ->
+      exists o,  translate i = only_f o.
+    Proof.
+      intros.
+      unfold find_only_f in *.
+      remember (translate _) as i'.
+      symmetry in Heqi'.
+      destruct i'; try (inversion H).
+      exists o; trivial.
+    Qed.
     
+    Let find_none_impl_some_p:
+      forall t i,
+      find_only_f t i = false ->
+      exists o, as_p_op i = Some o.
+    Proof.
+      intros.
+      unfold find_only_f  in H.
+      unfold as_p_op.
+      remember (translate i) as i'.
+      destruct i'.
+      - exists o; trivial.
+      - inversion H.
+      - exists o; trivial.
+    Qed.
 
     Theorem ctx_progress:
       ~ Map_TID.Empty reqs ->
       exists t i ctx, CtxReduce (P_P.get_state p, f) t i ctx.
     Proof.
       intros.
-      
+      destruct (Map_TID_Extra.pred_choice reqs find_only_f)
+        as [(t,(i,(?,?)))|?]; auto with *.
+      - exists t.
+        exists i.
+        assert (R: exists f', CtxReduce ((P_P.get_state p), f) t i ((P_P.get_state p), f')). {
+          apply find_only_f_to_some in H1.
+          destruct H1.
+          eauto.
+        }
+        destruct R as (f', ?).
+        exists (P_P.get_state p, f').
+        assumption.
+     - apply progress_all_p; auto.
+       intros.
+       apply e in H0.
+       eauto using find_none_impl_some_p.
     Qed.
-  Section CtxProgress.
+  End CtxProgress.
 
   Variable s: state.
   Variable reqs: Map_TID.t op.
