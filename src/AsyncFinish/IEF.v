@@ -13,12 +13,17 @@ Inductive IEF (t:tid) (f:finish) : Prop :=
     Registered t f ->
     IEF t f.
 
-Inductive FID (f:finish) (t:tid): fid -> Prop :=
-  | fid_nil:
-     IEF t f ->
-     FID f t nil
-   | fid_cons:
-     forall t' f' l,
-     FID f' t l ->
-     Child (t' <| f') f ->
-     FID f t (t'::l) % list.
+Inductive FIDPath (f:finish) : finish -> fid -> Prop :=
+  | fid_path_nil:
+     FIDPath f f nil
+   | fid_path_cons:
+     forall t' f' l f'',
+     FIDPath f f' l ->
+     Child (t' <| f') f'' ->
+     FIDPath f f'' (t'::l) % list.
+
+Inductive FID (f:finish) (i:fid) : Prop :=
+  fid_def:
+    forall f',
+    FIDPath f' f i ->
+    FID f i.
