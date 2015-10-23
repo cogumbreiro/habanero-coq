@@ -116,7 +116,9 @@ Qed.
 
 Inductive PhasermapOf (s:state) (t:tid) (f:fid) (m:phasermap) : Prop :=
   phasermap_of:
-    FID (get_finish s) t f ->
+    forall f',
+    IEF t f' ->
+    FIDPath f' (get_finish s) f ->
     Map_FID.MapsTo f m s.(get_fstate) ->
     PhasermapOf s t f m.
 (*
@@ -216,6 +218,7 @@ Module P_P := HJ.Phasers.Progress.
 Module Progress.
   Import Semantics.
   Import Typesystem.
+  (*
   Definition requests := Map_TID.t op.
   Definition r_state := (state * requests) % type.
 
@@ -224,10 +227,9 @@ Module Progress.
       Map_TID.MapsTo t i (snd s) ->
       Reduce (fst s) t i s' ->
       Redex s t i s'.
-
+*)
   Section CtxProgress.
     Variable f:F.finish.
-    Variable f_IsValid: F_T.Valid f.
     Variable p:P_P.state.
 
     Variable reqs: Map_TID.t op.
@@ -390,14 +392,61 @@ Module Progress.
     Qed.
   End CtxProgress.
 
-  Variable s: state.
-  Variable reqs: Map_TID.t op.
-  Variable ReqsChecked:
-    forall t i ctx,
-    Map_TID.MapsTo t i reqs -> ContextOf s t ctx -> Check ctx t i.
+  Inductive GetPhasermap f m s : Prop :=
+    maps_to_def:
+      Map_FID.MapsTo f m (get_fstate s) ->
+      P_T.Valid m ->
+      GetPhasermap f m s.
+(*
+  Definition fid_of (f:F.finish) := {i:fid | FID f i}.
+  Definition l_op (f:F.finish) := ( (fid_of f) * op) % type.
+*)
+  Structure pstate := {
+    get_state : state;
+    get_requests: Map_TID.t op;
+    get_phasermap_spec:
+      forall i,
+      FID (get_finish get_state) i ->
+      exists m, GetPhasermap i m get_state;
+    requests_checked:
+      forall i m t o,
+      FID (get_finish get_state) i ->
+      GetPhasermap i m get_state ->
+      Map_TID.MapsTo t o get_requests ->
+      Check (m,get_finish get_state) t o;
+    in_finish_impl_in_requests:
+      forall f t,
+      Lang.In t f ->
+      Map_TID.In t get_requests;
+    in_requests_impl_in_finish:
+      forall f t,
+      Lang.In t f ->
+      Map_TID.In t get_requests
+  }.
+
+  Section ApplyCtx.
+  Variable s: pstate.
+  Require HJ.AsyncFinish.Lang.
+  Import Lang.FinishNotations.
+  Open Scope finish_scope.
+  
+  Variable le_to_fid:
+    forall f f',
+    f <= f' -> exists i, FIDPath f f' i.
+
+  Notation ROOT := (get_finish (get_state s)).
+  Notation FID_OF f i := (FIDPath f ROOT i).
+
+  Variable exists_flat:
+    exists f i,
+    FID_OF f i ->
+    Progress.Flat f.
 
   Theorem progress:
-    ~ Map_TID.Empty reqs ->
+    ~ Map_TID.Empty (get_requests s) ->
     exists t i s',
-    Redex (s,reqs) t i s'.
+    Map_TID.MapsTo t i (get_requests s) /\ Reduce (get_state s) t i s'.
   Proof.
+    intros.
+    
+  Qed.
