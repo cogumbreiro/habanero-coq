@@ -7,63 +7,6 @@ Import FinishNotations.
 
 Open Local Scope finish_scope.
 
-Inductive Any (P: finish -> Prop) (f:finish) : Prop :=
-  any_def:
-    forall f',
-    f' <= f ->
-    P f' ->
-    Any P f.
-
-Lemma any_cons:
-  forall P f t l,
-  Any P f ->
-  Any P (Node ((t,(Blocked f))::l)).
-Proof.
-  intros.
-  inversion H.
-  apply any_def with (f').
-  - apply le_inv in H0.
-    destruct H0.
-    + apply lt_to_le.
-      remember (Node _) as y.
-      assert (f <  y). {
-        subst.
-        eauto using lt_eq.
-      }
-      eauto using lt_trans.
-    + subst.
-      apply lt_to_le.
-      auto using lt_eq.
-  - assumption.
-Qed.
-
-Lemma any_cons_rhs:
-  forall (P:finish->Prop) p l,
-  Any P (Node l) ->
-  ( (P (Node l)) ->  P (Node (p::l))) ->
-  Any P (Node (p::l)).
-Proof.
-  intros.
-  inversion H.
-  apply le_inv in H1.
-  destruct H1.
-  - eauto using any_def, lt_to_le, lt_cons.
-  - subst.
-    apply any_def with (Node (p :: l)); auto.
-    intuition.
-Qed.
-
-Lemma any_inv_nil:
-  forall P,
-  Any P (Node nil) ->
-  P (Node nil).
-Proof.
-  intros.
-  inversion H.
-  apply le_inv_nil in H0.
-  subst; assumption.
-Qed.
-
 Inductive Nonempty : finish -> Prop :=
   nonempty_def:
     forall t f,
@@ -214,37 +157,7 @@ Qed.
 
 Require Import HJ.AsyncFinish.Semantics.
 Require Import HJ.AsyncFinish.Typesystem.
-(*
-Inductive Registered (t:tid) (f:finish) : Prop :=
-  | registered_def:
-    forall a,
-    Child t a f ->
-    Registered t f.
 
-Inductive Typesystem (f:finish) (t:tid) : op -> Prop :=
-  | check_begin_async:
-    forall t',
-    Leaf t f ->
-    ~ In t' f ->
-    Typesystem f t (BEGIN_ASYNC t')
-  | check_end_async:
-    Leaf t f ->
-    Typesystem f t END_ASYNC
-  | check_begin_finish:
-    Leaf t f ->
-    Typesystem f t BEGIN_FINISH
-  | check_end_finish:
-    forall f',
-    ~ Registered t f' -> (* the task executed its body *)
-    Child t (Blocked f') f ->
-    Typesystem f t END_FINISH.
-
-Inductive Valid (f:finish) (t:tid) (o:op): Prop :=
-  valid_def:
-    Typesystem f t o ->
-    Disjoint f o ->
-    Valid f t o.
-*)
 Lemma flat_reduces:
   forall f t o,
   Flat f ->
@@ -296,13 +209,13 @@ Proof.
   - exists (put (Node (p::l)) (t', Blocked f'')).
     eauto using reduce_nested, child_cons.
 Qed.
-
+(*
 Lemma flat_inv_cons:
   forall p p' l,
   Flat (Node (p :: p' :: l)) ->
   Flat (Node (p' :: l)).
 Admitted.
-
+*)
 Lemma flat_inv_blocked:
   forall t f f',
   Flat f' ->
@@ -318,7 +231,7 @@ Proof.
   inversion Hx.
   trivial.
 Qed.
-
+(*
 Lemma flat_reduce:
   forall f,
   Nonempty f ->
@@ -368,39 +281,9 @@ Proof.
     exists t.
     auto using child_eq.
 Qed.
+*)
 
-Lemma child_fun:
-  forall t f a a',
-  Valid f ->
-  Child (t, a) f ->
-  Child (t, a') f ->
-  a = a'.
-Proof.
-  intros.
-  apply valid_impl_is_map in H.
-  inversion H.
-  subst.
-  destruct H0, H1.
-  simpl in *.
-  induction l.
-  { inversion H0. }
-  destruct H0, H1.
-  - destruct a0; inversion H0; inversion H1; subst; auto.
-  - destruct a0; inversion H0; subst; clear H0.
-    inversion H2.
-    subst.
-    contradiction H4.
-    apply Map_TID_Extra.eq_key_in_to_ina with (t) (a'); auto.
-  - destruct a0; inversion H1; subst; clear H1.
-    inversion H2.
-    subst.
-    contradiction H4.
-    apply Map_TID_Extra.eq_key_in_to_ina with (t) (a); auto.
-  - inversion H2; subst.
-    apply is_map_inv_cons in H.
-    auto.
-Qed.
-
+(*
 Let child_impl_nleaf:
   forall t f,
   Valid f ->
@@ -408,11 +291,12 @@ Let child_impl_nleaf:
   ~ Child (!t) f.
 Proof.
   intros.
-  unfold not; intros Hx.
+  unfold not; intros Hx.  
   apply child_fun with (a:=Ready) in H0; auto.
   inversion H0.
 Qed.
-
+*)
+(*
 Lemma blocked_nil_impl_end_finish:
   forall f t o,
   Valid  f ->
@@ -425,7 +309,8 @@ Proof.
   inversion H2; (try (apply child_impl_nleaf in H4; auto; tauto)).
   trivial.
 Qed.
-
+*)
+(*
 Lemma blocked_nil_impl_redex:
   forall f t,
   Valid  f ->
@@ -436,9 +321,8 @@ Proof.
   exists (f |+ !t).
   auto using end_finish.
 Qed.
-
-
-(* XXXXXXXXXXXXXXXXXXXXXXXXXXX 
+*)
+(* XXXXXXXXXXXXXXXXXXXXXXXXXXX
 Lemma reduce_any:
   forall (f f':finish) (t:tid) (o:op),
   Disjoint f o ->
