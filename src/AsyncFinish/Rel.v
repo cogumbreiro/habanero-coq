@@ -422,6 +422,25 @@ Proof.
     intuition.
 Qed.
 
+Lemma any_cons_lt:
+  forall (P:finish->Prop) f p l,
+  P f ->
+  f < Node l ->
+  Any P (Node (p :: l)).
+Proof.
+  intros.
+  eauto using any_def, lt_to_le, lt_cons.
+Qed.
+
+Lemma any_eq:
+  forall (P:finish->Prop) f,
+  P f ->
+  Any P f.
+Proof.
+  intros.
+  eauto using any_def, le_refl.
+Qed.
+
 Lemma any_inv_nil:
   forall P,
   Any P (Node nil) ->
