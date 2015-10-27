@@ -1,12 +1,14 @@
 Require Import Coq.Lists.List.
 Require Import Aniceto.List.
+Require Import Aniceto.Spec.
+Require Import Aniceto.Option.
 Require Coq.Program.Wf.
 
 Require Import HJ.AsyncFinish.Lang.
 Require HJ.AsyncFinish.Lang.
 Module L := HJ.AsyncFinish.Lang.
 
-Import Lang.Semantics.
+Import Lang.
 Require Import HJ.Vars.
 Require Import Coq.Init.Datatypes.
 
@@ -71,7 +73,7 @@ Qed.
 Lemma find_child_spec_1:
   forall l t a,
   IsMap (Node l) ->
-  Child t a (Node l) ->
+  Child (t, a) (Node l) ->
   find_child l t = Some a.
 Proof.
   intros l.
@@ -109,7 +111,7 @@ Qed.
 Lemma find_child_spec_2:
   forall l t a,
   find_child l t = Some a ->
-  Child t a (Node l).
+  Child (t, a) (Node l).
 Proof.
   intros l.
   induction l.
@@ -127,16 +129,101 @@ Proof.
       auto using child_cons.
 Qed.
 
+
+
 Lemma find_child_spec:
   forall l t a,
   IsMap (Node l) ->
-  (find_child l t = Some a <-> Child t a (Node l)).
+  (find_child l t = Some a <-> Child (t, a) (Node l)).
 Proof.
   intros.
   split.
   - apply find_child_spec_2.
   - auto using find_child_spec_1.
 Qed.
+
+Definition child f := find_child (get_tasks f). 
+
+Lemma child_spec_1:
+  forall f,
+  IsMap f ->
+  forall t a,
+  Child (t, a) f ->
+  child f t = Some a.
+Proof.
+  intros.
+  unfold child.
+  destruct f.
+  auto using find_child_spec_1.
+Qed.
+
+Lemma child_spec_2:
+  forall f t a,
+  child f t = Some a ->
+  Child (t, a) f.
+Proof.
+  intros.
+  unfold child.
+  destruct f.
+  auto using find_child_spec_2.
+Qed.
+
+Section SpecChild.
+Variable f:finish.
+Variable t:tid.
+Variable is_map : IsMap f.
+
+Global Program Instance Spec_child : Spec (fun (a:task) => Child (t, a) f) (child f t).
+Next Obligation.
+  auto using child_spec_1.
+Qed.
+Next Obligation.
+  auto using child_spec_2.
+Qed.
+Lemma child_rw:
+  forall a,
+  (child f t = Some a <-> Child (t, a) f).
+Proof.
+  eapply spec_rw.
+  auto with *.
+Qed.
+
+Definition child_dec := (spec_dec (s:=Spec_child)).
+
+End SpecChild.
+
+Definition is_registered f t : bool := is_some (child f t).
+
+Section BSpecChild.
+Variable f:finish.
+Variable t:tid.
+Variable H: IsMap f.
+Print BSpec.
+Global Program Instance BSpec_registered : BSpec task (fun (a:task) => Child (t, a) f) (child f t) (Registered t f).
+Next Obligation.
+  auto with *.
+Qed.
+Next Obligation.
+  eauto using registered_def.
+Qed.
+Next Obligation.
+  inversion H0.
+  exists a.
+  assumption.
+Qed.
+End BSpecChild.
+
+Lemma is_registered_spec_1:
+  forall t f,
+  IsMap f ->
+  Registered t f ->
+  is_registered f t = true.
+Proof.
+  unfold is_registered.
+  intros.
+  eapply bspec_impl_is_some; eauto with *.
+Qed.
+(* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
 
 Lemma find_child_incl:
   forall t p l,
@@ -154,6 +241,7 @@ Proof.
     rewrite Heqo.
     trivial.
 Qed.
+
 
 Section IEF.
 
