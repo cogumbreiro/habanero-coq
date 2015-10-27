@@ -129,28 +129,30 @@ Proof.
       assumption.
 Qed.
 
-Inductive Typesystem (f:finish) (t:tid) : op -> Prop :=
+Inductive CheckLeaf (f:finish) (t:tid) : op -> Prop :=
   | check_begin_async:
     forall t',
     Child (!t) f ->
     ~ In t' f ->
-    Typesystem f t (BEGIN_ASYNC t')
+    CheckLeaf f t (BEGIN_ASYNC t')
   | check_end_async:
     Child (!t) f ->
-    Typesystem f t END_ASYNC
+    CheckLeaf f t END_ASYNC
   | check_begin_finish:
     Child (!t) f ->
-    Typesystem f t BEGIN_FINISH
+    CheckLeaf f t BEGIN_FINISH
   | check_end_finish:
     forall f',
     ~ Registered t f' -> (* the task executed its body *)
     Child (t <| f') f ->
-    Typesystem f t END_FINISH.
+    CheckLeaf f t END_FINISH.
+
+Import FinishNotations.
 
 Inductive Check (f:finish) (t:tid) (o:op): Prop :=
   valid_def:
-    Typesystem f t o ->
+    forall f',
+    CheckLeaf f' t o ->
+    f' <= f ->
     Disjoint f o ->
     Check f t o.
-
-    

@@ -169,6 +169,127 @@ Qed.
 
 Require Import HJ.AsyncFinish.Semantics.
 Require Import HJ.AsyncFinish.Typesystem.
+Require Import HJ.AsyncFinish.LangExtra.
+
+Lemma sub_notin:
+  forall x y t,
+  Sub x y ->
+  ~ In t y ->
+  ~ In t x.
+Proof.
+  intros.
+  rewrite notin_spec in *.
+  destruct H.
+  destruct H.
+  destruct y.
+  assert (RW : get_tasks (Node l) = l) by (simpl; auto).
+  rewrite RW in *; clear RW.
+  induction l.
+  { inversion H. }
+  apply notin_inv in H0.
+  destruct H0 as (?, (?, ?)).
+  inversion H.
+  - subst.
+    simpl in H0, H1.
+    assumption.
+  - auto.
+Qed.
+
+Lemma le_notin:
+  forall f f',
+  f' <= f ->
+  forall t,
+  ~ In t f ->
+  ~ In t f'.
+Proof.
+  intros f f' Hle.
+  destruct Hle as (Hle).
+  induction Hle; intros; eauto using sub_notin.
+Qed.
+
+Lemma le_disjoint:
+  forall o f f',
+  Disjoint f o ->
+  f' <= f ->
+  Disjoint f' o.
+Proof.
+  intros.
+  inversion H; subst;
+  eauto using disjoint_ok, le_notin, disjoint_skip.
+Qed.
+
+Theorem reduce_le:
+  forall f1 f3,
+  f1 <= f3 ->
+  forall f2 t o,
+  Reduce f1 t o f2 ->
+  Disjoint f3 o ->
+  exists f4, Reduce f3 t o f4.
+Proof.
+  intros f1 f2 Hf.
+  inversion Hf as (Hf').
+  induction Hf'; intros.
+  - inversion H as (t', ?).
+    exists (y |+ t' <| f2).
+    eauto using reduce_nested.
+  - eauto.
+  - apply IHHf'1 in H.
+    + clear IHHf'1.
+      destruct H as (y', R1).
+      apply IHHf'2 with (y'); auto.
+      intuition.
+    + intuition.
+    + apply le_disjoint with (z); auto.
+      intuition.
+Qed.
+
+Lemma flat_le:
+  forall f f',
+  Flat f ->
+  f' <= f ->
+  (f' = f \/ f' = []).
+Proof.
+  intros.
+  destruct H0.
+  induction H0.
+  - inversion H0.
+    inversion H.
+    apply H2 in H1.
+    inversion H1.
+    intuition.
+  - intuition.
+  - intuition.
+    + subst.
+      auto.
+    + subst.
+      assert (Hle : x <= []) by intuition.
+      apply le_inv_nil in  Hle.
+      intuition.
+Qed.
+
+Lemma check_leaf_absurd_nil:
+  forall t o,
+  ~ CheckLeaf [] t o.
+Proof.
+  intros.
+  intuition.
+  inversion H; try (apply child_absurd_nil in H0; inversion H0).
+  apply child_absurd_nil in H1; inversion H1.
+Qed.
+
+Lemma flat_le_rw:
+  forall f f' t o,
+  Flat f ->
+  CheckLeaf f' t o ->
+  f' <= f ->
+  f' = f.
+Proof.
+  intros.
+  apply flat_le in H1; auto.
+  destruct H1; subst; auto.
+  apply check_leaf_absurd_nil in H0.
+  inversion H0.
+Qed.
 
 Lemma flat_reduces:
   forall f t o,
@@ -178,6 +299,8 @@ Lemma flat_reduces:
 Proof.
   intros.
   destruct H0.
+  assert (RW : f' = f) by eauto using flat_le_rw.
+  subst; clear H1.
   inversion H0; subst.
   - exists (f |+ !t').
     auto using begin_async.
