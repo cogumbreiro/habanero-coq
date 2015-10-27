@@ -210,6 +210,19 @@ Module Typesystem.
       assumption.
   Qed.
 
+
+  Lemma check_change_finish:
+    forall t f f' i m,
+    FS.Registered t f ->
+    Check (m, f') t i ->
+    Check (m, f) t i.
+  Proof.
+    intros.
+    inversion H0; subst; simpl in *.
+    - eauto using check_only_p.
+    - 
+  Qed.
+
 End Typesystem.
 
 Require HJ.Phasers.Progress.
@@ -218,16 +231,7 @@ Module P_P := HJ.Phasers.Progress.
 Module Progress.
   Import Semantics.
   Import Typesystem.
-  (*
-  Definition requests := Map_TID.t op.
-  Definition r_state := (state * requests) % type.
 
-  Inductive Redex (s:r_state) (t:tid) (i:op) (s':state) : Prop :=
-    redex_def:
-      Map_TID.MapsTo t i (snd s) ->
-      Reduce (fst s) t i s' ->
-      Redex s t i s'.
-*)
   Section CtxProgress.
     Variable f:F.finish.
     Variable p:P_P.state.
@@ -392,15 +396,58 @@ Module Progress.
     Qed.
   End CtxProgress.
 
+  Module CtxProgressSig.
+    Require Import HJ.AsyncFinish.Progress.
+    Structure ctx_progress_sig := {
+      get_finish:F.finish;
+      get_p_state:P_P.state;
+      get_requests: Map_TID.t op;
+      get_ctx := (P_P.get_state get_p_state, get_finish);
+
+      requests_to_check:
+        forall t i,
+        Map_TID.MapsTo t i get_requests ->
+        Check ((P_P.get_state get_p_state),get_finish) t i;
+
+      finish_is_flat:
+        Flat get_finish;
+      
+      pstate_requests_to_requests:
+        forall t o,
+        Map_TID.MapsTo t o (P_P.get_requests get_p_state) ->
+        exists i, Map_TID.MapsTo t i get_requests /\ as_p_op i = Some o;
+
+      requests_to_pstate_requests:
+        forall t i o,
+        Map_TID.MapsTo t i get_requests ->
+        as_p_op i = Some o ->
+        Map_TID.MapsTo t o (P_P.get_requests get_p_state);
+      
+      requests_nonempty:
+        ~ Map_TID.Empty get_requests
+      }.
+
+      Lemma ctx_progress_alt:
+        forall (c:ctx_progress_sig),
+          exists (t : tid) (i : op) (ctx : context),
+         CtxReduce (get_ctx c) t i ctx.
+       Proof.
+         intros.
+         assert (RW: get_ctx c = (P_P.get_state (get_p_state c), (get_finish c))). {
+           auto.
+         }
+         destruct c.
+         rewrite RW.
+         eauto using ctx_progress.
+       Qed.
+     End CtxProgressSig.
+
   Inductive GetPhasermap f m s : Prop :=
     maps_to_def:
       Map_FID.MapsTo f m (get_fstate s) ->
       P_T.Valid m ->
       GetPhasermap f m s.
-(*
-  Definition fid_of (f:F.finish) := {i:fid | FID f i}.
-  Definition l_op (f:F.finish) := ( (fid_of f) * op) % type.
-*)
+
   Structure pstate := {
     get_state : state;
     get_requests: Map_TID.t op;
@@ -423,6 +470,39 @@ Module Progress.
       Lang.In t f ->
       Map_TID.In t get_requests
   }.
+  Variable is_registered: tid -> F.finish -> bool.
+  
+  Variable is_registered_true: forall t f, is_registered t f = true -> FS.Registered t f.
+
+  Module PstateCtx.
+
+    Lemma pstate_to_ctx:
+      forall (p:pstate) f h,
+      FIDPath f (get_finish (get_state p)) h ->
+      exists m r,
+      (forall t i,
+        Map_TID.MapsTo t i r ->
+        Check (m, f) t i).
+    Proof.
+      intros.
+      remember (get_finish _) as ROOT.
+      assert (Hm : FID ROOT h) by eauto using fid_def.
+      subst.
+      apply (get_phasermap_spec p) in Hm.
+      destruct Hm as (m, Hg).
+      exists m.
+      remember (fun (t:tid) (_:op) => is_registered t f ) as sel.
+      exists (Map_TID_Extra.filter sel (get_requests p)).
+      intros ? ? Hmt.
+      apply Map_TID_Extra.filter_spec in Hmt; auto with *.
+      destruct Hmt as (Hmt, Hreg).
+      subst.
+      apply is_registered_true in Hreg.
+      assert (Check (m,get_finish (get_state p)) t i). {
+        eauto using (requests_checked p), fid_def.
+      }
+    Qed.
+  End PstateCtx.
 
   Section ApplyCtx.
   Variable s: pstate.
@@ -439,8 +519,49 @@ Module Progress.
 
   Variable exists_flat:
     exists f i,
-    FID_OF f i ->
+    FID_OF f i /\
     Progress.Flat f.
+
+(*
+  Variable create_p_reqs:
+    
+    exists (r:Map_TID.t Phasers.Lang.op),
+    (forall (t : Map_TID.key) (i : Lang.op),
+                  Map_TID.MapsTo t i r ->
+                  Phasers.Typesystem.Check r t i).
+
+  { get_requests : Map_TID.t Lang.op;
+    reqs_spec_1 : forall t : tid,
+                  Lang.In t get_state ->
+                  Map_TID.In (elt:=Lang.op) t get_requests;
+    reqs_spec_2 : forall t : Map_TID.key,
+                  Map_TID.In (elt:=Lang.op) t get_requests ->
+                  Lang.In t get_state;
+    reqs_spec_3 :  }
+*)
+
+  Section FilterReqs.
+  Import HJ.AsyncFinish.Lang.
+
+  Axiom filter_reqs:
+    forall (f:finish),
+    exists r,
+    (forall t i, Map_TID.MapsTo t i r -> Map_TID.MapsTo t i (get_requests s)) /\
+    (forall t, Map_TID.In t r <-> Registered t f).
+
+  Lemma get_p_state:
+    forall (f:finish),
+    
+    exists (c:CtxProgressSig.ctx_progress_sig) t i ctx,
+         (CtxProgressSig.get_finish c) = f /\
+         CtxReduce (CtxProgressSig.get_ctx c) t i ctx.
+  Proof.
+    intros.
+    Check P_P.Build_state.
+    Check ctx_progress f.
+    apply Build_ctx_progress_sig.
+  Qed.
+  End FilterReqs.
 
   Theorem progress:
     ~ Map_TID.Empty (get_requests s) ->
@@ -448,5 +569,10 @@ Module Progress.
     Map_TID.MapsTo t i (get_requests s) /\ Reduce (get_state s) t i s'.
   Proof.
     intros.
-    
+    destruct (exists_flat) as (f, (i, (?,Hflat))).
+    destruct (get_p_state f) as  (c, (t, (i', (ctx, (?, R))))).
+    unfold CtxProgressSig.get_ctx in *.
+    rewrite H1 in *.
+    destruct (get_p_state f) as (r, (ps, (Hcheck, (H1,H2)))).
+    Check ctx_progress f ps r Hcheck Hflat H1 H2.
   Qed.
