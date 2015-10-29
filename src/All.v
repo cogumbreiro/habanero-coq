@@ -210,7 +210,6 @@ Module Typesystem.
       assumption.
   Qed.
 
-
   Lemma check_change_finish:
     forall t f f' i m,
     FS.Registered t f ->
@@ -220,9 +219,9 @@ Module Typesystem.
     intros.
     inversion H0; subst; simpl in *.
     - eauto using check_only_p.
-    - 
-  Qed.
-
+    - apply check_only_f with (o); auto.
+      simpl.
+  Admitted.
 End Typesystem.
 
 Require HJ.Phasers.Progress.
@@ -395,52 +394,6 @@ Module Progress.
        eauto using find_none_impl_some_p.
     Qed.
   End CtxProgress.
-
-  Module CtxProgressSig.
-    Require Import HJ.AsyncFinish.Progress.
-    Structure ctx_progress_sig := {
-      get_finish:F.finish;
-      get_p_state:P_P.state;
-      get_requests: Map_TID.t op;
-      get_ctx := (P_P.get_state get_p_state, get_finish);
-
-      requests_to_check:
-        forall t i,
-        Map_TID.MapsTo t i get_requests ->
-        Check ((P_P.get_state get_p_state),get_finish) t i;
-
-      finish_is_flat:
-        Flat get_finish;
-      
-      pstate_requests_to_requests:
-        forall t o,
-        Map_TID.MapsTo t o (P_P.get_requests get_p_state) ->
-        exists i, Map_TID.MapsTo t i get_requests /\ as_p_op i = Some o;
-
-      requests_to_pstate_requests:
-        forall t i o,
-        Map_TID.MapsTo t i get_requests ->
-        as_p_op i = Some o ->
-        Map_TID.MapsTo t o (P_P.get_requests get_p_state);
-      
-      requests_nonempty:
-        ~ Map_TID.Empty get_requests
-      }.
-
-      Lemma ctx_progress_alt:
-        forall (c:ctx_progress_sig),
-          exists (t : tid) (i : op) (ctx : context),
-         CtxReduce (get_ctx c) t i ctx.
-       Proof.
-         intros.
-         assert (RW: get_ctx c = (P_P.get_state (get_p_state c), (get_finish c))). {
-           auto.
-         }
-         destruct c.
-         rewrite RW.
-         eauto using ctx_progress.
-       Qed.
-     End CtxProgressSig.
 
   Inductive GetPhasermap f m s : Prop :=
     maps_to_def:
