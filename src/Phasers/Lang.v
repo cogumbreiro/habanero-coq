@@ -19,7 +19,7 @@ Inductive r_le : regmode -> regmode -> Prop :=
     r_le m SIGNAL_WAIT
 where "n <= m" := (r_le n m) : reg_scope.
 
-Local Open Scope reg_scope.
+Open Scope reg_scope.
 
 Record taskview := TV {
   signal_phase: nat;
