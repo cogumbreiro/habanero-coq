@@ -150,7 +150,7 @@ Inductive CheckLeaf (f:finish) (t:tid) : op -> Prop :=
 Import FinishNotations.
 
 Inductive Check (f:finish) (t:tid) (o:op): Prop :=
-  valid_def:
+  check_def:
     forall f',
     CheckLeaf f' t o ->
     f' <= f ->
