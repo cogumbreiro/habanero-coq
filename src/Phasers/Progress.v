@@ -166,7 +166,7 @@ Proof.
   symmetry in Heqo.
   destruct o as [v|].
   * rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo.
-    destruct (wait_cap_or_sigonly v).
+    destruct (wait_cap_so_dec (mode v)).
     - apply sync_wait with (v:=v); repeat intuition.
       unfold Await.
       intros t' v' Hmt'.

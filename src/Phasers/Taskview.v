@@ -1,0 +1,235 @@
+
+Inductive regmode : Set:=
+  | SIGNAL_ONLY : regmode
+  | WAIT_ONLY : regmode
+  | SIGNAL_WAIT : regmode.
+
+(** Defines a <= relation between registration modes. *)
+
+Inductive r_le : regmode -> regmode -> Prop :=
+  | r_le_so:
+    r_le SIGNAL_ONLY SIGNAL_ONLY
+  | r_le_wo:
+    r_le WAIT_ONLY WAIT_ONLY
+  | r_le_sw:
+    forall m,
+    r_le m SIGNAL_WAIT
+where "n <= m" := (r_le n m) : reg_scope.
+
+Open Scope reg_scope.
+
+Record taskview := TV {
+  signal_phase: nat;
+  wait_phase: nat;
+  mode: regmode
+}.
+
+Definition make := TV 0 0 SIGNAL_WAIT.
+
+(** Standard mutators. *)
+
+Definition set_mode (v:taskview) (m:regmode) := TV v.(signal_phase) v.(wait_phase) m.
+Definition set_signal_phase (v:taskview) (n:nat) := TV n (wait_phase v) (mode v).
+Definition set_wait_phase (v:taskview) (n:nat) := TV (signal_phase v) n (mode v).
+
+(** Signal operation on taskviews. *)
+
+Definition signal (v:taskview) :=
+match v.(mode) with
+| SIGNAL_ONLY => set_signal_phase v (S (signal_phase v))
+| _ => set_signal_phase v (S (wait_phase v))
+end.
+
+(** Wait operation on taskviews. *)
+
+Definition wait (v:taskview) := set_wait_phase v (S (wait_phase v)).
+
+Definition WaitCap (m:regmode) :=
+  m = SIGNAL_WAIT \/ m = WAIT_ONLY.
+
+Definition SignalCap (r:regmode) :=
+  r = SIGNAL_WAIT \/ r = SIGNAL_ONLY.
+
+Section Facts.
+
+  Lemma regmode_eq_dec:
+    forall (m1 m2:regmode),
+    { m1 = m2 } + { m1 <> m2 }.
+  Proof.
+    intros.
+    destruct m1, m2; solve [ left; auto | right; intuition; inversion H]. 
+  Qed.
+
+  Lemma wait_cap_dec:
+    forall r,
+    { WaitCap r } + { ~ WaitCap r }.
+  Proof.
+    intros.
+    destruct r.
+    - right. intuition.
+      unfold WaitCap in *.
+      intuition; inversion H0.
+    - left. unfold WaitCap; intuition.
+    - left. unfold WaitCap; intuition.
+  Qed.
+
+  Lemma neq_so_to_wait_cap:
+    forall r,
+    r <> SIGNAL_ONLY ->
+    WaitCap r.
+  Proof.
+    intros.
+    unfold WaitCap.
+    destruct r.
+    - contradiction H; trivial.
+    - intuition.
+    - intuition.
+  Qed.
+
+  Lemma not_wait_cap_to_so:
+    forall r,
+    ~ WaitCap r ->
+    r = SIGNAL_ONLY.
+  Proof.
+    intros.
+    unfold WaitCap in *.
+    destruct r; intuition.
+  Qed.
+
+  Lemma wait_cap_so_dec:
+    forall r,
+    { WaitCap r } + { r = SIGNAL_ONLY }.
+  Proof.
+    intros.
+    destruct (wait_cap_dec r);
+    auto using not_wait_cap_to_so.
+  Qed.
+
+  Lemma signal_cap_dec:
+    forall r,
+    { SignalCap r } + { ~ SignalCap r }.
+  Proof.
+    intros.
+    destruct r.
+    - left; unfold SignalCap; intuition.
+    - right. intuition.
+      unfold SignalCap in *.
+      destruct H; inversion H.
+    - left; unfold SignalCap; intuition.
+  Qed.
+
+  Lemma neq_wo_to_signal_cap:
+    forall r,
+    r <> WAIT_ONLY ->
+    SignalCap r.
+  Proof.
+    intros.
+    unfold SignalCap.
+    destruct r.
+    - intuition.
+    - contradiction H; trivial.
+    - intuition.
+  Qed.
+
+  Lemma not_signal_cap_to_wo:
+    forall r,
+    ~ SignalCap r ->
+    r = WAIT_ONLY.
+  Proof.
+    intros.
+    unfold SignalCap in *.
+    destruct r; intuition.
+  Qed.
+
+  Lemma signal_cap_wo_dec:
+    forall r,
+    { SignalCap r } + { r = WAIT_ONLY }.
+  Proof.
+    intros.
+    destruct (signal_cap_dec r);
+    auto using not_signal_cap_to_wo.
+  Qed.
+    
+  Ltac simpl_taskview v :=
+    destruct v as (?, ?, m); destruct m; simpl in *; subst; intuition.
+
+  Lemma signal_preserves_mode:
+    forall v,
+    mode (signal v) = mode v.
+  Proof.
+    intros.
+    simpl_taskview v.
+  Qed.
+
+  Lemma signal_preserves_wait_phase:
+    forall v,
+    wait_phase (signal v) = wait_phase v.
+  Proof.
+    intros.
+    simpl_taskview v.
+  Qed.
+
+  Lemma signal_wait_cap_signal_phase:
+    forall v,
+    WaitCap (mode v) ->
+    signal_phase (signal v) = S (wait_phase v).
+  Proof.
+    intros.
+    simpl_taskview v.
+    destruct H; inversion H.
+  Qed.
+
+  Lemma signal_phase_set_signal_phase:
+    forall v n,
+    signal_phase (set_signal_phase v n) = n.
+  Proof.
+    intros.
+    unfold set_signal_phase.
+    auto.
+  Qed.
+
+  Lemma signal_so_signal_phase:
+    forall v,
+    mode v = SIGNAL_ONLY ->
+    signal_phase (signal v) = S (signal_phase v).
+  Proof.
+    intros.
+    unfold signal.
+    rewrite H.
+    rewrite signal_phase_set_signal_phase.
+    trivial.
+  Qed.
+
+  Lemma wait_preserves_mode:
+    forall v,
+    mode (wait v) = mode v.
+  Proof.
+    intros.
+    simpl_taskview v.
+  Qed.
+
+  Lemma wait_preserves_signal_phase:
+    forall v,
+    signal_phase (wait v) = signal_phase v.
+  Proof.
+    intros; simpl_taskview v.
+  Qed.
+
+  Lemma wait_phase_set_wait_phase:
+    forall v n,
+    wait_phase (set_wait_phase v n) = n.
+  Proof.
+    intros; simpl_taskview v.
+  Qed.
+
+  Lemma wait_wait_phase:
+    forall v,
+    wait_phase (wait v) = S (wait_phase v).
+  Proof.
+    intros.
+    unfold wait.
+    rewrite wait_phase_set_wait_phase.
+    trivial.
+  Qed.
+
+End Facts.

@@ -3,6 +3,7 @@
 src/Vars.v
 src/Phasers/Rel.v
 src/Phasers/PhaseDiff.v
+src/Phasers/Taskview.v
 src/Phasers/Lang.v
 src/Phasers/TransClosure.v
 src/Phasers/Progress.v
