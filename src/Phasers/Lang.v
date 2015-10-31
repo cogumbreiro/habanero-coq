@@ -7,6 +7,14 @@ Inductive regmode : Set:=
   | WAIT_ONLY : regmode
   | SIGNAL_WAIT : regmode.
 
+Lemma regmode_eq_dec:
+ forall (m1 m2:regmode),
+ { m1 = m2 } + { m1 <> m2 }.
+Proof.
+  intros.
+  destruct m1, m2; solve [ left; auto | right; intuition; inversion H]. 
+Qed.
+
 (** Defines a <= relation between registration modes. *)
 
 Inductive r_le : regmode -> regmode -> Prop :=
@@ -27,17 +35,30 @@ Record taskview := TV {
   mode: regmode
 }.
 
-Let inc_signal (v:taskview) := TV (v.(signal_phase) + 1) v.(wait_phase) v.(mode).
+Module Taskview.
 
-Let set_mode (v:taskview) (m:regmode) := TV v.(signal_phase) v.(wait_phase) m.
+  Definition make := TV 0 0 SIGNAL_WAIT.
 
-Definition signal (v:taskview) :=
+  (** Standard mutators. *)
+
+  Definition set_mode (v:taskview) (m:regmode) := TV v.(signal_phase) v.(wait_phase) m.
+  Definition set_signal_phase (v:taskview) (n:nat) := TV n (wait_phase v) (mode v).
+  Definition set_wait_phase (v:taskview) (n:nat) := TV (signal_phase v) n (mode v).
+
+  (** Signal operation on taskviews. *)
+
+  Definition signal (v:taskview) :=
   match v.(mode) with
-    | SIGNAL_ONLY => v
-    | _ => if eq_nat_dec v.(signal_phase) v.(wait_phase) then (inc_signal v) else v
+    | SIGNAL_ONLY => set_signal_phase v (S (signal_phase v))
+    | _ => set_signal_phase v (S (wait_phase v))
   end.
 
-Definition wait (v:taskview) := TV v.(signal_phase) (v.(wait_phase) + 1) v.(mode).
+  (** Wait operation on taskviews. *)
+
+  Definition wait (v:taskview) := set_wait_phase v (S (wait_phase v)).
+End Taskview.
+
+Import Taskview. 
 
 Definition WaitCap (v:taskview) :=
   mode v = SIGNAL_WAIT \/ mode v = WAIT_ONLY.
@@ -54,6 +75,30 @@ Proof.
     intuition; repeat (rewrite H0 in Heqr; inversion Heqr).
   - left. unfold WaitCap; intuition.
   - left. unfold WaitCap; intuition.
+Qed.
+
+Lemma neq_so_to_wait_cap:
+  forall v,
+  mode v <> SIGNAL_ONLY ->
+  WaitCap v.
+Proof.
+  intros.
+  unfold WaitCap.
+  destruct v; simpl in *; destruct mode0.
+  - contradiction H; trivial.
+  - intuition.
+  - intuition.
+Qed.
+
+Lemma not_wait_cap_to_so:
+  forall v,
+  ~ WaitCap v ->
+  mode v = SIGNAL_ONLY.
+Proof.
+  intros.
+  unfold WaitCap in *.
+  destruct v; simpl in *.
+  destruct mode0; intuition.
 Qed.
 
 Lemma wait_cap_or_sigonly:
@@ -75,9 +120,65 @@ Qed.
 Definition SignalCap (v:taskview) :=
   mode v = SIGNAL_WAIT \/ mode v = SIGNAL_ONLY.
 
+Lemma signal_cap_dec:
+  forall v,
+  { SignalCap v } + { ~ SignalCap v }.
+Proof.
+  intros.
+  remember (mode v).
+  destruct r.
+  - left; unfold SignalCap; intuition.
+  - right. intuition.
+    unfold SignalCap in *.
+    intuition; repeat (
+    rewrite H0 in Heqr; inversion Heqr).
+  - left; unfold SignalCap; intuition.
+Qed.
+
+Lemma neq_wo_to_signal_cap:
+  forall v,
+  mode v <> WAIT_ONLY ->
+  SignalCap v.
+Proof.
+  intros.
+  unfold SignalCap.
+  destruct v; simpl in *; destruct mode0.
+  - intuition.
+  - contradiction H; trivial.
+  - intuition.
+Qed.
+
+Lemma not_signal_cap_to_wo:
+  forall v,
+  ~ SignalCap v ->
+  mode v = WAIT_ONLY.
+Proof.
+  intros.
+  unfold SignalCap in *.
+  destruct v; simpl in *.
+  destruct mode0; intuition.
+Qed.
+
 Definition phaser := Map_TID.t taskview.
 
-Definition drop : tid -> phaser -> phaser := @Map_TID.remove taskview.
+
+Module Phaser.
+
+  Definition make (t:tid) := Map_TID.add t Taskview.make (Map_TID.empty taskview).
+
+  Definition update (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
+  match Map_TID.find t ph with
+    | Some v => Map_TID.add t (f v) ph
+    | None => ph
+  end.
+
+  Definition signal (t:tid) := update t Taskview.signal.
+
+  Definition wait (t:tid) := update t Taskview.wait.
+
+  Definition drop : tid -> phaser -> phaser := @Map_TID.remove taskview.
+
+End Phaser.
 
 Definition Await (ph:phaser) (n:nat) :=
   forall t v,
@@ -115,6 +216,18 @@ Inductive op : Type :=
 
 Definition phasermap := Map_PHID.t phaser.
 
+Module Phasermap.
+  Definition make : phasermap := Map_PHID.empty phaser.
+  Definition new_phaser (p:phid) (t:tid) : phasermap -> phasermap := Map_PHID.add p (Phaser.make t).
+  Definition put (p:phid) (ph:phaser) : phasermap -> phasermap := Map_PHID.add p ph.
+  Definition foreach (f:phaser -> phaser) : phasermap -> phasermap := Map_PHID.mapi (fun _ ph => f ph).
+  Definition drop_all (t:tid) := foreach (Phaser.drop t).
+  Definition wait_all (t:tid) := foreach (Phaser.wait t).
+  Definition signal_all (t:tid) := foreach (Phaser.signal t).
+End Phasermap.
+
+Import Phasermap.
+
 Inductive Async : phasermap -> tid -> list phased -> tid -> phasermap -> Prop :=
   | async_step:
     forall m t p r a t' m' v ph,
@@ -129,51 +242,34 @@ Inductive Async : phasermap -> tid -> list phased -> tid -> phasermap -> Prop :=
     forall m t t',
     Async m t nil t' m.
 
-Definition newPhaser (t:tid) := Map_TID.add t (TV 0 0 SIGNAL_WAIT) (Map_TID.empty taskview).
-
-Definition update (t:tid) (f:taskview -> phaser) (ph:phaser) :=
-  match Map_TID.find t ph with
-    | Some v => f v
-    | None => ph
-  end.
-
-Definition apply (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
-  update t (fun v => Map_TID.add t (f v) ph) ph.
-
-Definition mapi (t:tid) (f:taskview->taskview) : phasermap -> phasermap :=
-  Map_PHID.mapi (fun p ph => apply t f ph).
-
-Definition drop_all (t:tid) : phasermap -> phasermap :=
-  Map_PHID.mapi (fun _ ph => drop t ph).
-
 Inductive Reduce (m:phasermap) (t:tid): op -> phasermap -> Prop :=
   | reduce_new:
     forall p,
     ~ Map_PHID.In p m ->
     (* --------------- *)
-    Reduce m t (PH_NEW p) (Map_PHID.add p (newPhaser t) m)
+    Reduce m t (PH_NEW p) (new_phaser p t m)
 
   | reduce_signal:
     forall p ph,
     Map_PHID.MapsTo p ph m ->
     (* --------------- *)
-    Reduce m t (PH_SIGNAL p) (Map_PHID.add p (apply t signal ph) m)
+    Reduce m t (PH_SIGNAL p) (put p (Phaser.signal t ph) m)
 
   | reduce_drop:
     forall p ph,
     Map_PHID.MapsTo p ph m ->
     (* --------------- *)
-    Reduce m t (PH_DROP p) (Map_PHID.add p (drop t ph) m)
+    Reduce m t (PH_DROP p) (put p (Phaser.drop t ph) m)
 
  | reduce_signal_all:
     (* --------------- *)
-    Reduce m t SIGNAL_ALL (mapi t signal m)
+    Reduce m t SIGNAL_ALL (signal_all t m)
 
  | reduce_wait_all:
     (* check if it can synchronize on every phaser *)
     (forall p ph, Map_PHID.MapsTo p ph m -> Sync ph t) ->
     (* --------------- *)
-    Reduce m t WAIT_ALL (mapi t wait m)
+    Reduce m t WAIT_ALL (wait_all t m)
 
  | reduce_drop_all:
     (* --------------- *)

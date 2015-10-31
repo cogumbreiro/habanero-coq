@@ -199,7 +199,7 @@ Proof.
   destruct Hsmall as (t, Hsmall).
   exists t.
   intuition.
-  exists (mapi t wait pm).
+  exists (Phasermap.wait_all t pm).
   apply reduce_wait_all.
   intros.
   eauto using smallest_to_sync.
@@ -253,20 +253,15 @@ Proof.
   destruct i.
   - inversion H0.
     subst.
-    exists (Map_PHID.add p (newPhaser t) pm).
-    auto using reduce_new.
+    eauto using reduce_new.
   - inversion H0.
     subst.
-    exists (Map_PHID.add p (apply t signal ph) pm).
-    auto using reduce_signal.
+    eauto using reduce_signal.
   - inversion H0; subst.
-    exists (Map_PHID.add p (Map_TID.remove t ph) pm).
-    auto using reduce_drop.
-  - exists (mapi t signal pm).
-    auto using reduce_signal_all.
+    eauto using reduce_drop.
+  - eauto using reduce_signal_all.
   - contradiction H1; auto.
-  - exists (drop_all t pm).
-    auto using reduce_drop_all.
+  - eauto using reduce_drop_all.
   - inversion H0; subst; clear H0.
     clear H1.
     rename t0 into t'.
@@ -280,13 +275,12 @@ Proof.
         destruct H7 as (pm', Ha).
         destruct a as (p, r).
         inversion H2; subst; clear H2.
-        exists  (Map_PHID.add p (Map_TID.add t' (set_mode v r) ph0) pm').
+        exists  (Map_PHID.add p (Map_TID.add t' (Taskview.set_mode v r) ph0) pm').
         apply async_step; repeat auto.
         eauto using async_preserves_pm.
    }
    destruct Hpm as (pm', ?).
-   exists pm'.
-   auto using reduce_async.
+   eauto using reduce_async.
 Qed.
 
 Structure state := {
@@ -479,5 +473,3 @@ Proof.
   - auto using progress_blocking.
 Qed.
 End PROGRESS.
-
-
