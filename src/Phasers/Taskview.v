@@ -44,11 +44,21 @@ end.
 
 Definition wait (v:taskview) := set_wait_phase v (S (wait_phase v)).
 
-Definition WaitCap (m:regmode) :=
-  m = SIGNAL_WAIT \/ m = WAIT_ONLY.
+Inductive WaitCap : regmode -> Prop :=
+  | wait_cap_sw:
+    WaitCap SIGNAL_WAIT
+  | wait_cap_wo:
+    WaitCap WAIT_ONLY.
 
-Definition SignalCap (r:regmode) :=
-  r = SIGNAL_WAIT \/ r = SIGNAL_ONLY.
+Hint Resolve wait_cap_sw wait_cap_wo: taskview.
+
+Inductive SignalCap : regmode -> Prop :=
+  | signal_cap_sw:
+    SignalCap SIGNAL_WAIT
+  | signal_cap_so:
+    SignalCap SIGNAL_ONLY.
+
+Hint Resolve signal_cap_so signal_cap_sw: taskview.
 
 Section Facts.
 
@@ -60,17 +70,34 @@ Section Facts.
     destruct m1, m2; solve [ left; auto | right; intuition; inversion H]. 
   Qed.
 
+  Lemma make_mode:
+    mode make = SIGNAL_WAIT.
+  Proof.
+    unfold make.
+    auto.
+  Qed.
+
+  Lemma make_signal_phase:
+    signal_phase make = 0.
+  Proof.
+    unfold make.
+    auto.
+  Qed.
+
+  Lemma make_wait_phase:
+    wait_phase make = 0.
+  Proof.
+    unfold make.
+    auto.
+  Qed.
+
   Lemma wait_cap_dec:
     forall r,
     { WaitCap r } + { ~ WaitCap r }.
   Proof.
     intros.
-    destruct r.
-    - right. intuition.
-      unfold WaitCap in *.
-      intuition; inversion H0.
-    - left. unfold WaitCap; intuition.
-    - left. unfold WaitCap; intuition.
+    destruct r; auto with taskview.
+    right; intuition; inversion H.
   Qed.
 
   Lemma neq_so_to_wait_cap:
@@ -79,11 +106,8 @@ Section Facts.
     WaitCap r.
   Proof.
     intros.
-    unfold WaitCap.
-    destruct r.
-    - contradiction H; trivial.
-    - intuition.
-    - intuition.
+    destruct r; auto with taskview.
+    contradiction H; trivial.
   Qed.
 
   Lemma not_wait_cap_to_so:
@@ -92,8 +116,10 @@ Section Facts.
     r = SIGNAL_ONLY.
   Proof.
     intros.
-    unfold WaitCap in *.
-    destruct r; intuition.
+    destruct r;
+    intuition;
+    contradiction H;
+    auto with taskview.
   Qed.
 
   Lemma wait_cap_so_dec:
@@ -110,12 +136,8 @@ Section Facts.
     { SignalCap r } + { ~ SignalCap r }.
   Proof.
     intros.
-    destruct r.
-    - left; unfold SignalCap; intuition.
-    - right. intuition.
-      unfold SignalCap in *.
-      destruct H; inversion H.
-    - left; unfold SignalCap; intuition.
+    destruct r; auto with taskview.
+    right; intuition; inversion H.
   Qed.
 
   Lemma neq_wo_to_signal_cap:
@@ -123,12 +145,7 @@ Section Facts.
     r <> WAIT_ONLY ->
     SignalCap r.
   Proof.
-    intros.
-    unfold SignalCap.
-    destruct r.
-    - intuition.
-    - contradiction H; trivial.
-    - intuition.
+    destruct r; intuition.
   Qed.
 
   Lemma not_signal_cap_to_wo:
@@ -137,8 +154,10 @@ Section Facts.
     r = WAIT_ONLY.
   Proof.
     intros.
-    unfold SignalCap in *.
-    destruct r; intuition.
+    destruct r;
+    intuition;
+    contradiction H;
+    auto with taskview.
   Qed.
 
   Lemma signal_cap_wo_dec:
@@ -176,7 +195,7 @@ Section Facts.
   Proof.
     intros.
     simpl_taskview v.
-    destruct H; inversion H.
+    inversion H.
   Qed.
 
   Lemma signal_phase_set_signal_phase:
