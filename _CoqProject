@@ -5,6 +5,7 @@ src/Phasers/Rel.v
 src/Phasers/PhaseDiff.v
 src/Phasers/Taskview.v
 src/Phasers/Lang.v
+src/Phasers/Welformedness.v
 src/Phasers/TransClosure.v
 src/Phasers/Progress.v
 src/Phasers/LEDec.v
