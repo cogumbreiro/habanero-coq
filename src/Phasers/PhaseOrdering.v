@@ -7,6 +7,103 @@ Require Import Coq.Arith.Peano_dec.
 
 Module Taskview.
 
+  (** Valid task view *)
+  Inductive Valid v : Prop :=
+    | tv_valid_wait_cap_eq:
+      WaitCap (mode v) ->
+      wait_phase v = signal_phase v ->
+      Valid v
+    | tv_valid_wait_cap_succ:
+      WaitCap (mode v) ->
+      S (wait_phase v) = signal_phase v ->
+      Valid v
+    | tv_valid_so:
+      mode v = SIGNAL_ONLY ->
+      wait_phase v <= signal_phase v ->
+      Valid v.
+
+  Lemma valid_wait_phase_le_signal_phase:
+    forall v,
+    Valid v ->
+    wait_phase v <= signal_phase v.
+  Proof.
+    intros.
+    inversion H; intuition.
+  Qed.
+
+  Lemma make_valid:
+    Valid Taskview.make.
+  Proof.
+    intros.
+    apply tv_valid_wait_cap_eq.
+    rewrite make_mode.
+    auto with taskview.
+    rewrite make_signal_phase.
+    rewrite make_wait_phase.
+    trivial.
+  Qed.
+
+  Lemma signal_preserves_valid:
+    forall v,
+    Valid v ->
+    Valid (Taskview.signal v).
+  Proof.
+    intros.
+    inversion H.
+    - apply tv_valid_wait_cap_succ.
+      rewrite signal_preserves_mode; auto.
+      apply signal_wait_cap_signal_phase in H0.
+      rewrite H0.
+      auto using signal_preserves_wait_phase.
+    - apply tv_valid_wait_cap_succ.
+      rewrite signal_preserves_mode; auto.
+      apply signal_wait_cap_signal_phase in H0.
+      rewrite H0.
+      auto using signal_preserves_wait_phase.
+    - apply tv_valid_so.
+      rewrite signal_preserves_mode; auto.
+      rewrite signal_preserves_wait_phase.
+      rewrite signal_so_signal_phase; auto.
+  Qed.
+
+  Lemma wait_preserves_valid:
+    forall v,
+    Valid v ->
+    wait_phase v < signal_phase v ->
+    Valid (Taskview.wait v).
+  Proof.
+    intros.
+    inversion H.
+    - assert (wait_phase v <> signal_phase v) by intuition.
+      contradiction.
+    - apply tv_valid_wait_cap_eq.
+      rewrite wait_preserves_mode; auto.
+      rewrite wait_preserves_signal_phase.
+      rewrite <- H2.
+      rewrite wait_wait_phase.
+      trivial.
+    - apply tv_valid_so.
+      rewrite wait_preserves_mode; auto.
+      rewrite wait_wait_phase.
+      rewrite wait_preserves_signal_phase.
+      intuition.
+  Qed.
+
+  Lemma signal_phase_signal_inv:
+    forall v,
+    Valid v ->
+    signal_phase (signal v) = signal_phase v
+    \/ signal_phase (signal v) = S (signal_phase v).
+  Proof.
+    intros.
+    inversion H.
+    - rewrite signal_wait_cap_signal_phase; auto.
+    - rewrite signal_wait_cap_signal_phase; auto.
+    - rewrite signal_so_signal_phase; auto.
+  Qed.
+
+  (* * * * * * * *)
+
   (* We negate prec *)
 
   Inductive Ge v1 v2 : Prop := 
@@ -38,8 +135,8 @@ Module Taskview.
   Inductive Lt v1 v2 : Prop :=
     tv_lt_def:
       (signal_phase v1) < (wait_phase v2) ->
-      WaitCap v1 ->
-      SignalCap v2 ->
+      WaitCap (mode v1) ->
+      SignalCap (mode v2) ->
       Lt v1 v2.
 
   Lemma tv_lt_dec:
@@ -47,8 +144,8 @@ Module Taskview.
     { Lt v1 v2 } + { ~ Lt v1 v2 }.
   Proof.
     intros.
-    destruct (wait_cap_dec v1). {
-      destruct (signal_cap_dec v2). {
+    destruct (wait_cap_dec (mode v1)). {
+      destruct (signal_cap_dec (mode v2)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           left; auto using tv_lt_def.
         }
@@ -65,8 +162,8 @@ Module Taskview.
   Proof.
     intros.
     intuition.
-    - destruct H2; rewrite H in H3; inversion H3.
-    - destruct H0; rewrite H in H3; inversion H3.
+    - destruct H2; inversion H3.
+    - destruct H0; inversion H3.
   Qed.
 
   Lemma tv_lt_to_not_ge:
@@ -75,8 +172,8 @@ Module Taskview.
   Proof.
     intros.
     intuition.
-    - destruct H2; rewrite H0 in H3; inversion H3.
-    - destruct H; rewrite H in H3; inversion H3.
+    - destruct H2; inversion H3.
+    - inversion H; rewrite H3 in *; inversion H4.
   Qed.
 
   Lemma tv_not_lt_to_ge:
@@ -109,8 +206,8 @@ Module Taskview.
     ~ Ge v1 v2 -> Lt v1 v2.
   Proof.
     intros.
-    destruct (wait_cap_dec v1). {
-      destruct (signal_cap_dec v2). {
+    destruct (wait_cap_dec (mode v1)). {
+      destruct (signal_cap_dec (mode v2)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           auto using tv_lt_def.
         }
@@ -120,9 +217,8 @@ Module Taskview.
         }
         contradiction.
       }
-      assert (Ge v1 v2). {
+      assert (Ge v1 v2) by
         auto using tv_ge_wo, not_signal_cap_to_wo.
-      }
       contradiction.
     }
     assert (Ge v1 v2) by
@@ -142,89 +238,175 @@ Module Taskview.
     { Lt v1 v2 } + { Ge v1 v2 }.
   Proof.
     intros.
-    destruct (tv_lt_dec v1 v2).
-    - left; auto.
-    - right; auto using tv_not_lt_to_ge.
+    destruct (tv_lt_dec v1 v2);
+    auto using tv_not_lt_to_ge.
   Qed.
 
 
-
-  (** Valid task view *)
-  Inductive Valid v : Prop :=
-    | tv_valid_wait_cap_eq:
-      WaitCap v ->
-      wait_phase v = signal_phase v ->
-      Valid v
-    | tv_valid_wait_cap_succ:
-      WaitCap v ->
-      S (wait_phase v) = signal_phase v ->
-      Valid v
-    | tv_valid_so:
-      mode v = SIGNAL_ONLY ->
-      wait_phase v <= signal_phase v ->
-      Valid v.
-
-
-  Lemma signal_preserves_valid:
+  Lemma signal_preserves_ge_both:
     forall v,
-    Valid v ->
-    Valid (Lang.Taskview.signal v).
+    Ge v v ->
+    Ge (Taskview.signal v) (Taskview.signal v).
+  Proof.
+    intros;
+    unfold Taskview.signal;
+    destruct v;
+    inversion H; simpl in *;
+    first [
+      solve [(apply tv_ge_ge;
+      simpl in  *;
+      destruct mode; (simpl in *; auto))] |
+      (subst; auto using tv_ge_so, tv_ge_wo) ].
+  Qed.
+
+  Lemma signal_preserves_rhs:
+    forall v v',
+    Ge v v' ->
+    Ge v (Taskview.signal v').
   Proof.
     intros.
-    inversion H.
-    - apply tv_valid_wait_cap_succ.
-      auto using signal_presevers_wait_cap.
-      apply signal_wait_cap_signal_phase in H0.
-      rewrite H0.
-      auto using signal_preserves_wait_phase.
-    - apply tv_valid_wait_cap_succ.
-      auto using signal_presevers_wait_cap.
-      apply signal_wait_cap_signal_phase in  H0.
-      rewrite H0.
-      auto using signal_preserves_wait_phase.
-    - apply tv_valid_so.
-      rewrite signal_preserves_mode; auto.
-      rewrite signal_preserves_wait_phase.
-      rewrite signal_so_signal_phase; auto.
+    unfold Taskview.signal.
+    destruct v';
+    inversion H; simpl in *;
+    first [
+      solve [(apply tv_ge_ge;
+      simpl in  *;
+      destruct mode; (simpl in *; auto))] |
+      (subst; auto using tv_ge_so, tv_ge_wo) ].
   Qed.
 
-
-  Lemma wait_preserves_valid:
+  Lemma signal_preserves_rhs_to_both:
     forall v,
-    Valid v ->
-    wait_phase v < signal_phase v ->
-    Valid (Lang.Taskview.wait v).
+    Ge v (Taskview.signal v) ->
+    Ge (Taskview.signal v) (Taskview.signal v).
   Proof.
     intros.
-    inversion H.
-    - assert (wait_phase v <> signal_phase v) by intuition.
-      contradiction.
-    - apply tv_valid_wait_cap_eq.
-      eauto using wait_preserves_mode, wait_cap_eq_mode.
-      rewrite wait_preserves_signal_phase.
-      rewrite <- H2.
-      rewrite wait_wait_phase.
-      trivial.
-    - apply tv_valid_so.
-      eauto using wait_preserves_mode, wait_cap_eq_mode.
-      rewrite wait_wait_phase.
-      rewrite wait_preserves_signal_phase.
-      intuition.
+    unfold Taskview.signal.
+    destruct v;
+    inversion H; simpl in *;
+    first [
+      solve [(apply tv_ge_ge;
+      simpl in  *;
+      destruct mode; (simpl in *; auto))] |
+      (subst; auto using tv_ge_so, tv_ge_wo) ].
+  Qed.  
+
+  Lemma signal_preserves_lhs:
+    forall v,
+    Valid v ->
+    forall v',
+    Ge v v' ->
+    Ge (Taskview.signal v) v'.
+  Proof.
+    intros.
+    inversion H0; subst.
+    - apply tv_ge_ge.
+      destruct (signal_phase_signal_inv _ H); intuition.
+    - apply tv_ge_so.
+      rewrite signal_preserves_mode.
+      assumption.
+    - auto using tv_ge_wo.
   Qed.
-  
+
+
 End Taskview.
 
+Module Phaser.
+  Import Taskview.
 
+  Inductive Valid (ph:phaser) : Prop :=
+    ph_valid_def:
+      (forall t v,
+        Map_TID.MapsTo t v ph ->
+        Taskview.Valid v) ->
+      Valid ph.
 
-Inductive PhRel (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
-  ph_rel_def:
-    (forall t1 t2 v1 v2,
-    Map_TID.MapsTo t1 v1 ph1 ->
-    Map_TID.MapsTo t2 v2 ph2 ->
-    R v1 v2) ->
-    PhRel R ph1 ph2.
+  Lemma ph_valid_to_tv_valid:
+    forall t v ph,
+    Valid ph ->
+    Map_TID.MapsTo t v ph ->
+    Taskview.Valid v.
+  Proof.
+    intros.
+    inversion H.
+    eauto.
+  Qed.
 
-Definition PhGe := PhRel TvGe.
+  Inductive Rel (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
+    ph_rel_def:
+      (forall t1 t2 v1 v2,
+        Map_TID.MapsTo t1 v1 ph1 ->
+        Map_TID.MapsTo t2 v2 ph2 ->
+        R v1 v2) ->
+      Rel R ph1 ph2.
+
+  Definition Ge := Rel Taskview.Ge.
+
+  Lemma signal_preserves_ge_rhs:
+    forall ph,
+    Ge ph ph ->
+    forall t,
+    Ge ph (Phaser.signal t ph).
+  Proof.
+    intros.
+    unfold Ge in *.
+    apply ph_rel_def.
+    intros.
+    inversion H.
+    unfold Phaser.signal in *.
+    unfold Phaser.update in *.
+    remember (Map_TID.find _ _).
+    symmetry in Heqo.
+    destruct o as [v|?].
+    - apply Map_TID_Facts.add_mapsto_iff in H1.
+      destruct H1 as [(?,?)|(?,?)].
+      + subst. 
+        apply Map_TID_Facts.find_mapsto_iff in Heqo.
+        eauto using signal_preserves_rhs.
+      + eauto.
+    - eauto.
+  Qed.
+
+  Lemma signal_preserves_ge_rhs_to_both (ph:phaser) (V:Valid ph):
+    forall t,
+    Ge ph (Phaser.signal t ph) ->
+    Ge (Phaser.signal t ph) (Phaser.signal t ph).
+  Proof.
+    intros.
+    unfold Ge in *.
+    apply ph_rel_def.
+    intros.
+    inversion H.
+    clear H.
+    unfold Phaser.signal in *.
+    unfold Phaser.update in *.
+    remember (Map_TID.find _ _).
+    symmetry in Heqo.
+    destruct o as [v|?].
+    - apply Map_TID_Facts.add_mapsto_iff in H1.
+      apply Map_TID_Facts.add_mapsto_iff in H0.
+      apply Map_TID_Facts.find_mapsto_iff in Heqo; auto.
+      destruct H0, H1 as [(?,?)|(?,?)].
+      + destruct H.
+        repeat subst.
+        assert (Taskview.Ge v (Taskview.signal v)). {
+          apply H2 with (t2) (t2); auto.
+          auto using Map_TID.add_1.
+        }
+        auto using signal_preserves_rhs_to_both.
+      + destruct H; subst.
+        assert (Taskview.Ge v v2). {
+          eauto using Map_TID.add_2.
+        }
+        eauto using signal_preserves_lhs, ph_valid_to_tv_valid.
+      + subst.
+        destruct H.
+        eauto using Map_TID.add_1.
+      + destruct H.
+        eauto using Map_TID.add_2.
+    - eauto.
+  Qed.
+
 
 Inductive PmRel (R: phaser -> phaser -> Prop) (m1 m2:phasermap) : Prop :=
   pm_rel_def:
@@ -241,117 +423,7 @@ Inductive Valid (m:phasermap) :=
     PmGe m m ->
     Valid m.
 
-Lemma signal_respects_tv_ge:
-  forall v,
-  TvGe v v ->
-  TvGe v (Taskview.signal v) /\
-  TvGe (Taskview.signal v) (Taskview.signal v).
-Proof.
-  split; intros;
-  unfold Taskview.signal;
-  destruct v;
-  inversion H; simpl in *;
-  first [
-    solve [(apply tv_ge_ge;
-    simpl in  *;
-    destruct mode; (simpl in *; auto))] |
-    (subst; auto using tv_ge_so, tv_ge_wo) ].
-Qed.
 
-Lemma tv_ge_signal_3:
-  forall v v',
-  TvGe v v' ->
-  TvGe v (Taskview.signal v').
-Proof.
-  intros.
-  unfold Taskview.signal.
-  destruct v';
-  inversion H; simpl in *;
-  first [
-    solve [(apply tv_ge_ge;
-    simpl in  *;
-    destruct mode; (simpl in *; auto))] |
-    (subst; auto using tv_ge_so, tv_ge_wo) ].
-Qed.
-
-Lemma signal_respects_tv_ge_1:
-  forall v,
-  TvGe v v ->
-  TvGe (Taskview.signal v) (Taskview.signal v).
-Proof.
-  intros.
-  apply signal_respects_tv_ge in H.
-  destruct H; assumption.
-Qed.
-
-Lemma signal_respects_tv_ge_2:
-  forall v,
-  TvGe v v ->
-  TvGe v (Taskview.signal v).
-Proof.
-  intros.
-  apply signal_respects_tv_ge in H.
-  destruct H; assumption.
-Qed.
-
-Lemma tv_signal_ge_4:
-  forall v,
-  TvGe v (Taskview.signal v) ->
-  TvGe (Taskview.signal v) (Taskview.signal v).
-Proof.
-  intros.
-  unfold Taskview.signal.
-  destruct v;
-  inversion H; simpl in *;
-  first [
-    solve [(apply tv_ge_ge;
-    simpl in  *;
-    destruct mode; (simpl in *; auto))] |
-    (subst; auto using tv_ge_so, tv_ge_wo) ].
-Qed.  
-
-
-Lemma tv_signal_ge_5 (Hx:forall v, wait_phase v <= signal_phase v)
-  (v:taskview)
-  (Hsig: signal_phase v = wait_phase v \/ signal_phase v = S (wait_phase v)):
-  forall v',
-  TvGe v v' ->
-  TvGe (Taskview.signal v) v'.
-Proof.
-  intros.
-  unfold Taskview.signal.
-  destruct v;
-  inversion H; simpl in *.
-  - apply tv_ge_ge.
-    destruct mode;  simpl in *; subst; intuition.
-  - subst. auto using tv_ge_so.
-  - subst. auto using tv_ge_wo.
-Qed.
-
-Lemma signal_respect_ph_ge:
-  forall ph,
-  PhGe ph ph ->
-  forall t,
-  PhGe ph (Phaser.signal t ph).
-Proof.
-  intros.
-  unfold PhGe in *.
-  apply ph_rel_def.
-  intros.
-  inversion H.
-  unfold Phaser.signal in *.
-  unfold Phaser.update in *.
-  remember (Map_TID.find _ _).
-  symmetry in Heqo.
-  destruct o as [v|?].
-  - apply Map_TID_Facts.add_mapsto_iff in H1.
-    destruct H1 as [(?,?)|(?,?)].
-    + subst. 
-      apply Map_TID_Facts.find_mapsto_iff in Heqo.
-      eauto using tv_ge_signal_3.
-    + eauto.
-  - eauto.
-Qed.
 
 Inductive TvValid (v:taskview) : Prop :=
   tv_valid_def:
@@ -362,40 +434,6 @@ Inductive ValidPh (ph:phaser) : Prop :=
   valid_ph_def:
     (forall t v, Map_TID.MapsTo t v ph -> 
 
-Lemma signal_respect_ph_ge_2:
-  forall ph t,
-  PhGe ph (Phaser.signal t ph) ->
-  PhGe (Phaser.signal t ph) (Phaser.signal t ph).
-Proof.
-  intros.
-  unfold PhGe in *.
-  apply ph_rel_def.
-  intros.
-  inversion H.
-  clear H.
-  unfold Phaser.signal in *.
-  unfold Phaser.update in *.
-  remember (Map_TID.find _ _).
-  symmetry in Heqo.
-  destruct o as [v|?].
-  - apply Map_TID_Facts.add_mapsto_iff in H1.
-    apply Map_TID_Facts.add_mapsto_iff in H0.
-    destruct H0, H1 as [(?,?)|(?,?)].
-    + destruct H.
-      repeat subst.
-      assert (TvGe v (Taskview.signal v)). {
-        apply H2 with (t2) (t2).
-        apply Map_TID_Facts.find_mapsto_iff in Heqo; auto.
-        auto using Map_TID.add_1.
-      }
-      eauto using signal_respects_tv_ge_1, tv_signal_ge_4.
-    + destruct H; subst.
-      apply Map_TID_Facts.find_mapsto_iff in Heqo; auto.
-      assert (TvGe v v2). {
-        eauto using Map_TID.add_2.
-      }
-      apply tv_signal_ge_5.
-Qed.
 
 Lemma signal_respects_tv_ge_2:
   forall v,
