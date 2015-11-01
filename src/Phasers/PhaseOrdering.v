@@ -214,29 +214,56 @@ Module Taskview.
     - auto using tv_ge_wo.
   Qed.
 
+  Lemma tv_welformed_to_ge_refl:
+    forall v,
+    Welformed v ->
+    Ge v v.
+  Proof.
+    intros.
+    inversion H;
+      apply tv_ge_ge;
+      intuition.
+  Qed.
 
+  (**
+    In a wellformed phaser there is a well-defined difference
+    between wait-phases. Let [vm] be the minimum wait-phase of a
+    phaser, then the wait-phase of any phaser is given by
+
+    Example 1:
+        (1, 0)
+        (1, 1)
+        (2, 1)
+    Example 2:
+        (0, 0)
+        (1, 0)
+    
+    Which means we cannot conclude [Ge v1 v2] in general. The following
+    is a counter example.
+  *)
+  Example tv_welformed_to_ge:
+    forall v1 v2,
+    Welformed v1 ->
+    Welformed v2 ->
+    WaitCap (mode v1) ->
+    wait_phase v1 = signal_phase v1 ->
+    WaitCap (mode v2) ->
+    wait_phase v2 = signal_phase v2 ->
+    (* The following wait-phase relation can happen: *)
+    SignalCap (mode v2) ->
+    S (wait_phase v1) = wait_phase v2 ->
+    Lt v1 v2.
+  Proof.
+    intros.
+    apply tv_lt_def; auto.
+    rewrite <- H2 in *.
+    intuition.
+  Qed.
 End Taskview.
 
 Module Phaser.
   Import Taskview.
-
-  Inductive Welformed (ph:phaser) : Prop :=
-    ph_welformed_def:
-      (forall t v,
-        Map_TID.MapsTo t v ph ->
-        Taskview.Welformed v) ->
-      Welformed ph.
-
-  Lemma ph_welformed_to_tv_valid:
-    forall t v ph,
-    Welformed ph ->
-    Map_TID.MapsTo t v ph ->
-    Taskview.Welformed v.
-  Proof.
-    intros.
-    inversion H.
-    eauto.
-  Qed.
+  Import Welformedness.Phaser.
 
   Inductive Rel (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
     ph_rel_def:
@@ -247,6 +274,15 @@ Module Phaser.
       Rel R ph1 ph2.
 
   Definition Ge := Rel Taskview.Ge.
+
+  Lemma tv_welformed_to_ge_refl:
+    forall ph,
+    Welformed ph ->
+    Ge ph ph.
+  Proof.
+    intros.
+    apply ph_rel_def.
+    intros.
 
   Lemma signal_preserves_ge_rhs:
     forall ph,
