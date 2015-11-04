@@ -50,7 +50,7 @@ Inductive WaitCap : regmode -> Prop :=
   | wait_cap_wo:
     WaitCap WAIT_ONLY.
 
-Hint Resolve wait_cap_sw wait_cap_wo: taskview.
+Hint Resolve wait_cap_sw wait_cap_wo.
 
 Inductive SignalCap : regmode -> Prop :=
   | signal_cap_sw:
@@ -58,7 +58,17 @@ Inductive SignalCap : regmode -> Prop :=
   | signal_cap_so:
     SignalCap SIGNAL_ONLY.
 
-Hint Resolve signal_cap_so signal_cap_sw: taskview.
+Hint Resolve signal_cap_so signal_cap_sw.
+
+Module Semantics.
+  Inductive op := | SIGNAL | WAIT.
+  Inductive Reduction (v:taskview) : op -> taskview -> Prop :=
+    | reduction_signal:
+      Reduction v SIGNAL (signal v)
+    | reduction_wait_wait_cap:
+      wait_phase v < signal_phase v -> 
+      Reduction v WAIT (wait v).
+End Semantics.
 
 Section Facts.
 
@@ -96,7 +106,7 @@ Section Facts.
     { WaitCap r } + { ~ WaitCap r }.
   Proof.
     intros.
-    destruct r; auto with taskview.
+    destruct r; auto.
     right; intuition; inversion H.
   Qed.
 
@@ -106,7 +116,7 @@ Section Facts.
     WaitCap r.
   Proof.
     intros.
-    destruct r; auto with taskview.
+    destruct r; auto.
     contradiction H; trivial.
   Qed.
 
@@ -119,7 +129,7 @@ Section Facts.
     destruct r;
     intuition;
     contradiction H;
-    auto with taskview.
+    auto.
   Qed.
 
   Lemma wait_cap_so_dec:
@@ -136,7 +146,7 @@ Section Facts.
     { SignalCap r } + { ~ SignalCap r }.
   Proof.
     intros.
-    destruct r; auto with taskview.
+    destruct r; auto.
     right; intuition; inversion H.
   Qed.
 
@@ -157,7 +167,7 @@ Section Facts.
     destruct r;
     intuition;
     contradiction H;
-    auto with taskview.
+    auto.
   Qed.
 
   Lemma signal_cap_wo_dec:
