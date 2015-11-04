@@ -10,17 +10,22 @@ Open Scope nat.
 Module Taskview.
   Import Welformedness.Taskview.
 
-  (* We negate prec *)
+  Inductive Lt v1 v2 : Prop :=
+    tv_lt_def:
+      signal_phase v1 < wait_phase v2 ->
+      SignalCap (mode v1) ->
+      WaitCap (mode v2) ->
+      Lt v1 v2.
 
   Inductive Ge v1 v2 : Prop := 
     | tv_ge_ge:
        signal_phase v1 >= wait_phase v2 ->
        Ge v1 v2
     | tv_ge_so:
-      mode v1 = SIGNAL_ONLY ->
+      mode v2 = SIGNAL_ONLY ->
       Ge v1 v2
     | tv_ge_wo:
-      mode v2 = WAIT_ONLY ->
+      mode v1 = WAIT_ONLY ->
       Ge v1 v2.
 
   Lemma tv_ge_dec:
@@ -30,28 +35,21 @@ Module Taskview.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
     { left; auto using tv_ge_ge. }
-    destruct (regmode_eq_dec (mode v1) SIGNAL_ONLY).
+    destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY).
     { left; auto using tv_ge_so. }
-    destruct (regmode_eq_dec (mode v2) WAIT_ONLY).
+    destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
     { left; auto using tv_ge_wo. }
     right.
     intuition.
   Qed.
-
-  Inductive Lt v1 v2 : Prop :=
-    tv_lt_def:
-      (signal_phase v1) < (wait_phase v2) ->
-      WaitCap (mode v1) ->
-      SignalCap (mode v2) ->
-      Lt v1 v2.
 
   Lemma tv_lt_dec:
     forall v1 v2,
     { Lt v1 v2 } + { ~ Lt v1 v2 }.
   Proof.
     intros.
-    destruct (wait_cap_dec (mode v1)). {
-      destruct (signal_cap_dec (mode v2)). {
+    destruct (wait_cap_dec (mode v2)). {
+      destruct (signal_cap_dec (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           left; auto using tv_lt_def.
         }
@@ -68,8 +66,8 @@ Module Taskview.
   Proof.
     intros.
     intuition.
-    - destruct H2; inversion H3.
     - destruct H0; inversion H3.
+    - destruct H2; inversion H3.
   Qed.
 
   Lemma tv_lt_to_not_ge:
@@ -78,8 +76,8 @@ Module Taskview.
   Proof.
     intros.
     intuition.
-    - destruct H2; inversion H3.
-    - inversion H; rewrite H3 in *; inversion H4.
+    - destruct H; inversion H3.
+    - inversion H2; rewrite H3 in *; inversion H4.
   Qed.
 
   Lemma tv_not_lt_to_ge:
@@ -89,9 +87,9 @@ Module Taskview.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
     { auto using tv_ge_ge. }
-    destruct (regmode_eq_dec (mode v1) SIGNAL_ONLY).
+    destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY).
     { auto using tv_ge_so. }
-    destruct (regmode_eq_dec (mode v2) WAIT_ONLY).
+    destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
     { auto using tv_ge_wo. }
     assert (Lt v1 v2). {
       assert (signal_phase v1 < wait_phase v2) by intuition.
@@ -112,8 +110,8 @@ Module Taskview.
     ~ Ge v1 v2 -> Lt v1 v2.
   Proof.
     intros.
-    destruct (wait_cap_dec (mode v1)). {
-      destruct (signal_cap_dec (mode v2)). {
+    destruct (wait_cap_dec (mode v2)). {
+      destruct (signal_cap_dec (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           auto using tv_lt_def.
         }
@@ -147,7 +145,6 @@ Module Taskview.
     destruct (tv_lt_dec v1 v2);
     auto using tv_not_lt_to_ge.
   Qed.
-
 
   Lemma signal_preserves_ge_both:
     forall v,
@@ -208,10 +205,9 @@ Module Taskview.
     inversion H0; subst.
     - apply tv_ge_ge.
       destruct (signal_phase_signal_inv _ H); intuition.
-    - apply tv_ge_so.
-      rewrite signal_preserves_mode.
-      assumption.
-    - auto using tv_ge_wo.
+    - auto using tv_ge_so.
+    - rewrite <- signal_preserves_mode in *.
+      auto using tv_ge_wo.
   Qed.
 
   Lemma tv_welformed_to_ge_refl:
@@ -223,7 +219,7 @@ Module Taskview.
     inversion H;
       apply tv_ge_ge;
       intuition.
-  Qed.
+  Qed.        
 
   (**
     In a wellformed phaser there is a well-defined difference
@@ -231,34 +227,32 @@ Module Taskview.
     phaser, then the wait-phase of any phaser is given by
 
     Example 1:
+     WO:(0, 0)
         (1, 0)
         (1, 1)
         (2, 1)
-    Example 2:
+     SO:(5, 3)
+
+   (*1, 0) >= (2, 1*)
+   (*2, 1) >= (1, 0*)
+   (1,0) >= (2+k, 3)
+   (*1, 0) >= (1, 1*)
+   (*2, 1) >= (1, 0*)
+   
+   (1,0) >= (0,0) WO (OK)
+ WO:(0,0) >= *
+ SO:(5, 3) >= (1, 0 )
+   * >= (5,3):SO
+   
+
+    Example 2, if the smallest is not-signalled, then
+    the wait phase difference is the same. The biggest
+    signal-difference is 1.
+    
         (0, 0)
         (1, 0)
     
-    Which means we cannot conclude [Ge v1 v2] in general. The following
-    is a counter example.
   *)
-  Example tv_welformed_to_ge:
-    forall v1 v2,
-    Welformed v1 ->
-    Welformed v2 ->
-    WaitCap (mode v1) ->
-    wait_phase v1 = signal_phase v1 ->
-    WaitCap (mode v2) ->
-    wait_phase v2 = signal_phase v2 ->
-    (* The following wait-phase relation can happen: *)
-    SignalCap (mode v2) ->
-    S (wait_phase v1) = wait_phase v2 ->
-    Lt v1 v2.
-  Proof.
-    intros.
-    apply tv_lt_def; auto.
-    rewrite <- H2 in *.
-    intuition.
-  Qed.
 End Taskview.
 
 Module Phaser.
@@ -274,15 +268,6 @@ Module Phaser.
       Rel R ph1 ph2.
 
   Definition Ge := Rel Taskview.Ge.
-
-  Lemma tv_welformed_to_ge_refl:
-    forall ph,
-    Welformed ph ->
-    Ge ph ph.
-  Proof.
-    intros.
-    apply ph_rel_def.
-    intros.
 
   Lemma signal_preserves_ge_rhs:
     forall ph,
