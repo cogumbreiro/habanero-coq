@@ -35,7 +35,7 @@ Module Taskview.
     intros.
     apply tv_welformed_wait_cap_eq.
     rewrite make_mode.
-    auto with taskview.
+    auto.
     rewrite make_signal_phase.
     rewrite make_wait_phase.
     trivial.
@@ -85,6 +85,17 @@ Module Taskview.
       rewrite wait_wait_phase.
       rewrite wait_preserves_signal_phase.
       intuition.
+  Qed.
+
+  Theorem tv_reduction_preserves_welformed:
+    forall v o v',
+    Welformed v ->
+    Semantics.Reduction v o v' ->
+    Welformed v'.
+  Proof.
+    intros.
+    inversion H0; subst; 
+    auto using signal_preserves_welformed, wait_preserves_welformed.
   Qed.
 
   Lemma signal_phase_signal_inv:
