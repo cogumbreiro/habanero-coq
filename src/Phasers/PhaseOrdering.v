@@ -41,6 +41,8 @@ Module Taskview.
   Open Scope phaser_scope.
   Import Notations.
 
+  Section Facts.
+
   Lemma le_spec:
     forall v1 v2,
     v1 <= v2 <-> v2 >= v1.
@@ -174,7 +176,7 @@ Module Taskview.
   Qed.
 
 
-  Lemma signal_preserves_rhs:
+  Let signal_preserves_rhs:
     forall v v',
     Ge v v' ->
     Ge v (Taskview.signal v').
@@ -190,7 +192,7 @@ Module Taskview.
       (subst; auto using tv_ge_so, tv_ge_wo) ].
   Qed.
 
-  Lemma wait_preserves_rhs:
+  Let wait_preserves_rhs:
     forall v,
     (wait_phase v < signal_phase v) % nat ->
     Welformed v ->
@@ -201,22 +203,6 @@ Module Taskview.
     rewrite wait_wait_phase.
     intuition.
   Qed.
-(*
-  Lemma signal_preserves_rhs_to_both:
-    forall v,
-    Ge v (Taskview.signal v) ->
-    Ge (Taskview.signal v) (Taskview.signal v).
-  Proof.
-    intros.
-    unfold Taskview.signal.
-    destruct v;
-    inversion H; simpl in *;
-    first [
-      solve [(apply tv_ge_ge;
-      simpl in  *;
-      destruct mode; (simpl in *; auto))] |
-      (subst; auto using tv_ge_so, tv_ge_wo) ].
-  Qed.  *)
 
   Lemma tv_welformed_to_ge_refl:
     forall v,
@@ -229,8 +215,7 @@ Module Taskview.
       intuition.
   Qed.
 
-
-  Lemma signal_preserves_lhs:
+  Let signal_preserves_lhs:
     forall v,
     Welformed v ->
     forall v',
@@ -263,7 +248,7 @@ Module Taskview.
       auto using wait_preserves_rhs.
   Qed.
 
-  Lemma tv_signal_ge_lhs:
+  Let tv_signal_ge_lhs:
     forall v v',
     Welformed v ->
     Reduce v SIGNAL v' ->
@@ -275,7 +260,7 @@ Module Taskview.
     apply signal_preserves_lhs; auto using tv_welformed_to_ge_refl.
   Qed.
 
-  Lemma tv_wait_ge_lhs:
+  Let tv_wait_ge_lhs:
     forall v,
     (wait_phase v < signal_phase v) % nat ->
     Ge (wait v) v.
@@ -285,7 +270,7 @@ Module Taskview.
     intuition.
  Qed.
 
-  Lemma tv_ge_reduce_lhs:
+  Let tv_ge_reduce_lhs:
     forall v o v',
     Welformed v ->
     Reduce v o v' ->
@@ -444,6 +429,7 @@ Module Taskview.
         (1, 0)
     
   *)
+  End Facts.
 End Taskview.
 
 Module Phaser.
