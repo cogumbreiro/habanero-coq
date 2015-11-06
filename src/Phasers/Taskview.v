@@ -62,12 +62,16 @@ Hint Resolve signal_cap_so signal_cap_sw.
 
 Module Semantics.
   Inductive op := | SIGNAL | WAIT.
-  Inductive Reduction (v:taskview) : op -> taskview -> Prop :=
-    | reduction_signal:
-      Reduction v SIGNAL (signal v)
-    | reduction_wait_wait_cap:
-      wait_phase v < signal_phase v -> 
-      Reduction v WAIT (wait v).
+
+  Definition get_func (o:op) :=
+  match o with
+  | SIGNAL => signal
+  | WAIT => wait
+  end.
+
+  Inductive Reduction (v:taskview) (o:op): taskview -> Prop :=
+    reduction_def:
+      Reduction v o ((get_func o) v).
 End Semantics.
 
 Section Facts.
