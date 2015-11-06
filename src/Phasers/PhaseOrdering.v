@@ -5,9 +5,8 @@ Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.Welformedness.
 
-Open Scope nat.
-
 Module Taskview.
+  Import Taskview.Semantics.
   Import Welformedness.Taskview.
 
   Inductive Lt v1 v2 : Prop :=
@@ -28,9 +27,37 @@ Module Taskview.
       mode v1 = WAIT_ONLY ->
       Ge v1 v2.
 
+  Definition Le v1 v2 := Ge v2 v1.
+
+  Definition Gt v1 v2 := Lt v2 v1.
+
+  Module Notations.
+    Infix "<" := Lt : phaser_scope.
+    Infix ">" := Gt : phaser_scope.
+    Infix "<=" := Le : phaser_scope.
+    Infix ">=" := Ge : phaser_scope.
+  End Notations.
+
+  Open Scope phaser_scope.
+  Import Notations.
+
+  Lemma le_spec:
+    forall v1 v2,
+    v1 <= v2 <-> v2 >= v1.
+  Proof.
+    split; auto.
+  Qed.
+
+  Lemma lt_spec:
+    forall v1 v2,
+    v1 < v2 <-> v2 > v1.
+  Proof.
+    split; auto.
+  Qed.
+
   Lemma tv_ge_dec:
     forall v1 v2,
-    { Ge v1 v2 } + { ~ Ge v1 v2 }.
+    { v1 >= v2 } + { ~ v1 >= v2 }.
   Proof.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
@@ -45,7 +72,7 @@ Module Taskview.
 
   Lemma tv_lt_dec:
     forall v1 v2,
-    { Lt v1 v2 } + { ~ Lt v1 v2 }.
+    { v1 < v2 } + { ~ v1 < v2 }.
   Proof.
     intros.
     destruct (wait_cap_dec (mode v2)). {
@@ -92,7 +119,7 @@ Module Taskview.
     destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
     { auto using tv_ge_wo. }
     assert (Lt v1 v2). {
-      assert (signal_phase v1 < wait_phase v2) by intuition.
+      assert (signal_phase v1 < wait_phase v2) % nat by intuition.
       auto using tv_lt_def, neq_wo_to_signal_cap, neq_so_to_wait_cap.
     }
     contradiction.
@@ -116,7 +143,7 @@ Module Taskview.
           auto using tv_lt_def.
         }
         assert (Ge v1 v2). {
-          assert (signal_phase v1 >= wait_phase v2) by intuition.
+          assert (signal_phase v1 >= wait_phase v2) % nat by intuition.
           auto using tv_ge_ge.
         }
         contradiction.
@@ -146,21 +173,6 @@ Module Taskview.
     auto using tv_not_lt_to_ge.
   Qed.
 
-  Lemma signal_preserves_ge_both:
-    forall v,
-    Ge v v ->
-    Ge (Taskview.signal v) (Taskview.signal v).
-  Proof.
-    intros;
-    unfold Taskview.signal;
-    destruct v;
-    inversion H; simpl in *;
-    first [
-      solve [(apply tv_ge_ge;
-      simpl in  *;
-      destruct mode; (simpl in *; auto))] |
-      (subst; auto using tv_ge_so, tv_ge_wo) ].
-  Qed.
 
   Lemma signal_preserves_rhs:
     forall v v',
@@ -178,6 +190,18 @@ Module Taskview.
       (subst; auto using tv_ge_so, tv_ge_wo) ].
   Qed.
 
+  Lemma wait_preserves_rhs:
+    forall v,
+    (wait_phase v < signal_phase v) % nat ->
+    Welformed v ->
+    Ge v (Taskview.wait v).
+  Proof.
+    intros.
+    apply tv_ge_ge.
+    rewrite wait_wait_phase.
+    intuition.
+  Qed.
+(*
   Lemma signal_preserves_rhs_to_both:
     forall v,
     Ge v (Taskview.signal v) ->
@@ -192,7 +216,19 @@ Module Taskview.
       simpl in  *;
       destruct mode; (simpl in *; auto))] |
       (subst; auto using tv_ge_so, tv_ge_wo) ].
-  Qed.  
+  Qed.  *)
+
+  Lemma tv_welformed_to_ge_refl:
+    forall v,
+    Welformed v ->
+    Ge v v.
+  Proof.
+    intros.
+    inversion H;
+      apply tv_ge_ge;
+      intuition.
+  Qed.
+
 
   Lemma signal_preserves_lhs:
     forall v,
@@ -210,16 +246,171 @@ Module Taskview.
       auto using tv_ge_wo.
   Qed.
 
-  Lemma tv_welformed_to_ge_refl:
-    forall v,
+  Lemma tv_ge_reduce:
+    forall v o v',
     Welformed v ->
-    Ge v v.
+    Reduce v o v' ->
+    Ge v v'.
   Proof.
     intros.
-    inversion H;
-      apply tv_ge_ge;
+    assert (Hx := H0).
+    apply reduce_spec in Hx.
+    subst.
+    assert (Ge v v) by auto using tv_welformed_to_ge_refl.
+    destruct o; simpl.
+    - auto using signal_preserves_rhs.
+    - inversion H0.
+      auto using wait_preserves_rhs.
+  Qed.
+
+  Lemma tv_signal_ge_lhs:
+    forall v v',
+    Welformed v ->
+    Reduce v SIGNAL v' ->
+    Ge v' v.
+  Proof.
+    intros.
+    inversion H0.
+    subst.
+    apply signal_preserves_lhs; auto using tv_welformed_to_ge_refl.
+  Qed.
+
+  Lemma tv_wait_ge_lhs:
+    forall v,
+    (wait_phase v < signal_phase v) % nat ->
+    Ge (wait v) v.
+  Proof.
+    intros.
+    apply tv_ge_ge.
+    intuition.
+ Qed.
+
+  Lemma tv_ge_reduce_lhs:
+    forall v o v',
+    Welformed v ->
+    Reduce v o v' ->
+    Ge v' v.
+  Proof.
+    intros.
+    inversion H0; subst.
+    - auto using tv_signal_ge_lhs.
+    - auto using tv_wait_ge_lhs.
+  Qed.
+
+  Let tv_ge_reduce_trans_sw:
+    forall x o y o' z,
+    Welformed x ->
+    Welformed y ->
+    Welformed z ->
+    Reduce x o y ->
+    Reduce y o' z ->
+    mode x = SIGNAL_WAIT ->
+    z >= x.
+  Proof.
+    intros.
+    assert (Ge z y) by eauto using tv_ge_reduce_lhs.
+    assert (Ge y x) by eauto using tv_ge_reduce_lhs.
+    apply tv_ge_ge.
+    destruct o.
+    - apply reduce_rw_signal in H2.
+      destruct o'.
+      + apply reduce_rw_signal in H3.
+        assert (R: mode z = mode x). {
+          subst.
+          repeat rewrite signal_preserves_mode in *.
+          trivial.
+        }
+        assert (WaitCap (mode z)). {
+          rewrite R.
+          rewrite H4.
+          apply wait_cap_sw.
+        }
+        subst.
+        assert (WaitCap (mode x)). {
+          rewrite H4.
+          apply wait_cap_sw.
+        }
+        rewrite signal_signal_wait_cap; auto.
+        rewrite signal_wait_cap_signal_phase; (intuition || auto).
+      + apply reduce_rw_wait in H3.
+        assert (wait_phase x <= signal_phase x)%nat by auto
+          using welformed_wait_phase_le_signal_phase.
+        subst.
+        rewrite wait_preserves_signal_phase.
+        assert (signal_phase x <= signal_phase (signal x)) % nat. {
+          auto using signal_phase_le_signal.
+        }
+        intuition.
+    - assert (WaitCap (mode x)). {
+        rewrite H4.
+        auto using wait_cap_sw.
+      }
+      assert (o' = SIGNAL) by eauto using reduce_trans_inv.
+      subst.
+      assert (R: signal_phase y = wait_phase y) by eauto using reduce_wait_inv_wait_cap.
+      inversion H2; subst.
+      inversion H3; subst.
+      rewrite wait_preserves_signal_phase in *.
+      rewrite signal_wait_cap_signal_phase in *; auto.
+      rewrite wait_wait_phase in *.
       intuition.
-  Qed.        
+  Qed.
+
+  Lemma tv_ge_reduce_trans:
+    forall x o y o' z,
+    Welformed x ->
+    Welformed y ->
+    Welformed z ->
+    Reduce x o y ->
+    Reduce y o' z ->
+    z >= x.
+  Proof.
+    intros.
+    assert (Ge z y) by eauto using tv_ge_reduce_lhs.
+    assert (Ge y x) by eauto using tv_ge_reduce_lhs.
+    assert (R1: mode y = mode x) by
+      eauto using reduce_preserves_mode.
+    assert (R2: mode z = mode y). {
+      eauto using reduce_preserves_mode.
+    }
+    assert (R3: mode x = mode z) by
+      (transitivity (mode y); auto).
+    destruct (regmode_eq_dec (mode z) WAIT_ONLY).
+    {
+      assert (mode x = WAIT_ONLY). {
+        assert (mode y = WAIT_ONLY). {
+          apply reduce_preserves_mode in H3.
+          rewrite <- H3.
+          assumption.
+        }
+        apply reduce_preserves_mode in H2.
+        rewrite <- H2.
+        assumption.
+      }
+      auto using tv_ge_wo.
+    }
+    destruct (regmode_eq_dec (mode z) SIGNAL_ONLY). {
+      assert (mode x = SIGNAL_ONLY). {
+        assert (mode y = SIGNAL_ONLY). {
+          apply reduce_preserves_mode in H3.
+          rewrite <- H3.
+          assumption.
+        }
+        apply reduce_preserves_mode in H2.
+        rewrite <- H2.
+        assumption.
+      }
+      auto using tv_ge_so.
+    }
+    assert (mode z = SIGNAL_WAIT). {
+      destruct (mode z);
+        intuition.
+    }
+    assert (mode x = SIGNAL_WAIT). {
+      transitivity (mode z); auto.
+    }
+    eauto using tv_ge_reduce_trans_sw.
+  Qed.
 
   (**
     In a wellformed phaser there is a well-defined difference

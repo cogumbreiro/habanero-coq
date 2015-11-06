@@ -161,7 +161,7 @@ Module Phaser.
       Reduction ph t o ph' ->
       as_tv_op o = Some o' ->
       Map_TID.MapsTo t v ph ->
-      ph' = Map_TID.add t (Semantics.get_func o' v) ph.
+      ph' = Map_TID.add t (Semantics.eval o' v) ph.
     Proof.
       intros.
       destruct o'; simpl.
@@ -171,7 +171,7 @@ Module Phaser.
         auto using ph_wait_spec.
     Qed.
 
-  End Semantics.
+ End Semantics.
 End Phaser.
 
 Definition phased := (phid * regmode) % type.

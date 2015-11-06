@@ -50,7 +50,7 @@ Inductive WaitCap : regmode -> Prop :=
   | wait_cap_wo:
     WaitCap WAIT_ONLY.
 
-Hint Resolve wait_cap_sw wait_cap_wo.
+Hint Constructors WaitCap.
 
 Inductive SignalCap : regmode -> Prop :=
   | signal_cap_sw:
@@ -58,21 +58,7 @@ Inductive SignalCap : regmode -> Prop :=
   | signal_cap_so:
     SignalCap SIGNAL_ONLY.
 
-Hint Resolve signal_cap_so signal_cap_sw.
-
-Module Semantics.
-  Inductive op := | SIGNAL | WAIT.
-
-  Definition get_func (o:op) :=
-  match o with
-  | SIGNAL => signal
-  | WAIT => wait
-  end.
-
-  Inductive Reduction (v:taskview) (o:op): taskview -> Prop :=
-    reduction_def:
-      Reduction v o ((get_func o) v).
-End Semantics.
+Hint Constructors SignalCap.
 
 Section Facts.
 
@@ -124,6 +110,26 @@ Section Facts.
     contradiction H; trivial.
   Qed.
 
+  Lemma wait_cap_to_neq_so:
+    forall r,
+    WaitCap r ->
+    r <> SIGNAL_ONLY.
+  Proof.
+    intros.
+    inversion H;
+      subst;
+      intuition;
+      inversion H0.
+  Qed.
+
+  Lemma wait_cap_rw:
+    forall r,
+    WaitCap r <-> r <> SIGNAL_ONLY.
+  Proof.
+    intros.
+    split; auto using wait_cap_to_neq_so, neq_so_to_wait_cap.
+  Qed.
+
   Lemma not_wait_cap_to_so:
     forall r,
     ~ WaitCap r ->
@@ -160,6 +166,26 @@ Section Facts.
     SignalCap r.
   Proof.
     destruct r; intuition.
+  Qed.
+
+  Lemma signal_cap_to_neq_wo:
+    forall r,
+    SignalCap r ->
+    r <> WAIT_ONLY.
+  Proof.
+    intros.
+    inversion H;
+      subst;
+      intuition;
+      inversion H0.
+  Qed.
+
+  Lemma signal_cap_rw:
+    forall r,
+    SignalCap r <-> r <> WAIT_ONLY.
+  Proof.
+    intros.
+    split; auto using signal_cap_to_neq_wo, neq_wo_to_signal_cap.
   Qed.
 
   Lemma not_signal_cap_to_wo:
@@ -265,4 +291,86 @@ Section Facts.
     trivial.
   Qed.
 
+  Lemma signal_signal_wait_cap:
+    forall v,
+    WaitCap (mode v) ->
+    signal (signal v) = signal v.
+  Proof.
+    intros.
+    inversion H;
+      unfold signal;
+      unfold set_signal_phase;
+      rewrite <- H1;
+      simpl;
+      auto.
+  Qed.
 End Facts.
+
+Module Semantics.
+  Inductive op := | SIGNAL | WAIT.
+
+  Definition eval (o:op) :=
+  match o with
+  | SIGNAL => signal
+  | WAIT => wait
+  end.
+
+  Inductive Reduce (v:taskview) : op -> taskview -> Prop :=
+    | reduce_signal:
+      Reduce v SIGNAL (signal v)
+    | reduce_wait:
+      wait_phase v < signal_phase v ->
+      Reduce v WAIT (wait v).
+
+  Lemma reduce_spec:
+    forall v o v',
+    Reduce v o v' ->
+    v' = eval o v.
+  Proof.
+    intros.
+    inversion H; subst; simpl; trivial.
+  Qed.
+
+  Lemma reduce_rw_signal:
+    forall v v',
+    Reduce v SIGNAL v' ->
+    v' = signal v.
+  Proof.
+    intros.
+    inversion H.
+    trivial.
+  Qed.
+
+  Lemma reduce_rw_wait:
+    forall v v',
+    Reduce v WAIT v' ->
+    v' = wait v.
+  Proof.
+    intros.
+    inversion H.
+    trivial.
+  Qed.
+
+  Lemma eval_preserves_mode:
+    forall v o,
+    mode (eval o v) = mode v.
+  Proof.
+    intros.
+    destruct o;
+    simpl;
+    auto using signal_preserves_mode, wait_preserves_mode.
+  Qed.
+
+  Lemma reduce_preserves_mode:
+    forall v o v',
+    Reduce v o v' ->
+    mode v' = mode v.
+  Proof.
+    intros.
+    apply reduce_spec in H.
+    subst.
+    auto using eval_preserves_mode.
+  Qed.
+    
+
+End Semantics.
