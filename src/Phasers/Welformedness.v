@@ -195,6 +195,8 @@ End Taskview.
 
 Module Phaser.
   Import Taskview.
+  Import Lang.Phaser.
+  Import Lang.Phaser.Semantics.
 
   Inductive Welformed (ph:phaser) : Prop :=
     ph_welformed_def:
@@ -212,5 +214,128 @@ Module Phaser.
     intros.
     inversion H.
     eauto.
+  Qed.
+
+  Lemma ph_signal_preserves_welformed:
+    forall ph t ph',
+    Welformed ph ->
+    Reduction ph t SIGNAL ph' ->
+    Welformed ph'.
+  Proof.
+    intros.
+    inversion H0; subst.
+    apply Map_TID_Extra.in_to_mapsto in H1.
+    destruct H1 as (v, Hmt).
+    assert (R: signal t ph = Map_TID.add t (Taskview.signal v) ph) by auto using ph_signal_spec.
+    rewrite R.
+    apply ph_welformed_def.
+    intros.
+    destruct (TID.eq_dec t0 t).
+    + subst.
+      remember (Taskview.signal _) as v'.
+      assert (v0 = v'). {
+        assert (Map_TID.MapsTo t v' (Map_TID.add t v' ph)) by auto using Map_TID.add_1.
+        eauto using Map_TID_Facts.MapsTo_fun.
+      }
+      subst.
+      assert (Taskview.Welformed v) by eauto using ph_welformed_to_tv_welformed.
+      auto using signal_preserves_welformed.
+    + apply Map_TID_Facts.add_neq_mapsto_iff in H1; auto with *.
+      eauto using ph_welformed_to_tv_welformed.
+  Qed.
+
+  Lemma ph_wait_preserves_welformed:
+    forall ph t ph',
+    Welformed ph ->
+    Reduction ph t WAIT ph' ->
+    Welformed ph'.
+  Proof.
+    intros.
+    inversion H0; subst.
+    assert (R: wait t ph = Map_TID.add t (Taskview.wait v) ph) by auto using ph_wait_spec.
+    rewrite R; clear R.
+    apply ph_welformed_def.
+    intros.
+    destruct (TID.eq_dec t0 t).
+    + subst.
+      remember (Taskview.wait _) as v'.
+      assert (v0 = v'). {
+        assert (Map_TID.MapsTo t v' (Map_TID.add t v' ph)) by auto using Map_TID.add_1.
+        eauto using Map_TID_Facts.MapsTo_fun.
+      }
+      subst.
+      assert (Taskview.Welformed v) by eauto using ph_welformed_to_tv_welformed.
+      auto using wait_preserves_welformed.
+    + apply Map_TID_Facts.add_neq_mapsto_iff in H4; auto with *.
+      eauto using ph_welformed_to_tv_welformed.
+  Qed.
+
+  Lemma ph_drop_preserves_welformed:
+    forall ph t ph',
+    Welformed ph ->
+    Reduction ph t DROP ph' ->
+    Welformed ph'.
+  Proof.
+    intros.
+    inversion H0; subst.
+    unfold drop in *.
+    apply ph_welformed_def.
+    intros.
+    rewrite Map_TID_Facts.remove_mapsto_iff in H2.
+    destruct H2.
+    eauto using ph_welformed_to_tv_welformed.
+  Qed.
+
+  Lemma ph_register_preserves_welformed:
+    forall ph t v ph',
+    Welformed ph ->
+    Taskview.Welformed v ->
+    Reduction ph t (REGISTER v) ph' ->
+    Welformed ph'.
+  Proof.
+    intros.
+    inversion H1; subst.
+    assert (R: register t v ph = Map_TID.add t v ph) by auto using ph_register_spec.
+    rewrite R; clear R.
+    apply ph_welformed_def.
+    intros.
+    destruct (TID.eq_dec t0 t).
+    + subst.
+      assert (v0 = v). {
+        assert (Map_TID.MapsTo t v (Map_TID.add t v ph)) by auto using Map_TID.add_1.
+        eauto using Map_TID_Facts.MapsTo_fun.
+      }
+      subst.
+      assumption.
+    + apply Map_TID_Facts.add_neq_mapsto_iff in H2; auto with *.
+      eauto using ph_welformed_to_tv_welformed.
+  Qed.
+
+  Inductive WelformedOp : op -> Prop :=
+    | welformed_op_signal:
+      WelformedOp SIGNAL
+    | welformed_op_wait:
+      WelformedOp WAIT
+    | welformed_op_drop:
+      WelformedOp DROP
+    | welformed_op_register:
+      forall v,
+      Taskview.Welformed v ->
+      WelformedOp (REGISTER v).
+
+  Lemma ph_reduce_preserves_welformed:
+    forall ph t o ph',
+    Welformed ph ->
+    WelformedOp o ->
+    Reduction ph t o ph' ->
+    Welformed ph'.
+  Proof.
+    intros.
+    inversion H1; subst; inversion H0;
+    eauto using
+      ph_signal_preserves_welformed,
+      ph_wait_preserves_welformed,
+      ph_drop_preserves_welformed,
+      ph_register_preserves_welformed.
   Qed.
 End Phaser.
