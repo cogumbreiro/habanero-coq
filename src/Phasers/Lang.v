@@ -59,7 +59,9 @@ Module Phaser.
       Map_TID.In t ph ->
       Reduction ph t SIGNAL (signal t ph)
     | reduction_wait:
-      Map_TID.In t ph ->
+      forall v,
+      Map_TID.MapsTo t v ph ->
+      wait_phase v < signal_phase v ->
       Sync ph t ->
       Reduction ph t WAIT (wait t ph)
     | reduction_drop:
@@ -142,6 +144,31 @@ Module Phaser.
       auto using ph_update_spec.
     Qed.
 
+    Lemma ph_drop_spec:
+      forall t ph ph',
+      Map_TID.In t ph ->
+      Reduction ph t DROP ph' ->
+      ph' = Map_TID.remove t ph.
+    Proof.
+      intros.
+      inversion H0; subst.
+      unfold drop; auto.
+    Qed.
+
+    Lemma ph_register_spec:
+      forall t v ph ph',
+      ~ Map_TID.In t ph ->
+      Reduction ph t (REGISTER v) ph' ->
+      ph' = Map_TID.add t v ph.
+    Proof.
+      intros.
+      inversion H0; subst.
+      unfold register in *.
+      rewrite Map_TID_Facts.not_find_in_iff in H.
+      rewrite H in *.
+      trivial.
+    Qed.
+
     Lemma ph_tv_in:
       forall ph t o o' ph',
       Reduction ph t o ph' ->
@@ -154,6 +181,7 @@ Module Phaser.
         inversion H; auto.
       - apply as_tv_op_inv_wait in H0; subst.
         inversion H; auto.
+        eauto using Map_TID_Extra.mapsto_to_in.
     Qed.
 
     Lemma ph_to_tv_correct:
@@ -169,6 +197,26 @@ Module Phaser.
         auto using ph_signal_spec.
       - apply as_tv_op_inv_wait in H0; subst.
         auto using ph_wait_spec.
+    Qed.
+
+    Lemma ph_reduce_to_tv_reduce:
+      forall ph t o o' ph' v,
+      Reduction ph t o ph' ->
+      as_tv_op o = Some o' ->
+      Map_TID.MapsTo t v ph ->
+      Semantics.Reduce v o' (Semantics.eval o' v).
+    Proof.
+      intros.
+      destruct o'; simpl.
+      - apply as_tv_op_inv_signal in H0; subst.
+        apply Semantics.reduce_signal.
+      - apply as_tv_op_inv_wait in H0; subst.
+        inversion H.
+        subst.
+        apply Semantics.reduce_wait.
+        assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun.
+        subst.
+        intuition.
     Qed.
 
  End Semantics.
