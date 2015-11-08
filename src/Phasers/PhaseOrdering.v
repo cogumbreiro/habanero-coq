@@ -175,7 +175,7 @@ Module Taskview.
     auto using tv_not_lt_to_ge.
   Qed.
 
-
+(*
   Let signal_preserves_rhs:
     forall v v',
     Ge v v' ->
@@ -203,7 +203,7 @@ Module Taskview.
     rewrite wait_wait_phase.
     intuition.
   Qed.
-
+*)
   Lemma tv_welformed_to_ge_refl:
     forall v,
     Welformed v ->
@@ -230,7 +230,7 @@ Module Taskview.
     - rewrite <- signal_preserves_mode in *.
       auto using tv_ge_wo.
   Qed.
-
+(*
   Lemma tv_ge_reduce:
     forall v o v',
     Welformed v ->
@@ -247,7 +247,7 @@ Module Taskview.
     - inversion H0.
       auto using wait_preserves_rhs.
   Qed.
-
+*)
   Let tv_signal_ge_lhs:
     forall v v',
     Welformed v ->
@@ -435,6 +435,7 @@ End Taskview.
 Module Phaser.
   Import Taskview.
   Import Welformedness.Phaser.
+  Import Phaser.Semantics.
 
   Inductive Rel (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
     ph_rel_def:
@@ -444,7 +445,66 @@ Module Phaser.
         R v1 v2) ->
       Rel R ph1 ph2.
 
+  Definition Le := Rel Taskview.Le.
+
   Definition Ge := Rel Taskview.Ge.
+
+  Lemma ph_ge_preserves_reduces:
+    forall ph t o ph',
+    Welformed ph ->
+    Ge ph ph ->
+    Phaser.Semantics.Reduction ph t o ph' ->
+    Ge ph' ph'.
+  Proof.
+    intros.
+    remember (as_tv_op o) as o'.
+    symmetry in Heqo'.
+    destruct o' as [o'|].
+    - assert (Hin : Map_TID.In t ph) by eauto using ph_tv_in.
+      apply Map_TID_Extra.in_to_mapsto in Hin.
+      destruct Hin as (v, Hmt).
+      assert (Semantics.Reduce v o' (Semantics.eval o' v)) by
+        eauto using ph_reduce_to_tv_reduce.
+      assert (ph' = Map_TID.add t (Semantics.eval o' v) ph) by
+        eauto using ph_to_tv_correct.
+      subst.
+      apply ph_rel_def.
+      intros.
+      destruct (TID.eq_dec t t1), (TID.eq_dec t t2); repeat subst.
+      + assert (v2 = v1) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+        remember (Semantics.eval _ _) as v'.
+        assert (v1 = v'). {
+          assert (Map_TID.MapsTo t2 v' (Map_TID.add t2 v' ph)). {
+            auto using Map_TID.add_1.
+          }
+          eauto using Map_TID_Facts.MapsTo_fun.
+        }
+        subst.
+        assert (Taskview.Welformed v) by (inversion H; eauto).
+        ass
+        
+    inversion H0; subst.
+    - apply Map_TID_Extra.in_to_mapsto in H1.
+      destruct H1 as (v, Hmt).
+      assert (R: Phaser.signal t ph = Map_TID.add t (Taskview.signal v) ph). {
+        auto using ph_signal_spec.
+      }
+      rewrite R; clear R.
+      apply ph_rel_def.
+      intros.
+      destruct (TID.eq_dec t t1), (TID.eq_dec t t2); repeat subst.
+      + assert (v2 = v1) by eauto using Map_TID_Facts.MapsTo_fun.
+        subst.
+        assert (v1 = signal v). {
+          assert (Map_TID.MapsTo t2 (signal v) (Map_TID.add t2 (signal v) ph)). {
+            auto using Map_TID.add_1.
+          }
+          eauto using Map_TID_Facts.MapsTo_fun.
+        }
+        subst.
+        
+        
+        
 
   Lemma signal_preserves_ge_rhs:
     forall ph,
