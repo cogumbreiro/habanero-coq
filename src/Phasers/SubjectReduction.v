@@ -64,7 +64,7 @@ Qed.
 
 Lemma wait_phase_wait:
   forall v,
-  wait_phase (wait v) = S (wait_phase v).
+  wait_phase (Taskview.wait v) = S (wait_phase v).
 Proof.
   intros.
   unfold wait.
@@ -95,7 +95,7 @@ Qed.
 
 Lemma ph_diff_add_wait:
   forall t t1 t2 z v ph,
-  ph_diff (Map_TID.add t (wait v) ph) t1 t2 z ->
+  ph_diff (Map_TID.add t (Taskview.wait v) ph) t1 t2 z ->
   Map_TID.MapsTo t v ph ->
   ph_diff ph t1 t2 (z + wait_delta t (t1, t2)).
 Proof.
@@ -107,7 +107,7 @@ Proof.
       * subst.
         subst.
         rewrite wait_delta_refl.
-        remember (Z.of_nat (wait_phase (wait v))) as z.
+        remember (Z.of_nat (wait_phase (Taskview.wait v))) as z.
         assert (Heq: ((z - z + 0 = 0) %Z)). {
           intuition.
         }
@@ -159,11 +159,10 @@ Qed.
 
 Lemma ph_diff_apply_wait:
   forall t t1 t2 z ph,
-  ph_diff (apply t wait ph) t1 t2 z ->
+  ph_diff (wait t ph) t1 t2 z ->
   ph_diff ph t1 t2 (z + wait_delta t (t1, t2)).
 Proof.
   intros.
-  unfold apply, update in *.
   remember (Map_TID.find t ph).
   symmetry in Heqo.
   destruct o as [v|].
