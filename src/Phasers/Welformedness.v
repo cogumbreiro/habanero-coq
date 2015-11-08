@@ -1,9 +1,8 @@
 Require Import HJ.Vars.
-Require Import HJ.Phasers.Lang.
-
-Open Scope nat.
 
 Module Taskview.
+  Require Import HJ.Phasers.Taskview.
+  Open Scope nat.
 
   (** Valid task view *)
   Inductive Welformed v : Prop :=
@@ -102,8 +101,8 @@ Module Taskview.
   Lemma signal_phase_signal_inv:
     forall v,
     Welformed v ->
-    signal_phase (signal v) = signal_phase v
-    \/ signal_phase (signal v) = S (signal_phase v).
+    signal_phase (Taskview.signal v) = signal_phase v
+    \/ signal_phase (Taskview.signal v) = S (signal_phase v).
   Proof.
     intros.
     inversion H.
@@ -195,8 +194,8 @@ End Taskview.
 
 Module Phaser.
   Import Taskview.
-  Import Lang.Phaser.
-  Import Lang.Phaser.Semantics.
+  Require Import HJ.Phasers.Phaser.
+  Import Phaser.Semantics.
 
   Inductive Welformed (ph:phaser) : Prop :=
     ph_welformed_def:
