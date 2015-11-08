@@ -4,13 +4,14 @@ src/Vars.v
 src/Phasers/Rel.v
 src/Phasers/PhaseDiff.v
 src/Phasers/Taskview.v
+src/Phasers/Phaser.v
 src/Phasers/Lang.v
 src/Phasers/Welformedness.v
 src/Phasers/TransClosure.v
 src/Phasers/Progress.v
 src/Phasers/LEDec.v
 src/Phasers/TransDiff.v
-src/Phasers/SubjectReduction.v
+#src/Phasers/SubjectReduction.v
 src/Phasers/Typesystem.v
 #src/ReverseSemaphore.v
 src/AsyncFinish/Lang.v
@@ -22,6 +23,6 @@ src/AsyncFinish/Find.v
 src/AsyncFinish/LangExtra.v
 src/AsyncFinish/Examples.v
 src/AsyncFinish/Typesystem.v
-src/AsyncFinish/Progress.v
+#src/AsyncFinish/Progress.v
 #src/All.v
 
