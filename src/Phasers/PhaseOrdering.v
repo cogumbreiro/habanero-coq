@@ -576,6 +576,7 @@ Module Phaser.
           - auto using tv_ge_wo.
         * inversion H0; eauto.
   Qed.
+
   Let ph_ge_refl_preserves_reduce_drop:
     forall ph ph' t,
     Ge ph ph ->
@@ -591,6 +592,60 @@ Module Phaser.
     apply Map_TID.remove_3 in H3.
     apply Map_TID.remove_3 in H2.
     inversion H; eauto.
+  Qed.
+
+  Let tv_ge_register_left:
+    forall r v1 v2,
+    r_le (get_mode r) (mode v1) ->
+    Taskview.Ge v1 v2 ->
+    Taskview.Ge (set_mode v1 (get_mode r)) v2.
+  Proof.
+    intros ? ? ? Hle Hge.
+    inversion Hge.
+    * apply tv_ge_ge.
+      rewrite set_mode_preserves_signal_phase.
+      assumption.
+    * auto using tv_ge_so.
+    * rewrite H in Hle.
+      inversion Hle.
+      rewrite <- H.
+      rewrite set_mode_ident.
+      assumption.
+  Qed.
+
+  Let tv_ge_register_both:
+    forall r v,
+    r_le (get_mode r) (mode v) ->
+    Taskview.Ge v v ->
+    Taskview.Ge (set_mode v (get_mode r)) (set_mode v (get_mode r)).
+  Proof.
+    intros.
+    destruct (get_mode r); auto using tv_ge_so, tv_ge_wo.
+    inversion H.
+    subst.
+    rewrite H3.
+    rewrite set_mode_ident.
+    assumption.  
+  Qed.
+
+  Let tv_ge_register_right:
+    forall v1 v2 r,
+    r_le (get_mode r) (mode v2) ->
+    Taskview.Ge v1 v2 ->
+    Taskview.Ge v1 (set_mode v2 (get_mode r)).
+  Proof.
+    intros ? ? r Hle Hge.
+    inversion Hge.
+    * apply tv_ge_ge.
+      rewrite set_mode_preserves_wait_phase.
+      assumption.
+    * rewrite H in Hle.
+      inversion Hle.
+      rewrite H1 in *.
+      rewrite <- H.
+      rewrite set_mode_ident.
+      assumption.
+    * auto using tv_ge_wo.
   Qed.
 
   Let ph_ge_refl_preserves_reduce_register:
@@ -612,38 +667,14 @@ Module Phaser.
       destruct Hmt2 as [(?,?)|(?,?)].
       + subst.
         assert (Taskview.Ge v v) by (inversion Hge; eauto).
-        destruct (get_mode r); auto using tv_ge_so, tv_ge_wo.
-        inversion H2.
-        subst.
-        rewrite H5.
-        rewrite set_mode_ident.
-        assumption.
+        auto using tv_ge_register_both.
       + assert (Taskview.Ge v v2) by (inversion Hge; eauto).
-        inversion H4.
-        * apply tv_ge_ge.
-          rewrite set_mode_preserves_signal_phase.
-          assumption.
-        * auto using tv_ge_so.
-        * rewrite H5 in H2.
-          inversion H2.
-          rewrite <- H5.
-          rewrite set_mode_ident.
-          assumption.
+        auto using tv_ge_register_left.
     - apply Map_TID_Facts.add_mapsto_iff in Hmt2;
       destruct Hmt2 as [(?,?)|(?,?)].
       + subst.
         assert (Taskview.Ge v1 v) by (inversion Hge; eauto).
-        inversion H4.
-        * apply tv_ge_ge.
-          rewrite set_mode_preserves_wait_phase.
-          assumption.
-        * rewrite H5 in H2.
-          inversion H2.
-          rewrite H7 in *.
-          rewrite <- H5.
-          rewrite set_mode_ident.
-          assumption.
-        * auto using tv_ge_wo.
+        auto using tv_ge_register_right.
       + inversion Hge; eauto.
   Qed.
 
@@ -718,7 +749,9 @@ Module Phaser.
       apply Map_TID_Facts.add_mapsto_iff in H1;
       destruct H1 as [(?,?)|(?,?)].
       + subst.
-        
+        assert (Taskview.Ge v v2) by (inversion H0; eauto).
+        auto using tv_ge_register_left.
+      + inversion H0; eauto.
   Qed.
     
     
