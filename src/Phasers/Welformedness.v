@@ -2,7 +2,7 @@ Require Import HJ.Vars.
 
 Module Taskview.
   Require Import HJ.Phasers.Taskview.
-  Open Scope nat.
+  Import Taskview.Semantics.
 
   (** Valid task view *)
   Inductive Welformed v : Prop :=
