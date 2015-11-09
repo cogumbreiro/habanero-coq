@@ -80,6 +80,22 @@ Section Facts.
     intros; destruct v; trivial.
   Qed.
 
+  Lemma set_mode_preserves_signal_phase:
+    forall v r,
+    signal_phase (set_mode v r) =  signal_phase v.
+  Proof.
+    intros.
+    destruct v; auto.
+  Qed.
+
+  Lemma set_mode_preserves_wait_phase:
+    forall v r,
+    wait_phase (set_mode v r) =  wait_phase v.
+  Proof.
+    intros.
+    destruct v; auto.
+  Qed.
+
   Lemma make_mode:
     mode make = SIGNAL_WAIT.
   Proof.
