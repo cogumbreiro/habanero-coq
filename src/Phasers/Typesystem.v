@@ -3,7 +3,9 @@ Require Import HJ.Phasers.Lang.
 Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
 
-Local Open Scope reg_scope.
+Import Taskview.Notations.
+
+Open Scope reg_scope.
 
 Inductive CanRegister: tid -> phasermap -> phased -> Prop :=
   can_register_def:

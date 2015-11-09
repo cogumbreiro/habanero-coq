@@ -29,6 +29,10 @@ End Phasermap.
 
 Import Phasermap.
 
+Section PhasermapDef.
+Import Taskview.Notations.
+Open Scope reg_scope.
+
 Inductive Async : phasermap -> tid -> list phased -> tid -> phasermap -> Prop :=
   | async_step:
     forall m t p r a t' m' v ph,
@@ -87,3 +91,4 @@ Inductive In (t:tid) (pm:phasermap) : Prop :=
     Map_PHID.MapsTo p ph pm ->
     Map_TID.In t ph ->
     In t pm.
+End PhasermapDef.

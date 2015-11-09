@@ -13,10 +13,7 @@ Inductive r_le : regmode -> regmode -> Prop :=
     r_le WAIT_ONLY WAIT_ONLY
   | r_le_sw:
     forall m,
-    r_le m SIGNAL_WAIT
-where "n <= m" := (r_le n m) : reg_scope.
-
-Open Scope reg_scope.
+    r_le m SIGNAL_WAIT.
 
 Record taskview := TV {
   signal_phase: nat;
@@ -60,7 +57,13 @@ Inductive SignalCap : regmode -> Prop :=
 
 Hint Constructors SignalCap.
 
+Module Notations.
+  Infix "<=" := (r_le) : reg_scope.
+End Notations.
+
 Section Facts.
+  Import Notations.
+  Open Scope reg_scope.
 
   Lemma regmode_eq_dec:
     forall (m1 m2:regmode),
@@ -68,6 +71,13 @@ Section Facts.
   Proof.
     intros.
     destruct m1, m2; solve [ left; auto | right; intuition; inversion H]. 
+  Qed.
+  
+  Lemma set_mode_ident:
+    forall v,
+    set_mode v (mode v) = v.
+  Proof.
+    intros; destruct v; trivial.
   Qed.
 
   Lemma make_mode:
@@ -140,6 +150,18 @@ Section Facts.
     intuition;
     contradiction H;
     auto.
+  Qed.
+
+  Lemma so_to_not_wait_cap:
+    forall r,
+    r = SIGNAL_ONLY ->
+    ~ WaitCap r.
+  Proof.
+    intros.
+    intuition.
+    inversion H0;
+    rewrite <- H1 in *;
+    inversion H.
   Qed.
 
   Lemma wait_cap_so_dec:
@@ -371,6 +393,5 @@ Module Semantics.
     subst.
     auto using eval_preserves_mode.
   Qed.
-    
 
 End Semantics.
