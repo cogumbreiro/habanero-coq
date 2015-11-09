@@ -1,70 +1,94 @@
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Taskview.
+Import HJ.Vars.Map_TID.
+Import HJ.Vars.Map_TID_Facts.
+Import HJ.Vars.Map_TID_Extra.
 
 Definition phaser := Map_TID.t taskview.
 
 Definition Await (ph:phaser) (n:nat) : Prop :=
   forall t v,
-  Map_TID.MapsTo t v ph ->
+  MapsTo t v ph ->
   SignalCap (mode v) ->
   v.(signal_phase) >= n.
 
 Inductive Sync : phaser -> tid -> Prop :=
   | sync_so:
     forall t v ph,
-    Map_TID.MapsTo t v ph ->
+    MapsTo t v ph ->
     mode v = SIGNAL_ONLY ->
     Sync ph t
   | sync_wait:
     forall ph t v,
-    Map_TID.MapsTo t v ph ->
+    MapsTo t v ph ->
     WaitCap (mode v) ->
     Await ph (S (wait_phase v)) ->
     Sync ph t
   | sync_skip:
     forall t ph,
-    ~ Map_TID.In t ph ->
+    ~ In t ph ->
     Sync ph t.
 
-Definition make (t:tid) := Map_TID.add t Taskview.make (Map_TID.empty taskview).
+Definition make (t:tid) := add t Taskview.make (Map_TID.empty taskview).
 
 Definition update (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
-match Map_TID.find t ph with
-| Some v => Map_TID.add t (f v) ph
-| None => ph
-end.
+  match find t ph with
+  | Some v => add t (f v) ph
+  | None => ph
+  end.
 
 Definition signal (t:tid) : phaser -> phaser := update t Taskview.signal.
 
 Definition wait (t:tid) : phaser -> phaser := update t Taskview.wait.
 
-Definition drop : tid -> phaser -> phaser := @Map_TID.remove taskview.
+Definition drop : tid -> phaser -> phaser := @remove taskview.
 
-Definition register (t:tid) (v:taskview) (ph:phaser) : phaser := 
-match Map_TID.find t ph with
-| Some _ => ph
-| None => Map_TID.add t v ph
-end.
+Record registry := mk_registry {
+  get_task: tid;
+  get_mode: regmode
+}.
+
+Definition register (t:tid) (r:registry) (ph:phaser) : phaser := 
+  match find t ph with
+  | Some v => add (get_task r) (set_mode v (get_mode r)) ph
+  | None => ph
+  end.
 
 Module Semantics.
-  Inductive op := SIGNAL | WAIT | DROP | REGISTER : taskview -> op.
+
+  Import Taskview.Notations.
+  Open Scope reg_scope.
+
+  Inductive op :=
+    | SIGNAL
+    | WAIT
+    | DROP
+    | REGISTER : registry -> op.
+
+
   Inductive Reduction (ph:phaser) (t:tid) : op -> phaser -> Prop :=
+
   | reduction_signal:
-    Map_TID.In t ph ->
+    In t ph ->
     Reduction ph t SIGNAL (signal t ph)
+
   | reduction_wait:
     forall v,
-    Map_TID.MapsTo t v ph ->
+    MapsTo t v ph ->
     wait_phase v < signal_phase v ->
     Sync ph t ->
     Reduction ph t WAIT (wait t ph)
+
   | reduction_drop:
-    Map_TID.In t ph ->
+    In t ph ->
     Reduction ph t DROP (drop t ph)
+
   | reduction_register:
-    forall v,
-    ~ Map_TID.In t ph ->
-    Reduction ph t (REGISTER v) (register t v ph).
+    forall v r,
+    ~ In (get_task r) ph ->
+    MapsTo t v ph ->
+    get_mode r <= mode v ->
+    Reduction ph t (REGISTER r) (register t r ph).
   
   Definition as_tv_op (o:op) :=
   match o with
@@ -93,8 +117,8 @@ Module Semantics.
 
   Lemma ph_update_spec:
     forall t v f ph,
-    Map_TID.MapsTo t v ph ->
-    update t f ph = Map_TID.add t (f v) ph.
+    MapsTo t v ph ->
+    update t f ph = add t (f v) ph.
   Proof.
     intros.
     unfold update.
@@ -102,21 +126,21 @@ Module Semantics.
       symmetry in Heqo.
       destruct o as [v'|].
       {
-        apply Map_TID_Facts.find_mapsto_iff in Heqo.
-        assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun.
+        apply find_mapsto_iff in Heqo.
+        assert (v' = v) by eauto using MapsTo_fun.
         subst; clear Heqo.
         trivial.
       }
-      apply Map_TID_Facts.not_find_in_iff in Heqo.
+      apply not_find_in_iff in Heqo.
       contradiction Heqo.
-      eauto using  Map_TID_Extra.mapsto_to_in.
+      eauto using  mapsto_to_in.
   Qed.
 
   Lemma ph_signal_spec:
     forall t v ph ph',
     Map_TID.MapsTo t v ph ->
     Reduction ph t SIGNAL ph' ->
-    ph' = Map_TID.add t (Taskview.signal v) ph.
+    ph' = add t (Taskview.signal v) ph.
   Proof.
     intros.
     inversion H0.
@@ -127,9 +151,9 @@ Module Semantics.
 
   Lemma ph_wait_spec:
     forall t v ph ph',
-    Map_TID.MapsTo t v ph ->
+    MapsTo t v ph ->
     Reduction ph t WAIT ph' ->
-    ph' = Map_TID.add t (Taskview.wait v) ph.
+    ph' = add t (Taskview.wait v) ph.
   Proof.
     intros.
     inversion H0.
@@ -140,9 +164,9 @@ Module Semantics.
 
   Lemma ph_drop_spec:
     forall t ph ph',
-    Map_TID.In t ph ->
+    In t ph ->
     Reduction ph t DROP ph' ->
-    ph' = Map_TID.remove t ph.
+    ph' = remove t ph.
   Proof.
     intros.
     inversion H0; subst.
@@ -150,17 +174,31 @@ Module Semantics.
   Qed.
 
   Lemma ph_register_spec:
-    forall t v ph ph',
-    ~ Map_TID.In t ph ->
-    Reduction ph t (REGISTER v) ph' ->
-    ph' = Map_TID.add t v ph.
+    forall t v r ph ph',
+    MapsTo t v ph ->
+    Reduction ph t (REGISTER r) ph' ->
+    ph' = add (get_task r) (set_mode v (get_mode r)) ph.
   Proof.
     intros.
     inversion H0; subst.
     unfold register in *.
-    rewrite Map_TID_Facts.not_find_in_iff in H.
-    rewrite H in *.
-    trivial.
+    remember (find _ _ ).
+    symmetry in Heqo.
+    destruct o.
+    - rewrite find_mapsto_iff in *.
+      assert (v0 = v). {
+        rewrite H in *.
+        inversion H3; auto.
+      }
+      assert (t1 = v). {
+        rewrite H in *.
+        inversion Heqo; auto.
+      }
+      subst.
+      trivial.
+    - apply mapsto_to_in in H3.
+      apply not_find_in_iff in Heqo.
+      contradiction.
   Qed.
 
   Lemma ph_tv_in:

@@ -19,6 +19,8 @@ Module Taskview.
       wait_phase v <= signal_phase v ->
       Welformed v.
 
+  Hint Constructors Welformed.
+
   Lemma welformed_wait_phase_le_signal_phase:
     forall v,
     Welformed v ->
@@ -26,6 +28,36 @@ Module Taskview.
   Proof.
     intros.
     inversion H; intuition.
+  Qed.
+
+  Lemma tv_welformed_eq:
+    forall v,
+    wait_phase v = signal_phase v ->
+    Welformed v.
+  Proof.
+    intros.
+    destruct (wait_cap_so_dec (mode v)); auto; intuition.
+  Qed.
+
+  Lemma tv_welformed_succ:
+    forall v,
+    S (wait_phase v) = signal_phase v ->
+    Welformed v.
+  Proof.
+    intros.
+    destruct (wait_cap_so_dec (mode v)); auto; intuition.
+  Qed.
+
+  Lemma welformed_inv_sw:
+    forall v,
+    Welformed v ->
+    WaitCap (mode v) ->
+    (wait_phase v = signal_phase v) \/ (S (wait_phase v) = signal_phase v).
+  Proof.
+    intros.
+    inversion H; intuition.
+    apply so_to_not_wait_cap in H1.
+    contradiction.
   Qed.
 
   Lemma make_welformed:
@@ -190,6 +222,28 @@ Module Taskview.
     assumption.
   Qed.
 
+  Lemma set_mode_preserves_welformed:
+    forall v r,
+    Welformed v ->
+    r_le r (mode v) ->
+    Welformed (set_mode v r).
+  Proof.
+    intros.
+    remember (mode v) as r'.
+    symmetry in Heqr'.
+    destruct r';
+    try (inversion H0;
+      subst;
+      rewrite <- Heqr';
+      rewrite set_mode_ident;
+      auto).
+    inversion H.
+    - auto using tv_welformed_eq.
+    - auto using tv_welformed_succ.
+    - rewrite Heqr' in H1.
+      inversion H1.
+  Qed.
+
 End Taskview.
 
 Module Phaser.
@@ -286,51 +340,41 @@ Module Phaser.
   Qed.
 
   Lemma ph_register_preserves_welformed:
-    forall ph t v ph',
+    forall ph t r ph',
     Welformed ph ->
-    Taskview.Welformed v ->
-    Reduction ph t (REGISTER v) ph' ->
+    Reduction ph t (REGISTER r) ph' ->
     Welformed ph'.
   Proof.
     intros.
-    inversion H1; subst.
-    assert (R: register t v ph = Map_TID.add t v ph) by auto using ph_register_spec.
+    inversion H0; subst.
+    assert (R:= H0).
+    apply ph_register_spec with (v:=v) in R; auto.
     rewrite R; clear R.
     apply ph_welformed_def.
     intros.
     destruct (TID.eq_dec t0 t).
     + subst.
-      assert (v0 = v). {
-        assert (Map_TID.MapsTo t v (Map_TID.add t v ph)) by auto using Map_TID.add_1.
-        eauto using Map_TID_Facts.MapsTo_fun.
-      }
-      subst.
-      assumption.
-    + apply Map_TID_Facts.add_neq_mapsto_iff in H2; auto with *.
-      eauto using ph_welformed_to_tv_welformed.
+      rewrite Map_TID_Facts.add_mapsto_iff in H1.
+      destruct H1 as [(?,?)|(?,?)].
+      * subst.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      * eauto using ph_welformed_to_tv_welformed.
+    + rewrite Map_TID_Facts.add_mapsto_iff in H1.
+      destruct H1 as [(?,?)|(?,?)].
+      * subst.
+        eauto using set_mode_preserves_welformed, ph_welformed_to_tv_welformed.
+      * eauto using ph_welformed_to_tv_welformed.
   Qed.
-
-  Inductive WelformedOp : op -> Prop :=
-    | welformed_op_signal:
-      WelformedOp SIGNAL
-    | welformed_op_wait:
-      WelformedOp WAIT
-    | welformed_op_drop:
-      WelformedOp DROP
-    | welformed_op_register:
-      forall v,
-      Taskview.Welformed v ->
-      WelformedOp (REGISTER v).
 
   Lemma ph_reduce_preserves_welformed:
     forall ph t o ph',
     Welformed ph ->
-    WelformedOp o ->
     Reduction ph t o ph' ->
     Welformed ph'.
   Proof.
     intros.
-    inversion H1; subst; inversion H0;
+    inversion H0; subst; inversion H;
     eauto using
       ph_signal_preserves_welformed,
       ph_wait_preserves_welformed,
