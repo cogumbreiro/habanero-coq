@@ -4,6 +4,8 @@ Require Import Coq.Arith.Peano_dec.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Welformedness.
 
+Set Implict Arguments.
+
 Module Taskview.
   Require Import HJ.Phasers.Taskview.
   Import Taskview.Semantics.
@@ -290,12 +292,11 @@ Module Taskview.
     Reduce x o y ->
     Reduce y o' z ->
     mode x = SIGNAL_WAIT ->
-    z >= x.
+    (signal_phase z >= wait_phase x)%nat.
   Proof.
     intros.
     assert (Ge z y) by eauto using tv_ge_reduce.
     assert (Ge y x) by eauto using tv_ge_reduce.
-    apply tv_ge_ge.
     destruct o.
     - apply reduce_rw_signal in H2.
       destruct o'.
@@ -341,6 +342,24 @@ Module Taskview.
       intuition.
   Qed.
 
+  Lemma tv_ge_trans_helper
+    (x y z: taskview)
+    (Hcont:mode x <> WAIT_ONLY -> mode z <> SIGNAL_ONLY -> (signal_phase x >= wait_phase z)%nat):
+    x >= y ->
+    y >= z ->
+    x >= z.
+  Proof.
+    intros.
+    destruct (regmode_eq_dec (mode x) WAIT_ONLY).
+    {
+      auto using tv_ge_wo.
+    }
+    destruct (regmode_eq_dec (mode z) SIGNAL_ONLY). {
+      auto using tv_ge_so.
+    }
+    auto using tv_ge_ge.
+  Qed.
+
   Lemma tv_ge_reduce_trans:
     forall x o y o' z,
     Welformed x ->
@@ -360,39 +379,21 @@ Module Taskview.
     }
     assert (R3: mode x = mode z) by
       (transitivity (mode y); auto).
-    destruct (regmode_eq_dec (mode z) WAIT_ONLY).
-    {
-      assert (mode x = WAIT_ONLY). {
-        assert (mode y = WAIT_ONLY). {
-          apply reduce_preserves_mode in H3.
-          rewrite <- H3.
-          assumption.
-        }
-        apply reduce_preserves_mode in H2.
-        rewrite <- H2.
-        assumption.
-      }
-      auto using tv_ge_wo.
-    }
-    destruct (regmode_eq_dec (mode z) SIGNAL_ONLY). {
-      assert (mode x = SIGNAL_ONLY). {
-        assert (mode y = SIGNAL_ONLY). {
-          apply reduce_preserves_mode in H3.
-          rewrite <- H3.
-          assumption.
-        }
-        apply reduce_preserves_mode in H2.
-        rewrite <- H2.
-        assumption.
-      }
-      auto using tv_ge_so.
-    }
-    assert (mode z = SIGNAL_WAIT). {
-      destruct (mode z);
-        intuition.
+    apply tv_ge_trans_helper with (y); auto.
+    intros.
+    assert (mode y = SIGNAL_WAIT). {
+      destruct (mode y).
+      - rewrite R1 in H7.
+        contradiction H7.
+        trivial.
+      - rewrite R2 in H6.
+        contradiction H6.
+        trivial.
+      - trivial.
     }
     assert (mode x = SIGNAL_WAIT). {
-      transitivity (mode z); auto.
+      rewrite <- R1.
+      assumption.
     }
     eauto using tv_ge_reduce_trans_sw.
   Qed.
@@ -428,16 +429,26 @@ Module Taskview.
       rewrite H2 in H1.
       auto using tv_ge_wo.
   Qed.
-(*
-  Lemma tv_rhs_eval_ge:
-    forall v1 v2 v2' o,
-    Ge v1 v2 ->
-    Reduce v2 o v2' ->
-    Ge v1 v2'.
+
+  Lemma tv_ge_eval_rhs:
+    forall v1 v2 o,
+    Ge v1 (Semantics.eval o v2) ->
+    Reduce v2 o (Semantics.eval o v2) ->
+    Ge v1 v2.
   Proof.
     intros.
-    inversion H0.
-*)
+    inversion H.
+    - apply tv_ge_ge.
+      destruct o; simpl in *.
+      + rewrite signal_preserves_wait_phase in *.
+        assumption.
+      + inversion H0.
+        intuition.
+    - rewrite eval_preserves_mode in H1.
+      auto using tv_ge_so.
+    - auto using tv_ge_wo.
+  Qed.
+
   (**
     In a wellformed phaser there is a well-defined difference
     between wait-phases. Let [vm] be the minimum wait-phase of a
@@ -730,31 +741,364 @@ Module Phaser.
     Reduction ph t o ph' ->
     Ge ph' ph.
   Proof.
-    intros.
+    intros ? ? ? ? WF Hge R.
     remember(as_tv_op o) as o'.
     symmetry in Heqo'.
     destruct o' as [o'|]; eauto using ph_ge_reduce_some.
     (destruct o; simpl in Heqo'; inversion Heqo'); clear Heqo'.
-    - inversion H1; subst.
+    - inversion R; subst.
       unfold drop in *.
       apply ph_rel_def.
       intros.
-      apply Map_TID.remove_3 in H3.
-      inversion H0; eauto.
-    - inversion H1.
+      apply Map_TID.remove_3 in H0.
+      inversion Hge; eauto.
+    - inversion R.
       subst.
-      apply ph_register_spec with (v:=v) in H1; auto.
-      rewrite H1; clear H1.
+      apply ph_register_spec with (v:=v) in R; auto.
+      rewrite R; clear R.
       apply ph_rel_def; intros.
-      apply Map_TID_Facts.add_mapsto_iff in H1;
-      destruct H1 as [(?,?)|(?,?)].
+      apply Map_TID_Facts.add_mapsto_iff in H;
+      destruct H as [(?,?)|(?,?)].
       + subst.
-        assert (Taskview.Ge v v2) by (inversion H0; eauto).
+        assert (Taskview.Ge v v2) by (inversion Hge; eauto).
         auto using tv_ge_register_left.
-      + inversion H0; eauto.
+      + inversion Hge; eauto.
   Qed.
+
+  Section Trans.
+    Inductive Update : op -> Prop :=
+      | update_signal:
+        Update SIGNAL
+      | update_wait:
+        Update WAIT
+      | update_register:
+        forall r,
+        Update (REGISTER r).
+
+    Hint Constructors Update.
+
+    (** Reduces for update-operations *)
+
+    Inductive ReducesUpdates p1 t o p2 : Prop :=
+      reduces_updates_def:
+        Update o ->
+        Reduction p1 t o p2 ->
+        ReducesUpdates p1 t o p2.
+
+    Hint Constructors ReducesUpdates.
+
+    Inductive ReducesDestructs p1 t : op -> phaser -> Prop :=
+      reduces_destructs_def:
+        forall p2,
+        Reduction p1 t DROP p2 ->
+        ReducesDestructs p1 t DROP p2.
+
+    Hint Constructors ReducesDestructs.
+
+    Lemma case_reduces:
+      forall ph1 t o ph2,
+      Reduction ph1 t o ph2 ->
+      { ReducesUpdates ph1 t o ph2 } + { ReducesDestructs ph1 t o ph2 }.
+    Proof.
+      intros.
+      destruct o; (solve [left; auto | right; auto]).
+    Qed.
     
+    Let reduces_signal_preserves_in:
+      forall t ph1 t' o ph2,
+      Map_TID.In t ph1 ->
+      Update o ->
+      Reduction ph1 t' o ph2 ->
+      Map_TID.In t ph2.
+    Proof.
+      intros.
+      assert (Hin : Map_TID.In t' ph1) by eauto using ph_in.
+      apply Map_TID_Extra.in_to_mapsto in Hin.
+      destruct Hin as (v, Hmt).
+      inversion H0; subst; clear H0.
+      - apply ph_signal_spec with (v:=v) in H1; auto.
+        rewrite H1.
+        auto using Map_TID_Extra.add_in.
+      - apply ph_wait_spec with (v:=v) in H1; auto.
+        rewrite H1.
+        auto using Map_TID_Extra.add_in.
+      - apply ph_register_spec with (v:=v) in H1; auto.
+        rewrite H1.
+        auto using Map_TID_Extra.add_in.
+    Qed.
+
+    Let reduces_drop_mapsto_neq:
+      forall t v ph1 t' o ph2,
+      Map_TID.MapsTo t v ph1 ->
+      t' <> t ->
+      Reduction ph1 t' o ph2 ->
+      Map_TID.MapsTo t v ph2.
+    Proof.
+      intros.
+      assert (Hin : Map_TID.In t' ph1) by eauto using ph_in.
+      apply Map_TID_Extra.in_to_mapsto in Hin.
+      destruct Hin as (v', Hmt').
+      destruct o.
+      - apply ph_signal_spec with (v:=v') in H1; auto; rewrite H1.
+        auto using Map_TID.add_2.
+      - apply ph_wait_spec with (v:=v') in H1; auto; rewrite H1.
+        auto using Map_TID.add_2.
+      - inversion H1; unfold drop in *.
+        auto using Map_TID.remove_2.
+      - inversion H1; subst.
+        apply ph_register_spec with (v:=v') in H1; auto; rewrite H1.
+        apply Map_TID.add_2; auto.
+        intuition.
+        subst.
+        contradiction H3.
+        eauto using Map_TID_Extra.mapsto_to_in.
+    Qed.
+
+    Lemma reduces_drop_mapsto_eq:
+      forall t v ph1 ph2 t',
+      Map_TID.MapsTo t v ph2 ->
+      Reduction ph1 t' DROP ph2 ->
+      t' <> t /\ Map_TID.MapsTo t v ph1.
+    Proof.
+      intros.
+      inversion H0.
+      unfold drop in *.
+      rewrite <- H3 in H.
+      rewrite Map_TID_Facts.remove_mapsto_iff in H.
+      assumption.
+    Qed.
+
+    Lemma reduces_update_inv:
+      forall t v ph1 t' o ph2,
+      Map_TID.MapsTo t v ph1 ->
+      ReducesUpdates ph1 t' o ph2 ->
+      { Map_TID.MapsTo t v ph2 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Semantics.eval o' v) ph2) }.
+    Proof.
+      intros.
+      destruct H0.
+      destruct (TID.eq_dec t' t). {
+        subst.
+        destruct o.
+        - right.
+          exists Taskview.Semantics.SIGNAL.
+          intuition.
+          apply ph_signal_spec with (v:=v) in H1; auto; rewrite H1.
+          auto using Map_TID.add_1.
+        - right; exists Taskview.Semantics.WAIT; intuition.
+          apply ph_wait_spec with (v:=v) in H1; auto; rewrite H1.
+          auto using Map_TID.add_1.
+        - left.
+          inversion H0.
+        - left.
+          inversion H1; subst.
+          apply ph_register_spec with (v:=v) in H1; auto; rewrite H1.
+          apply Map_TID.add_2; auto.
+          remember (set_mode _ _) as v'.
+          intuition; subst.
+          contradiction H3.
+          eauto using Map_TID_Extra.mapsto_to_in.
+      }
+      left.
+      eauto using reduces_drop_mapsto_neq.
+    Qed.
+(*
+    Lemma reduces_update_rev_inv:
+      forall t v ph1 t' o ph2,
+      Map_TID.MapsTo t v ph2 ->
+      ReducesUpdates ph1 t' o ph2 ->
+      { Map_TID.MapsTo t v ph1 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Semantics.eval o' v) ph2) }.
+    Proof.
+*)
+
+    Notation WF ph := (Ge ph ph).
+    Variable ph1 : phaser.
+    Variable ph2 : phaser.
+    Variable ph3 : phaser.
+    Variable wf1: WF ph1.
+    Variable wf2: WF ph2.
+    Variable wf3: WF ph3.
+
+    Let trans1:
+      forall t t' o o',
+      ReducesUpdates ph1 t o ph2  ->
+      Reduction ph2 t' o' ph3 ->
+      Ge ph3 ph2 ->
+      Ge ph2 ph3 ->
+      Ge ph2 ph1.
+    Proof.
+      intros.
+      apply ph_rel_def.
+      intros.
+      destruct (reduces_update_inv _ _  _ _ _  _ H4 H).
+      - inversion wf2; eauto.
+      - destruct e as (t_o, (Htv, (?, Hmt))); subst.
+        apply tv_ge_eval_rhs with (t_o).
+        + inversion wf2; eauto.
+        + inversion H.
+          eauto using ph_reduce_to_tv_reduce.
+    Qed.
+
+    Let trans2:
+      forall t t',
+      Reduction ph1 t DROP ph2  ->
+      Reduction ph2 t' DROP ph3 ->
+      Ge ph3 ph2 ->
+      Ge ph2 ph3 ->
+      Ge ph3 ph1.
+    Proof.
+      intros ? ? R1 R2 G1 G2.
+      apply ph_rel_def.
+      intros.
+      assert (Map_TID.MapsTo t1 v1 ph2). {
+        apply reduces_drop_mapsto_eq with (t:=t1) (v:=v1) in R2; auto.
+        destruct R2.
+        assumption.
+      }
+      assert (Map_TID.MapsTo t1 v1 ph1). {
+        apply reduces_drop_mapsto_eq with (t:=t1) (v:=v1) in R1; auto.
+        destruct R1.
+        assumption.
+      }
+      inversion wf1; eauto.
+    Qed.
     
+    Let has_task (o:op) :=
+    match o with
+    | REGISTER r => Some (get_task r)
+    | _ => None
+    end.
+
+    Let ph_drop_register_commutes:
+      forall t t' r,
+      Reduction ph1 t DROP ph2  ->
+      Reduction ph2 t' (REGISTER r) ph3 ->
+      t <> get_task r ->
+      exists ph2',
+      (Reduction ph1 t' (REGISTER r) ph2'  /\
+      exists ph3',
+      Reduction ph2' t DROP ph3' /\ Map_TID.Equal ph3 ph3').
+    Proof.
+      intros.
+      inversion H.
+      apply ph_drop_spec in H; auto; rewrite H in *; clear H4 H.
+      inversion H0.
+      apply ph_register_spec with (v:=v) in H0; auto; rewrite H0 in *; clear H6 H H0 r0.
+      exists (register t' r ph1).
+      split.
+      - apply reduction_register with (v).
+        + unfold not; intros.
+          contradiction H3.
+          apply Map_TID_Facts.remove_neq_in_iff; auto.
+        + eauto using Map_TID.remove_3.
+        + auto.
+      - remember (Map_TID.remove _ _) as ph2'.
+        exists (drop t ph2').
+        split.
+        + 
+          apply Map_TID_Extra.remove_in in H2.
+          destruct (TID.eq_dec t (get_task r)). {
+            subst.
+    Qed.
+
+    Let trans3:
+      forall t o t',
+      Reduction ph1 t DROP ph2  ->
+      ReducesUpdates ph2 t' o ph3 ->
+      Ge ph3 ph2 ->
+      Ge ph2 ph3 ->
+      Ge ph3 ph1.
+    Proof.
+      intros ? ? ? R1 R2 G1 G2.
+      apply ph_rel_def.
+      intros ? ? ? ? mt1 mt2.
+      destruct (TID.eq_dec t2 t). {
+        subst.
+        remember (has_task o) as m.
+        symmetry in Heqm.
+        destruct m as [t''|].
+        - destruct o; try inversion Heqm.
+          destruct (TID.eq_dec t1 t'). {
+            subst.
+            
+          }
+      }
+
+      (* --- *)
+      assert (I: Map_TID.In t' ph2)
+      by (inversion R2; eauto using ph_in).
+      apply Map_TID_Extra.in_to_mapsto in I.
+      destruct I as (v', mt').
+      assert (Map_TID.MapsTo t' v' ph1). {
+        apply reduces_drop_mapsto_eq with (t:=t') (v:=v') in R1; auto.
+        destruct R1; assumption.
+      }
+      apply reduces_update_inv with (t:=t') (v:=v') in R2; auto.
+      destruct R2.
+      - 
+    Qed.
+
+    Variable t: tid.
+    Variable t': tid.
+    Variable o: op.
+    Variable o': op.
+    Variable R1: Reduction ph3 t o ph2.
+    Variable R2: Reduction ph2 t' o' ph1.
+    Variable G1: Ge ph1 ph2.
+    Variable G2: Ge ph2 ph3.
+    Lemma ge_ph_trans:
+      Ge ph1 ph3.
+    Proof.
+      intros.
+      apply ph_rel_def.
+      intros tz tx z x mtz mtx.
+      rename t' into ty.
+      assert (i: Map_TID.In ty ph2) by eauto using ph_in.
+      apply Map_TID_Extra.in_to_mapsto in i.
+      destruct i as (y, mty).
+      assert (Taskview.Ge z y) by (inversion G1; eauto).
+      assert (Taskview.Ge y x) by (inversion G2; eauto).
+      apply tv_ge_trans_helper with (y:=y); auto.
+      intros.
+      inversion H0.
+      - 
+      destruct (regmode_eq_dec (mode v2) WAIT_ONLY).
+      {
+        auto using tv_ge_wo.
+        assert (mode x = WAIT_ONLY). {
+        assert (mode y = WAIT_ONLY). {
+          apply reduce_preserves_mode in H3.
+          rewrite <- H3.
+          assumption.
+        }
+        apply reduce_preserves_mode in H2.
+        rewrite <- H2.
+        assumption.
+      }
+      auto using tv_ge_wo.
+    }
+    destruct (regmode_eq_dec (mode z) SIGNAL_ONLY). {
+      assert (mode x = SIGNAL_ONLY). {
+        assert (mode y = SIGNAL_ONLY). {
+          apply reduce_preserves_mode in H3.
+          rewrite <- H3.
+          assumption.
+        }
+        apply reduce_preserves_mode in H2.
+        rewrite <- H2.
+        assumption.
+      }
+      auto using tv_ge_so.
+    }
+    assert (mode z = SIGNAL_WAIT). {
+      destruct (mode z);
+        intuition.
+    }
+    assert (mode x = SIGNAL_WAIT). {
+      transitivity (mode z); auto.
+    }
+      
+    Qed.
+  
 
 
 End Phaser.
