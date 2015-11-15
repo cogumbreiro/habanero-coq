@@ -980,7 +980,7 @@ Module Phaser.
       { Map_TID.MapsTo t v ph1 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Semantics.eval o' v) ph2) }.
     Proof.
 *)
-    Lemma ph_trans_aux_1:
+    Let ph_trans_aux_1:
       forall ph1 ph2 ph3 : phaser,
       forall t t' o o',
       ReducesUpdates ph1 t o ph2  ->
@@ -1017,7 +1017,7 @@ Module Phaser.
       Reduction ph1 t DROP ph2  ->
       Reduction ph2 t' DROP ph3 ->
       Ge ph3 ph2 ->
-      Ge ph2 ph3 ->
+      Ge ph2 ph1 ->
       Ge ph3 ph1.
     Proof.
       intros ? ? R1 R2 G1 G2.
@@ -1070,7 +1070,7 @@ Module Phaser.
         split.
         + apply reduction_drop.
     Admitted.
-
+(*
     Let trans3_sd:
       forall t r,
       Reduction ph1 (get_task r) DROP ph2 ->
@@ -1085,7 +1085,8 @@ Module Phaser.
       destruct (TID.eq_dec t1 (get_task r)). {
         inversion R1; subst.
     Admitted.
-
+*)
+(*
     Let trans3_drop_register':
       forall t t' r,
       Reduction ph1 t DROP ph2 ->
@@ -1110,7 +1111,7 @@ Module Phaser.
       }
       eauto using ph_ge_equal_rhs.
     Qed.
-
+*)
     Let trans3:
       forall t o t',
       Reduction ph1 t DROP ph2  ->
@@ -1172,70 +1173,28 @@ Module Phaser.
       apply reduces_mapsto_neq with (t:=t2) (v:=v2) in R1; auto.
       inversion G1; eauto.
     Qed.
-
-    Variable t: tid.
-    Variable t': tid.
-    Variable o: op.
-    Variable o': op.
-    Variable R1: Reduction ph3 t o ph2.
-    Variable R2: Reduction ph2 t' o' ph1.
-    Variable G1: Ge ph1 ph2.
-    Variable G2: Ge ph2 ph3.
-    Lemma ge_ph_trans:
-      Ge ph1 ph3.
+    
+    Lemma ph_reduces_trans:
+      forall t o t' o',
+      Reduction ph1 t o ph2  ->
+      Reduction ph2 t' o' ph3 ->
+      Ge ph3 ph2 ->
+      Ge ph2 ph1 ->
+      Ge ph3 ph1.
     Proof.
       intros.
-      apply ph_rel_def.
-      intros tz tx z x mtz mtx.
-      rename t' into ty.
-      assert (i: Map_TID.In ty ph2) by eauto using ph_in.
-      apply Map_TID_Extra.in_to_mapsto in i.
-      destruct i as (y, mty).
-      assert (Taskview.Ge z y) by (inversion G1; eauto).
-      assert (Taskview.Ge y x) by (inversion G2; eauto).
-      apply tv_ge_trans_helper with (y:=y); auto.
-      intros.
-      inversion H0.
-      - 
-      destruct (regmode_eq_dec (mode v2) WAIT_ONLY).
-      {
-        auto using tv_ge_wo.
-        assert (mode x = WAIT_ONLY). {
-        assert (mode y = WAIT_ONLY). {
-          apply reduce_preserves_mode in H3.
-          rewrite <- H3.
-          assumption.
-        }
-        apply reduce_preserves_mode in H2.
-        rewrite <- H2.
-        assumption.
-      }
-      auto using tv_ge_wo.
-    }
-    destruct (regmode_eq_dec (mode z) SIGNAL_ONLY). {
-      assert (mode x = SIGNAL_ONLY). {
-        assert (mode y = SIGNAL_ONLY). {
-          apply reduce_preserves_mode in H3.
-          rewrite <- H3.
-          assumption.
-        }
-        apply reduce_preserves_mode in H2.
-        rewrite <- H2.
-        assumption.
-      }
-      auto using tv_ge_so.
-    }
-    assert (mode z = SIGNAL_WAIT). {
-      destruct (mode z);
-        intuition.
-    }
-    assert (mode x = SIGNAL_WAIT). {
-      transitivity (mode z); auto.
-    }
-      
+      apply case_reduces in H.
+      destruct H.
+      - eauto using ph_trans_aux_1.
+      - inversion r.
+        subst.
+        apply case_reduces in H0.
+        destruct H0.
+        + eauto using trans3.
+        + destruct r0.
+          eauto using trans2.
     Qed.
-  
-
+  End Trans.
 
 End Phaser.
 
