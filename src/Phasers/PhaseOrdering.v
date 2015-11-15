@@ -359,7 +359,7 @@ Module Taskview.
     }
     auto using tv_ge_ge.
   Qed.
-
+(*
   Lemma tv_ge_reduce_trans:
     forall x o y o' z,
     Welformed x ->
@@ -397,7 +397,7 @@ Module Taskview.
     }
     eauto using tv_ge_reduce_trans_sw.
   Qed.
-
+*)
   Lemma tv_eval_preserves_le:
     forall v1 v2 o,
     Welformed v1 ->
@@ -972,15 +972,8 @@ Module Phaser.
       left.
       eauto using reduces_mapsto_neq.
     Qed.
-(*
-    Lemma reduces_update_rev_inv:
-      forall t v ph1 t' o ph2,
-      Map_TID.MapsTo t v ph2 ->
-      ReducesUpdates ph1 t' o ph2 ->
-      { Map_TID.MapsTo t v ph1 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Semantics.eval o' v) ph2) }.
-    Proof.
-*)
-    Let ph_trans_aux_1:
+
+    Let trans1:
       forall ph1 ph2 ph3 : phaser,
       forall t t' o o',
       ReducesUpdates ph1 t o ph2  ->
@@ -1035,83 +1028,7 @@ Module Phaser.
       }
       inversion wf1; eauto.
     Qed.
-    
-    Let has_task (o:op) :=
-    match o with
-    | REGISTER r => Some (get_task r)
-    | _ => None
-    end.
 
-    Let ph_drop_register_commutes:
-      forall t t' r,
-      Reduction ph1 t DROP ph2  ->
-      Reduction ph2 t' (REGISTER r) ph3 ->
-      t <> get_task r ->
-      exists ph2',
-      (Reduction ph1 t' (REGISTER r) ph2'  /\
-      exists ph3',
-      Reduction ph2' t DROP ph3' /\ Map_TID.Equal ph3 ph3').
-    Proof.
-      intros.
-      inversion H.
-      apply ph_drop_spec in H; auto; rewrite H in *; clear H4 H.
-      inversion H0.
-      apply ph_register_spec with (v:=v) in H0; auto; rewrite H0 in *; clear H6 H H0 r0.
-      exists (register t' r ph1).
-      split.
-      - apply reduction_register with (v).
-        + unfold not; intros.
-          contradiction H3.
-          apply Map_TID_Facts.remove_neq_in_iff; auto.
-        + eauto using Map_TID.remove_3.
-        + auto.
-      - remember (register t' r ph1) as ph2'.
-        exists (drop t ph2').
-        split.
-        + apply reduction_drop.
-    Admitted.
-(*
-    Let trans3_sd:
-      forall t r,
-      Reduction ph1 (get_task r) DROP ph2 ->
-      Reduction ph2 t (REGISTER r) ph3 ->
-      Ge ph3 ph2 ->
-      Ge ph2 ph1 ->
-      Ge ph3 ph1.
-    Proof.
-      intros ? ? R1 R2 G1 G2.
-      apply ph_rel_def.
-      intros.
-      destruct (TID.eq_dec t1 (get_task r)). {
-        inversion R1; subst.
-    Admitted.
-*)
-(*
-    Let trans3_drop_register':
-      forall t t' r,
-      Reduction ph1 t DROP ph2 ->
-      Reduction ph2 t' (REGISTER r) ph3 ->
-      Ge ph3 ph2 ->
-      Ge ph2 ph1 ->
-      Ge ph3 ph1.
-    Proof.
-      intros ? ? ? R1 R2 G1 G2.
-      destruct (TID.eq_dec t (get_task r)). {
-        subst.
-        eauto using trans3_sd.
-      }
-      assert (Hx := ph_drop_register_commutes _ _ _ R1 R2 n).
-      destruct Hx as (ph2', (R1', (ph3', (R2', Heq)))).
-      assert (Ge ph3' ph1). {
-        assert (ReducesUpdates ph1 t' (REGISTER r) ph2') by
-        auto using reduces_updates_def.
-        assert (WF ph2') by
-        eauto using ph_ge_refl_preserves_reduce.
-        eauto using ph_trans_aux_1, ph_ge_reduce, ph_reduce_preserves_welformed.
-      }
-      eauto using ph_ge_equal_rhs.
-    Qed.
-*)
     Let trans3:
       forall t o t',
       Reduction ph1 t DROP ph2  ->
@@ -1185,7 +1102,7 @@ Module Phaser.
       intros.
       apply case_reduces in H.
       destruct H.
-      - eauto using ph_trans_aux_1.
+      - eauto using trans1.
       - inversion r.
         subst.
         apply case_reduces in H0.
@@ -1197,165 +1114,29 @@ Module Phaser.
   End Trans.
 
 End Phaser.
-
+(*
 Module Phasermap.
 
-Inductive PmRel (R: phaser -> phaser -> Prop) (m1 m2:phasermap) : Prop :=
-  pm_rel_def:
-    (forall p ph1 ph2,
-      Map_PHID.MapsTo p ph1 m1 ->
-      Map_PHID.MapsTo p ph2 m2 ->
-      R ph1 ph2) ->
-    PmRel R m1 m2.
+  Import Taskview.
+  Require Import HJ.Phasers.Taskview.
+  Import Welformedness.Taskview.
 
-Definition PmGe := PmRel PhGe.
+  Require Import HJ.Phasers.Phaser.
+  Import Phaser.Semantics.
+  Import Welformedness.Phaser.
 
-Inductive Welformed (m:phasermap) :=
-  pm_welformed_def:
-    PmGe m m ->
-    Welformed m.
+  Inductive PmRel (R: phaser -> phaser -> Prop) (m1 m2:phasermap) : Prop :=
+    pm_rel_def:
+      (forall p ph1 ph2,
+        Map_PHID.MapsTo p ph1 m1 ->
+        Map_PHID.MapsTo p ph2 m2 ->
+        R ph1 ph2) ->
+      PmRel R m1 m2.
 
+  Definition PmGe := PmRel PhGe.
 
-
-Inductive TvValid (v:taskview) : Prop :=
-  tv_valid_def:
-    wait_phase <= signal_phase v - >
-    TvValid  v
-
-Inductive ValidPh (ph:phaser) : Prop := 
-  valid_ph_def:
-    (forall t v, Map_TID.MapsTo t v ph -> 
-
-
-Lemma signal_respects_tv_ge_2:
-  forall v,
-  TvGe v v ->
-  TvGe v (Taskview.signal v).
-Proof.
-  intros.
-  unfold Taskview.signal.
-  destruct v.
-  inversion H; simpl in *.
-  - apply tv_ge_ge.
-    simpl in  *.
-    destruct mode; (simpl in *; auto).
-  - subst.
-    auto using tv_ge_so.
-  - subst.
-    apply tv_ge_wo.
-    auto.
-Qed.
-Import Phaser.
-
-Lemma ph_update_respects_ph_ge
-  (f: taskview -> taskview)
-  (Hge1: forall v, TvGe v v -> TvGe (f v) (f v))
-  (Hge2: forall v v', TvGe v v' -> TvGe (f v) v')
-  (Hge3: forall v v', TvGe v v' -> TvGe v (f v')):
-  forall t ph,
-  PhGe ph ph ->
-  PhGe (update t f ph) (update t f ph).
-Proof.
-  intros.
-  unfold PhGe in *.
-  unfold update in *.
-  inversion H.
-  apply ph_rel_def.
-  intros.
-  remember (Map_TID.find _ _) as o.
-  symmetry in Heqo.
-  destruct o.
-  - rename t0 into v.
-    apply Map_TID_Facts.add_mapsto_iff in H1.
-    apply Map_TID_Facts.add_mapsto_iff in H2.
-    destruct H1, H2;(
-      destruct H1, H2;
-      repeat subst;
-      apply Map_TID_Facts.find_mapsto_iff in Heqo;
-      eauto
-    ).
-  - eauto.
-Qed.
-
-
-
-Inductive Prec t1 m1 t2 m2 : Prop :=
-  prec_def:
-    forall p ph1 ph2 (v1 v2:taskview),
-    Map_PHID.MapsTo p ph1 m1 ->
-    Map_PHID.MapsTo p ph2 m2 ->
-    Map_TID.MapsTo t1 v1 ph1 ->
-    Map_TID.MapsTo t2 v2 ph2 ->
-    TvPrec v1 v2 ->
-    Prec t1 m1 t2 m2.
-
-Inductive Registered (t:tid) (p:phid) (m:phasermap) :=
-  registered_def:
-    forall ph,
-    Map_PHID.MapsTo p ph m ->
-    Map_TID.In t ph ->
-    Registered t p m.
-    
-
-Inductive Related (i1 i2:timestamp) : Prop :=
-  related_def:
-    forall p,
-    Registered (fst i1) p (snd i1) ->
-    Registered (fst i2) p (snd i2) ->
-    Related i1 i2.
-
-Lemma phase_ordering_step:
-  forall m t1 t2 o1 o2 m1 m2,
-  (* both tasks are related on at least one phaser *)
-  Related (t1,m1) (t2,m2) ->
-  Reduce m t1 o1 m1 ->
-  Reduce m1 t2 o2 m2 ->
-  ~ Prec (t2, m2) (t1, m1).
-Proof.
-  intros.
-  intuition.
-  inversion H2.
-  simpl in *.
-  inversion H0; subst.
-  simpl in *.
-  inversion H; subst.
-  -  
-Admitted.
-
-
-(** Reduction rule that hides the task and operation. *)
-
-Inductive SilentReduction (m m':phasermap) : Prop :=
-  silent_reduce_def:
-    forall t o,
-    Reduce m t o m' ->
-    SilentReduction m m'.
-
-Require Import Coq.Relations.Relation_Operators.
-
-Definition StarReduce := clos_trans phasermap SilentReduction.
-
-Lemma phase_ordering_step:
-  forall m m',
-  SilentReduction m m' ->
-  forall t' t, ~ Prec (t', m') (t, m).
-Proof.
-  intros.
-  destruct H as (t'', o, H).
-  
-Admitted.
-
-Theorem phase_ordering_correct:
-  forall m1 m2,
-  StarReduce m1 m2 ->
-  forall t1 t2,
-  ~ Prec (t2,m2) (t1,m1).
-Proof.
-  intros m1 m2 H.
-  induction H; intros.
-  - auto using phase_ordering_step.
-  - intuition.
-
+End Phasermap.
+*)
 (*
  Is it possible for i1 < i2 an i2 < i1?
 *)
@@ -1421,6 +1202,7 @@ m reducesto m' ->
 forall t t', ~ (t', m') < (t, m)
 ?
 *)
+(*
 Example case3:
   forall x y a b ph,
   x <> y ->
@@ -1500,3 +1282,4 @@ Proof.
     
     
 Qed.  
+*)
