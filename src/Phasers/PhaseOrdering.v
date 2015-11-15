@@ -1150,64 +1150,27 @@ Module Phaser.
         destruct H3 as (r, (?,?)).
         subst.
         clear H1 R2.
-        destruct (TID.eq_dec t2 (get_task r)). {
-          subst.
-          inversion H2; subst.
-          apply ph_register_spec with (v:=v) in H2; auto; rewrite H2 in *; clear H2.
-          assert (v0 = v)
-          by eauto using Map_TID_Facts.MapsTo_fun; subst.
-          assert (v1 = set_mode v (get_mode r)). {
-            apply Map_TID_Facts.add_mapsto_iff in H.
-            destruct H.
-            + destruct H.
-              subst.
-              trivial.
-            + destruct H.
-              contradiction H.
-              trivial.
-          }
-          subst.
-          assert (Taskview.Ge v v2)
-          by (inversion G2; eauto).
-          eauto using tv_ge_register_left.
+        inversion H2; subst.
+        apply ph_register_spec with (v:=v) in H2; auto; rewrite H2 in *; clear H2.
+        assert (v0 = v)
+        by eauto using Map_TID_Facts.MapsTo_fun; subst.
+        assert (v1 = set_mode v (get_mode r)). {
+          apply Map_TID_Facts.add_mapsto_iff in H.
+          destruct H.
+          + destruct H.
+            subst.
+            trivial.
+          + destruct H.
+            contradiction H.
+            trivial.
         }
-      }
-      (* -- *)
-      remember (has_task o) as m.
-      symmetry in Heqm.
-      apply ph_rel_def; intros.
-      destruct (TID.eq_dec t t2). {
         subst.
-        destruct (TID.eq_dec t' t2). {
-          subst.
-          assert (i: Map_TID.In t2 ph2) by (inversion R2;  eauto using ph_in).
-          apply Map_TID_Extra.in_to_mapsto in i.
-          destruct i as (v, mt).
-          assert (Map_TID.MapsTo t2 v ph1). {
-            apply reduces_drop_mapsto_eq with (t:=t2) (v:=v) in R1; auto.
-            intuition.
-          }
-          assert (v = v2) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-          destruct (reduces_update_inv _ _  _ _ _  _ mt R2).
-          + inversion wf3.
-            eauto.
-          + destruct e as (o', (Hx, (?, Hmt))).
-            assert (Taskview.Ge v1 (Semantics.eval o' v2)). {
-              inversion wf3; eauto.
-            }
-            assert (Semantics.Reduce v2 o' (Semantics.eval o' v2)). {
-              inversion R2.
-              eauto using ph_reduce_to_tv_reduce.
-            }
-            eauto using tv_ge_eval_rhs.
-        }
-        assert (Map_TID.MapsTo t2 v2 ph2 \/ exists r, o = REGISTER r /\ t2 = get_task r). {
-          inversion R2.
-          apply reduces_mapsto_neq_rtl with (t':=t') (ph2:=ph3); auto.
-        }
-        inversion wf2.
-        assert
+        assert (Taskview.Ge v v2)
+        by (inversion G2; eauto).
+        eauto using tv_ge_register_left.
       }
+      apply reduces_mapsto_neq with (t:=t2) (v:=v2) in R1; auto.
+      inversion G1; eauto.
     Qed.
 
     Variable t: tid.
