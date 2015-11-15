@@ -1143,7 +1143,34 @@ Module Phaser.
           assert (Taskview.Welformed v) by (inversion W2; eauto).
           eauto using tv_ge_eval_lhs.
         }
-            
+        inversion R2.
+        destruct (reduces_mapsto_neq_rtl _ _ _ _ _ ph3 H n H2). {
+          inversion G2; eauto.
+        }
+        destruct H3 as (r, (?,?)).
+        subst.
+        clear H1 R2.
+        destruct (TID.eq_dec t2 (get_task r)). {
+          subst.
+          inversion H2; subst.
+          apply ph_register_spec with (v:=v) in H2; auto; rewrite H2 in *; clear H2.
+          assert (v0 = v)
+          by eauto using Map_TID_Facts.MapsTo_fun; subst.
+          assert (v1 = set_mode v (get_mode r)). {
+            apply Map_TID_Facts.add_mapsto_iff in H.
+            destruct H.
+            + destruct H.
+              subst.
+              trivial.
+            + destruct H.
+              contradiction H.
+              trivial.
+          }
+          subst.
+          assert (Taskview.Ge v v2)
+          by (inversion G2; eauto).
+          eauto using tv_ge_register_left.
+        }
       }
       (* -- *)
       remember (has_task o) as m.
