@@ -784,24 +784,6 @@ Module Phaser.
       + inversion Hge; eauto.
   Qed.
 
-
-  Lemma ph_ge_equal_rhs:
-    forall ph1 ph2 ph2',
-    Map_TID.Equal ph2 ph2' ->
-    Ge ph2' ph1 ->
-    Ge ph2 ph1.
-  Proof.
-    intros ? ? ? Heq G.
-    unfold Map_TID.Equal in *.
-    inversion G.
-    apply ph_rel_def.
-    intros.
-    rewrite Map_TID_Facts.find_mapsto_iff in H0.
-    rewrite Heq in H0.
-    rewrite <- Map_TID_Facts.find_mapsto_iff in H0.
-    eauto.
-  Qed.
-
   Section Trans.
     Inductive Update : op -> Prop :=
       | update_signal:
@@ -839,29 +821,6 @@ Module Phaser.
     Proof.
       intros.
       destruct o; (solve [left; auto | right; auto]).
-    Qed.
-    
-    Let reduces_signal_preserves_in:
-      forall t ph1 t' o ph2,
-      Map_TID.In t ph1 ->
-      Update o ->
-      Reduction ph1 t' o ph2 ->
-      Map_TID.In t ph2.
-    Proof.
-      intros.
-      assert (Hin : Map_TID.In t' ph1) by eauto using ph_in.
-      apply Map_TID_Extra.in_to_mapsto in Hin.
-      destruct Hin as (v, Hmt).
-      inversion H0; subst; clear H0.
-      - apply ph_signal_spec with (v:=v) in H1; auto.
-        rewrite H1.
-        auto using Map_TID_Extra.add_in.
-      - apply ph_wait_spec with (v:=v) in H1; auto.
-        rewrite H1.
-        auto using Map_TID_Extra.add_in.
-      - apply ph_register_spec with (v:=v) in H1; auto.
-        rewrite H1.
-        auto using Map_TID_Extra.add_in.
     Qed.
 
     Lemma reduces_mapsto_neq:
@@ -999,11 +958,7 @@ Module Phaser.
     Variable ph2 : phaser.
     Variable ph3 : phaser.
     Variable wf1: WF ph1.
-    Variable wf2: WF ph2.
-    Variable wf3: WF ph3.
-    Variable W1: Welformed ph1.
     Variable W2: Welformed ph2.
-    Variable W3: Welformed ph3.
 
     Let trans2:
       forall t t',
@@ -1114,6 +1069,7 @@ Module Phaser.
   End Trans.
 
 End Phaser.
+
 (*
 Module Phasermap.
 
