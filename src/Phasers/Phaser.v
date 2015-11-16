@@ -68,29 +68,29 @@ Module Semantics.
     | REGISTER : registry -> op.
 
 
-  Inductive Reduction (ph:phaser) (t:tid) : op -> phaser -> Prop :=
+  Inductive Reduces (ph:phaser) (t:tid) : op -> phaser -> Prop :=
 
-  | reduction_signal:
+  | reduces_signal:
     Map_TID.In t ph ->
-    Reduction ph t SIGNAL (signal t ph)
+    Reduces ph t SIGNAL (signal t ph)
 
-  | reduction_wait:
+  | reduces_wait:
     forall v,
     Map_TID.MapsTo t v ph ->
     wait_phase v < signal_phase v ->
     Sync ph t ->
-    Reduction ph t WAIT (wait t ph)
+    Reduces ph t WAIT (wait t ph)
 
-  | reduction_drop:
+  | reduces_drop:
     Map_TID.In t ph ->
-    Reduction ph t DROP (drop t ph)
+    Reduces ph t DROP (drop t ph)
 
-  | reduction_register:
+  | reduces_register:
     forall v r,
     ~ Map_TID.In (get_task r) ph ->
     Map_TID.MapsTo t v ph ->
     get_mode r <= mode v ->
-    Reduction ph t (REGISTER r) (register t r ph).
+    Reduces ph t (REGISTER r) (register t r ph).
   
   Definition as_tv_op (o:op) :=
   match o with
@@ -141,7 +141,7 @@ Module Semantics.
   Lemma ph_signal_spec:
     forall t v ph ph',
     Map_TID.MapsTo t v ph ->
-    Reduction ph t SIGNAL ph' ->
+    Reduces ph t SIGNAL ph' ->
     ph' = Map_TID.add t (Taskview.signal v) ph.
   Proof.
     intros.
@@ -154,7 +154,7 @@ Module Semantics.
   Lemma ph_wait_spec:
     forall t v ph ph',
     Map_TID.MapsTo t v ph ->
-    Reduction ph t WAIT ph' ->
+    Reduces ph t WAIT ph' ->
     ph' = Map_TID.add t (Taskview.wait v) ph.
   Proof.
     intros.
@@ -167,7 +167,7 @@ Module Semantics.
   Lemma ph_drop_spec:
     forall t ph ph',
     Map_TID.In t ph ->
-    Reduction ph t DROP ph' ->
+    Reduces ph t DROP ph' ->
     ph' = Map_TID.remove t ph.
   Proof.
     intros.
@@ -178,7 +178,7 @@ Module Semantics.
   Lemma ph_register_spec:
     forall t v r ph ph',
     Map_TID.MapsTo t v ph ->
-    Reduction ph t (REGISTER r) ph' ->
+    Reduces ph t (REGISTER r) ph' ->
     ph' = Map_TID.add (get_task r) (set_mode v (get_mode r)) ph.
   Proof.
     intros.
@@ -205,7 +205,7 @@ Module Semantics.
 
   Lemma ph_in:
     forall ph t o ph',
-    Reduction ph t o ph' ->
+    Reduces ph t o ph' ->
     Map_TID.In t ph.
   Proof.
     intros.
@@ -214,7 +214,7 @@ Module Semantics.
 
   Lemma ph_to_tv_correct:
     forall ph t o o' ph' v,
-    Reduction ph t o ph' ->
+    Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
     ph' = Map_TID.add t (Semantics.eval o' v) ph.
@@ -229,7 +229,7 @@ Module Semantics.
 
   Lemma ph_reduce_to_tv_reduce:
     forall ph t o o' ph' v,
-    Reduction ph t o ph' ->
+    Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
     Semantics.Reduce v o' (Semantics.eval o' v).

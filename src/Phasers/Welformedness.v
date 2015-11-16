@@ -118,7 +118,7 @@ Module Taskview.
       intuition.
   Qed.
 
-  Theorem tv_reduction_preserves_welformed:
+  Theorem tv_reduces_preserves_welformed:
     forall v o v',
     Welformed v ->
     Semantics.Reduce v o v' ->
@@ -272,7 +272,7 @@ Module Phaser.
   Lemma ph_signal_preserves_welformed:
     forall ph t ph',
     Welformed ph ->
-    Reduction ph t SIGNAL ph' ->
+    Reduces ph t SIGNAL ph' ->
     Welformed ph'.
   Proof.
     intros.
@@ -300,7 +300,7 @@ Module Phaser.
   Lemma ph_wait_preserves_welformed:
     forall ph t ph',
     Welformed ph ->
-    Reduction ph t WAIT ph' ->
+    Reduces ph t WAIT ph' ->
     Welformed ph'.
   Proof.
     intros.
@@ -326,7 +326,7 @@ Module Phaser.
   Lemma ph_drop_preserves_welformed:
     forall ph t ph',
     Welformed ph ->
-    Reduction ph t DROP ph' ->
+    Reduces ph t DROP ph' ->
     Welformed ph'.
   Proof.
     intros.
@@ -342,7 +342,7 @@ Module Phaser.
   Lemma ph_register_preserves_welformed:
     forall ph t r ph',
     Welformed ph ->
-    Reduction ph t (REGISTER r) ph' ->
+    Reduces ph t (REGISTER r) ph' ->
     Welformed ph'.
   Proof.
     intros.
@@ -370,7 +370,7 @@ Module Phaser.
   Lemma ph_reduce_preserves_welformed:
     forall ph t o ph',
     Welformed ph ->
-    Reduction ph t o ph' ->
+    Reduces ph t o ph' ->
     Welformed ph'.
   Proof.
     intros.

@@ -540,7 +540,7 @@ Module Phaser.
     forall ph ph' t o o',
     Welformed ph ->
     Ge ph ph ->
-    Reduction ph t o ph' ->
+    Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
     Ge ph' ph'.
   Proof.
@@ -562,7 +562,7 @@ Module Phaser.
         destruct H5 as [(?,?)|(?,?)].
         * subst.
           eauto using
-            tv_reduction_preserves_welformed,
+            tv_reduces_preserves_welformed,
             ph_welformed_to_tv_welformed,
             tv_welformed_to_ge_refl.
         * apply tv_lhs_eval_ge with (v2:=v2) in H3;
@@ -610,7 +610,7 @@ Module Phaser.
   Let ph_ge_refl_preserves_reduce_drop:
     forall ph ph' t,
     Ge ph ph ->
-    Reduction ph t DROP ph' ->
+    Reduces ph t DROP ph' ->
     Ge ph' ph'.
   Proof.
     intros.
@@ -681,7 +681,7 @@ Module Phaser.
   Let ph_ge_refl_preserves_reduce_register:
     forall t r ph ph',
     Ge ph ph ->
-    Reduction ph t (REGISTER r) ph' ->
+    Reduces ph t (REGISTER r) ph' ->
     Ge ph' ph'.
   Proof.
     intros ? ? ? ? Hge R.
@@ -712,7 +712,7 @@ Module Phaser.
     forall ph t o ph',
     Welformed ph ->
     Ge ph ph ->
-    Phaser.Semantics.Reduction ph t o ph' ->
+    Phaser.Semantics.Reduces ph t o ph' ->
     Ge ph' ph'.
   Proof.
     intros.
@@ -729,7 +729,7 @@ Module Phaser.
     forall ph t o o' ph',
     Welformed ph ->
     Ge ph ph ->
-    Reduction ph t o ph' ->
+    Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
     Ge ph' ph.
   Proof.
@@ -757,7 +757,7 @@ Module Phaser.
     forall ph t o ph',
     Welformed ph ->
     Ge ph ph ->
-    Reduction ph t o ph' ->
+    Reduces ph t o ph' ->
     Ge ph' ph.
   Proof.
     intros ? ? ? ? WF Hge R.
@@ -801,7 +801,7 @@ Module Phaser.
     Inductive ReducesUpdates p1 t o p2 : Prop :=
       reduces_updates_def:
         Update o ->
-        Reduction p1 t o p2 ->
+        Reduces p1 t o p2 ->
         ReducesUpdates p1 t o p2.
 
     Hint Constructors ReducesUpdates.
@@ -809,14 +809,14 @@ Module Phaser.
     Inductive ReducesDestructs p1 t : op -> phaser -> Prop :=
       reduces_destructs_def:
         forall p2,
-        Reduction p1 t DROP p2 ->
+        Reduces p1 t DROP p2 ->
         ReducesDestructs p1 t DROP p2.
 
     Hint Constructors ReducesDestructs.
 
     Lemma case_reduces:
       forall ph1 t o ph2,
-      Reduction ph1 t o ph2 ->
+      Reduces ph1 t o ph2 ->
       { ReducesUpdates ph1 t o ph2 } + { ReducesDestructs ph1 t o ph2 }.
     Proof.
       intros.
@@ -827,7 +827,7 @@ Module Phaser.
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph1 ->
       t' <> t ->
-      Reduction ph1 t' o ph2 ->
+      Reduces ph1 t' o ph2 ->
       Map_TID.MapsTo t v ph2.
     Proof.
       intros.
@@ -854,7 +854,7 @@ Module Phaser.
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph2 ->
       t' <> t ->
-      Reduction ph1 t' o ph2 ->
+      Reduces ph1 t' o ph2 ->
       Map_TID.MapsTo t v ph1 \/ exists r, o = REGISTER r /\ t = (get_task r).
     Proof.
       intros.
@@ -887,7 +887,7 @@ Module Phaser.
     Lemma reduces_drop_mapsto_eq:
       forall t v ph1 ph2 t',
       Map_TID.MapsTo t v ph2 ->
-      Reduction ph1 t' DROP ph2 ->
+      Reduces ph1 t' DROP ph2 ->
       t' <> t /\ Map_TID.MapsTo t v ph1.
     Proof.
       intros.
@@ -936,7 +936,7 @@ Module Phaser.
       forall ph1 ph2 ph3 : phaser,
       forall t t' o o',
       ReducesUpdates ph1 t o ph2  ->
-      Reduction ph2 t' o' ph3 ->
+      Reduces ph2 t' o' ph3 ->
       Ge ph3 ph2 ->
       Ge ph2 ph1 ->
       Ge ph3 ph1.
@@ -962,8 +962,8 @@ Module Phaser.
 
     Let trans2:
       forall t t',
-      Reduction ph1 t DROP ph2  ->
-      Reduction ph2 t' DROP ph3 ->
+      Reduces ph1 t DROP ph2  ->
+      Reduces ph2 t' DROP ph3 ->
       Ge ph3 ph2 ->
       Ge ph2 ph1 ->
       Ge ph3 ph1.
@@ -986,7 +986,7 @@ Module Phaser.
 
     Let trans3:
       forall t o t',
-      Reduction ph1 t DROP ph2  ->
+      Reduces ph1 t DROP ph2  ->
       ReducesUpdates ph2 t' o ph3 ->
       Ge ph3 ph2 ->
       Ge ph2 ph1 ->
@@ -1048,8 +1048,8 @@ Module Phaser.
     
     Lemma ph_reduces_trans:
       forall t o t' o',
-      Reduction ph1 t o ph2  ->
-      Reduction ph2 t' o' ph3 ->
+      Reduces ph1 t o ph2  ->
+      Reduces ph2 t' o' ph3 ->
       Ge ph3 ph2 ->
       Ge ph2 ph1 ->
       Ge ph3 ph1.
