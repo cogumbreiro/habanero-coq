@@ -1,13 +1,13 @@
 -R src HJ
 
 src/Vars.v
-src/Phasers/Rel.v
-src/Phasers/PhaseDiff.v
 src/Phasers/Taskview.v
 src/Phasers/Phaser.v
 src/Phasers/Lang.v
 src/Phasers/Welformedness.v
 src/Phasers/PhaseOrdering.v
+src/Phasers/PhaseDiff.v
+src/Phasers/Rel.v
 src/Phasers/TransClosure.v
 src/Phasers/Progress.v
 src/Phasers/LEDec.v
