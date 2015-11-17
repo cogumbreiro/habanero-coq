@@ -33,13 +33,15 @@ Inductive Await ph n : Prop :=
     Await ph n.
 
 (**
-  Now predicate [Sync] defines what happens when a
-  task synchronizes with the other members of a phaser, which depends
-  on the registration mode of the task.
+  Predicate [Sync] defines what happens when a
+  task synchronizes with the other members of a phaser, which is triggered when
+  a task performs either wait on a phaser, or next.
+  The semantics of [Sync] depends on the registration mode of the task.
   Tasks registered in [SIGNAL_ONLY] mode do not block, so predicate [Sync] always
-  hold. Tasks that are not registered in [SIGNAL_ONLY] mode
-  (that is tasks with a wait capability) must await on the phaser for their
-  signal phase.
+  holds. Tasks that are not registered in [SIGNAL_ONLY] mode
+  (that is tasks with a wait capability) only holds once all 
+  members with a signal capability issued at least as many signals as the task
+  synchronizing.
   *)
 
 Inductive Sync : phaser -> tid -> Prop :=
@@ -50,12 +52,23 @@ Inductive Sync : phaser -> tid -> Prop :=
     Sync ph t
   | sync_wait:
     forall ph t v,
-    Map_TID.MapsTo t v ph ->
+    MapsTo t v ph ->
     WaitCap (mode v) ->
-    Await ph (S (wait_phase v)) ->
+    Await ph (signal_phase v) ->
     Sync ph t.
 
-Definition make (t:tid) := add t Taskview.make (Map_TID.empty taskview).
+(**
+  Function [make] creates a new phaser and registers task [t] with it.
+  Task [t] becomes registered with the initial taskview [Taskview.make].
+*)
+
+Definition make t := add t Taskview.make (Map_TID.empty taskview).
+
+(**
+  Function [update] targets a phaser [ph and is used internal to mutate
+  the taskview associated with the given task [t] with function [f].
+  If task [t] is not registered in [ph], then the phaser is left unhaltered.
+*)
 
 Definition update (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
   match find t ph with
@@ -63,11 +76,25 @@ Definition update (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
   | None => ph
   end.
 
+(**
+  Signal and wait use [update] to apply either [Taskview.signal] or
+  [Taskview.wait] to the registered taskview.
+  *)
+
 Definition signal (t:tid) : phaser -> phaser := update t Taskview.signal.
 
 Definition wait (t:tid) : phaser -> phaser := update t Taskview.wait.
 
+(** Function [drop] removes the taskview associated with the given task. *)
+
 Definition drop : tid -> phaser -> phaser := @remove taskview.
+
+(**
+  Function [register] embodies invoking an [async phased].
+  Operationally, this operation puts a new taskview in the phaser, associated to
+  task [get_task r].
+  The new taskview is a copy of the issuer's taskview, whose mode is set to [get_mode r].
+  *)
 
 Record registry := mk_registry {
   get_task: tid;
@@ -80,19 +107,30 @@ Definition register (t:tid) (r:registry) (ph:phaser) : phaser :=
   | None => ph
   end.
 
+(* begin hide *)
+
 End Defs.
 
 Module Semantics.
 
   Import Taskview.Notations.
   Open Scope reg_scope.
+(* end hide *)
 
-  Inductive op :=
-    | SIGNAL
-    | WAIT
-    | DROP
-    | REGISTER : registry -> op.
+(** * Small-step Operational Semantics *)
 
+(** The operational semantics define a set of four possible operations: signal, wait, drop (that deregisters the issuer),
+and register (that adds a new task to the phaser). *)
+
+  Inductive op := SIGNAL | WAIT | DROP | REGISTER : registry -> op.
+
+  (**
+    Relation [Reduces] defines the operational semantics. Two operations are worth detailing.
+    Operation [WAIT] has two pre-conditions: (i) the issuer must have signalled previously,
+    and (ii) the issuer must synchronize by means of the given phaser with [Sync t ph].
+    Operation [REGISTER r] has two pre-conditions: (i) task [get_task r] must be unknown to the phaser,
+    and (ii) the mode in the registry can only pass capabilities that the issuer already has.
+  *)
 
   Inductive Reduces (ph:phaser) (t:tid) : op -> phaser -> Prop :=
 

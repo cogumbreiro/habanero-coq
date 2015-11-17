@@ -155,6 +155,12 @@ Definition AllSignalled : Prop  :=
 
 Variable AS : AllSignalled.
 
+Require Import HJ.Phasers.Welformedness.
+
+Import Phasermap.
+
+Variable WF : Welformed pm.
+
 Lemma smallest_to_sync:
   forall t p ph,
   Smallest t tids ->
@@ -174,7 +180,19 @@ Proof.
     by eauto using Smallest_to_WaitPhase.
     assert (wait_phase v' < signal_phase v')
     by eauto using AS.
-    intuition.
+    assert (wf: Taskview.Welformed v). {
+      assert (WF1: Phaser.Welformed ph) by (inversion WF; eauto).
+      inversion WF1; eauto.
+    }
+    destruct wf.
+    + assert (wait_phase v <> signal_phase v). {
+        unfold AllSignalled in *.
+        assert (wait_phase v < signal_phase v) by eauto.
+        intuition.
+      }
+      contradiction.
+    + intuition.
+    + apply so_to_not_wait_cap in H2; contradiction.
   - eauto using sync_so.
 Qed.
 
@@ -313,6 +331,10 @@ Variable reqs_spec_2:
 *)
 Notation pm := (get_state s).
 Notation reqs := (get_requests s).
+
+Require Import HJ.Phasers.Welformedness.
+
+Variable WF: Phasermap.Welformed pm.
 Let tids := pm_tids pm.  
 
 
@@ -415,7 +437,7 @@ Proof.
   assert (Hnil : tids <> nil). {
     auto using nonempty_to_tids_not_nil.
   }
-  destruct (has_unblocked (IsValid s) AllSig Hnil) as (t, (Hin, (m, Hred))).
+  destruct (has_unblocked (IsValid s) AllSig WF Hnil) as (t, (Hin, (m, Hred))).
   exists t.
   assert (In t pm). {
     auto using pm_tids_spec_1.

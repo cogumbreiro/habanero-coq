@@ -374,11 +374,40 @@ Module Phaser.
     Welformed ph'.
   Proof.
     intros.
-    inversion H0; subst; inversion H;
-    eauto using
-      ph_signal_preserves_welformed,
-      ph_wait_preserves_welformed,
-      ph_drop_preserves_welformed,
-      ph_register_preserves_welformed.
+    inversion H0; subst; inversion H.
+    - eauto using
+      ph_signal_preserves_welformed.
+    - eauto using
+      ph_wait_preserves_welformed.
+    - eauto using 
+      ph_drop_preserves_welformed.
+    - eauto using ph_register_preserves_welformed.
   Qed.
+
 End Phaser.
+
+Module Phasermap.
+  Require Import HJ.Phasers.Lang.
+  Import Phaser.
+
+  Inductive Welformed (m:phasermap) : Prop :=
+    pm_welformed_def:
+      (forall p ph,
+        Map_PHID.MapsTo p ph m ->
+        Phaser.Welformed ph) ->
+      Welformed m.
+
+  Lemma pm_welformed_to_tv_welformed:
+    forall m p ph t v,
+    Welformed m ->
+    Map_PHID.MapsTo p ph m ->
+    Map_TID.MapsTo t v ph ->
+    Taskview.Welformed v.
+  Proof.
+    intros.
+    inversion H.
+    assert (W: Phaser.Welformed ph) by eauto.
+    inversion W; eauto.
+  Qed.
+
+End Phasermap.

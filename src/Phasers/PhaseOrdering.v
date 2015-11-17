@@ -593,8 +593,9 @@ Module Phaser.
             {
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
               destruct (signal_cap_wo_dec (mode v1)). {
-                assert (signal_phase v1 >= S (wait_phase v)) by (inversion H12; eauto).
                 apply tv_ge_ge.
+                assert (signal_phase v1 >= (signal_phase v)) by (inversion H12; eauto).
+                rewrite wait_wait_phase.
                 intuition.
               }
               auto using tv_ge_wo.
