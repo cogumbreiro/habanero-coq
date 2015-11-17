@@ -121,7 +121,7 @@ Module Taskview.
   Theorem tv_reduces_preserves_welformed:
     forall v o v',
     Welformed v ->
-    Semantics.Reduce v o v' ->
+    Semantics.Reduces v o v' ->
     Welformed v'.
   Proof.
     intros.
@@ -153,10 +153,10 @@ Module Taskview.
     destruct H; intuition.
   Qed.
 
-  Lemma reduce_wait_post:
+  Lemma reduces_wait_post:
     forall v v',
     Welformed v ->
-    Semantics.Reduce v Semantics.WAIT v' ->
+    Semantics.Reduces v Semantics.WAIT v' ->
     (mode v' = SIGNAL_ONLY \/ WaitCap (mode v') /\ wait_phase v' = signal_phase v').
   Proof.
     intros.
@@ -173,16 +173,16 @@ Module Taskview.
       assumption.
   Qed.
 
-  Lemma reduce_wait_inv_wait_cap:
+  Lemma reduces_wait_inv_wait_cap:
     forall v v',
     Welformed v ->
     WaitCap (mode v) ->
-    Semantics.Reduce v Semantics.WAIT v' ->
+    Semantics.Reduces v Semantics.WAIT v' ->
     signal_phase v' = wait_phase v'.
   Proof.
     intros.
     inversion H1; subst.
-    apply reduce_wait_post in H1; auto.
+    apply reduces_wait_post in H1; auto.
     destruct H1 as [R|(?,?)].
     - (* absurd case *)
       assert (WaitCap (mode (wait v))). {
@@ -193,19 +193,19 @@ Module Taskview.
     - intuition.
   Qed.
 
-  Lemma reduce_trans_inv:
+  Lemma reduces_trans_inv:
     forall x y z o,
     Welformed x ->
     WaitCap (mode x) ->
-    Semantics.Reduce x Semantics.WAIT y ->
-    Semantics.Reduce y o z ->
+    Semantics.Reduces x Semantics.WAIT y ->
+    Semantics.Reduces y o z ->
     o = Semantics.SIGNAL.
   Proof.
     intros.
     inversion H1; subst.
     inversion H2; trivial; subst.
     subst.
-    apply reduce_wait_post in H1.
+    apply reduces_wait_post in H1.
     {
       destruct H1 as [?|(?,?)].
       - rewrite wait_cap_rw in *.
@@ -367,7 +367,7 @@ Module Phaser.
       * eauto using ph_welformed_to_tv_welformed.
   Qed.
 
-  Lemma ph_reduce_preserves_welformed:
+  Lemma ph_reduces_preserves_welformed:
     forall ph t o ph',
     Welformed ph ->
     Reduces ph t o ph' ->

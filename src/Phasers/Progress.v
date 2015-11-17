@@ -159,28 +159,23 @@ Lemma smallest_to_sync:
   forall t p ph,
   Smallest t tids ->
   Map_PHID.MapsTo p ph pm ->
+  Map_TID.In t ph ->
   Sync ph t.
 Proof.
   intros.
-  remember (Map_TID.find t ph).
-  symmetry in Heqo.
-  destruct o as [v|].
-  * rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo.
-    destruct (wait_cap_so_dec (mode v)).
-    - apply sync_wait with (v:=v); repeat intuition.
-      unfold Await.
-      intros t' v' Hmt'.
-      (* show that: n <= WP(v') *)
-      assert (Hle : wait_phase v <= wait_phase v'). {
-        eauto using Smallest_to_WaitPhase.
-      }
-      assert (wait_phase v' < signal_phase v'). {
-        eauto using AS.
-      }
-      intuition.
-    - eauto using sync_so.
-  * rewrite <- Map_TID_Facts.not_find_in_iff in Heqo.
-    auto using sync_skip.
+  apply Map_TID_Extra.in_to_mapsto in H1.
+  destruct H1 as (v, mt).
+  destruct (wait_cap_so_dec (mode v)).
+  - apply sync_wait with (v:=v); auto.
+    apply await_def. 
+    intros t' v' Hmt'.
+    (* show that: n <= WP(v') *)
+    assert (Hle : wait_phase v <= wait_phase v')
+    by eauto using Smallest_to_WaitPhase.
+    assert (wait_phase v' < signal_phase v')
+    by eauto using AS.
+    intuition.
+  - eauto using sync_so.
 Qed.
 
 Theorem has_unblocked:

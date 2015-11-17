@@ -1,3 +1,4 @@
+(* begin hide *)
 Require Import Coq.Structures.OrderedType.
 Require Import Coq.Structures.OrderedTypeEx.
 Require Import Coq.FSets.FSetAVL.
@@ -177,3 +178,5 @@ Module Map_FID_Facts := FMapFacts.Facts Map_FID.
 Module Map_FID_Props := FMapFacts.Properties Map_FID.
 Module Map_FID_Extra := MapUtil Map_FID.
 Definition fid := FID.t.
+
+(* end hide  *)

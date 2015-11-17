@@ -253,7 +253,7 @@ Module Taskview.
   Let tv_signal_ge_lhs:
     forall v v',
     Welformed v ->
-    Reduce v SIGNAL v' ->
+    Reduces v SIGNAL v' ->
     Ge v' v.
   Proof.
     intros.
@@ -272,10 +272,10 @@ Module Taskview.
     intuition.
  Qed.
 
-  Lemma tv_ge_reduce:
+  Lemma tv_ge_reduces:
     forall v o v',
     Welformed v ->
-    Reduce v o v' ->
+    Reduces v o v' ->
     Ge v' v.
   Proof.
     intros.
@@ -284,23 +284,23 @@ Module Taskview.
     - auto using tv_wait_ge_lhs.
   Qed.
 
-  Let tv_ge_reduce_trans_sw:
+  Let tv_ge_reduces_trans_sw:
     forall x o y o' z,
     Welformed x ->
     Welformed y ->
     Welformed z ->
-    Reduce x o y ->
-    Reduce y o' z ->
+    Reduces x o y ->
+    Reduces y o' z ->
     mode x = SIGNAL_WAIT ->
     (signal_phase z >= wait_phase x)%nat.
   Proof.
     intros.
-    assert (Ge z y) by eauto using tv_ge_reduce.
-    assert (Ge y x) by eauto using tv_ge_reduce.
+    assert (Ge z y) by eauto using tv_ge_reduces.
+    assert (Ge y x) by eauto using tv_ge_reduces.
     destruct o.
-    - apply reduce_rw_signal in H2.
+    - apply reduces_rw_signal in H2.
       destruct o'.
-      + apply reduce_rw_signal in H3.
+      + apply reduces_rw_signal in H3.
         assert (R: mode z = mode x). {
           subst.
           repeat rewrite signal_preserves_mode in *.
@@ -318,7 +318,7 @@ Module Taskview.
         }
         rewrite signal_signal_wait_cap; auto.
         rewrite signal_wait_cap_signal_phase; (intuition || auto).
-      + apply reduce_rw_wait in H3.
+      + apply reduces_rw_wait in H3.
         assert (wait_phase x <= signal_phase x)%nat by auto
           using welformed_wait_phase_le_signal_phase.
         subst.
@@ -331,9 +331,9 @@ Module Taskview.
         rewrite H4.
         auto using wait_cap_sw.
       }
-      assert (o' = SIGNAL) by eauto using reduce_trans_inv.
+      assert (o' = SIGNAL) by eauto using reduces_trans_inv.
       subst.
-      assert (R: signal_phase y = wait_phase y) by eauto using reduce_wait_inv_wait_cap.
+      assert (R: signal_phase y = wait_phase y) by eauto using reduces_wait_inv_wait_cap.
       inversion H2; subst.
       inversion H3; subst.
       rewrite wait_preserves_signal_phase in *.
@@ -360,7 +360,7 @@ Module Taskview.
     auto using tv_ge_ge.
   Qed.
 (*
-  Lemma tv_ge_reduce_trans:
+  Lemma tv_ge_reduces_trans:
     forall x o y o' z,
     Welformed x ->
     Welformed y ->
@@ -373,9 +373,9 @@ Module Taskview.
     assert (Ge z y) by eauto using tv_ge_reduce.
     assert (Ge y x) by eauto using tv_ge_reduce.
     assert (R1: mode y = mode x) by
-      eauto using reduce_preserves_mode.
+      eauto using reduces_preserves_mode.
     assert (R2: mode z = mode y). {
-      eauto using reduce_preserves_mode.
+      eauto using reduces_preserves_mode.
     }
     assert (R3: mode x = mode z) by
       (transitivity (mode y); auto).
@@ -395,7 +395,7 @@ Module Taskview.
       rewrite <- R1.
       assumption.
     }
-    eauto using tv_ge_reduce_trans_sw.
+    eauto using tv_ge_reduces_trans_sw.
   Qed.
 *)
   Lemma tv_eval_preserves_le:
@@ -415,17 +415,17 @@ Module Taskview.
     forall v1 v2 v1' o,
     Welformed v1 ->
     Ge v1 v2 ->
-    Reduce v1 o v1' ->
+    Reduces v1 o v1' ->
     Ge v1' v2.
   Proof.
     intros.
     inversion H0.
     - apply tv_ge_ge.
-      apply reduce_spec in H1.
+      apply reduces_spec in H1.
       subst.
       auto using tv_eval_preserves_le.
     - auto using tv_ge_so.
-    - apply reduce_preserves_mode in H1.
+    - apply reduces_preserves_mode in H1.
       rewrite H2 in H1.
       auto using tv_ge_wo.
   Qed.
@@ -433,7 +433,7 @@ Module Taskview.
   Lemma tv_ge_eval_rhs:
     forall v1 v2 o,
     Ge v1 (Semantics.eval o v2) ->
-    Reduce v2 o (Semantics.eval o v2) ->
+    Reduces v2 o (Semantics.eval o v2) ->
     Ge v1 v2.
   Proof.
     intros.
@@ -453,7 +453,7 @@ Module Taskview.
     forall v1 v2 o,
     Welformed v1 ->
     Ge v1 v2 ->
-    Reduce v1 o (Semantics.eval o v1) ->
+    Reduces v1 o (Semantics.eval o v1) ->
     Ge (Semantics.eval o v1) v2.
   Proof.
     intros.
@@ -537,7 +537,7 @@ Module Phaser.
 
   Definition Ge := Rel Taskview.Ge.
 
-  Let ph_ge_refl_preserves_reduce_some:
+  Let ph_ge_refl_preserves_reduces_some:
     forall ph ph' t o o',
     Welformed ph ->
     Ge ph ph ->
@@ -549,8 +549,8 @@ Module Phaser.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
-    assert (Semantics.Reduce v o' (Semantics.eval o' v)) by
-        eauto using ph_reduce_to_tv_reduce.
+    assert (Taskview.Semantics.Reduces v o' (Semantics.eval o' v)) by
+        eauto using ph_reduces_to_tv_reduce.
       assert (ph' = Map_TID.add t (Semantics.eval o' v) ph) by
         eauto using ph_to_tv_correct.
       subst.
@@ -593,14 +593,12 @@ Module Phaser.
             {
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
               destruct (signal_cap_wo_dec (mode v1)). {
-                assert (signal_phase v1 >= S (wait_phase v)) by eauto.
+                assert (signal_phase v1 >= S (wait_phase v)) by (inversion H12; eauto).
                 apply tv_ge_ge.
                 intuition.
               }
               auto using tv_ge_wo.
             }
-            contradiction H10.
-            eauto using Map_TID_Extra.mapsto_to_in.
           - apply tv_ge_so.
             rewrite Semantics.eval_preserves_mode.
             assumption.
@@ -608,7 +606,7 @@ Module Phaser.
         * inversion H0; eauto.
   Qed.
 
-  Let ph_ge_refl_preserves_reduce_drop:
+  Let ph_ge_refl_preserves_reduces_drop:
     forall ph ph' t,
     Ge ph ph ->
     Reduces ph t DROP ph' ->
@@ -679,7 +677,7 @@ Module Phaser.
     * auto using tv_ge_wo.
   Qed.
 
-  Let ph_ge_refl_preserves_reduce_register:
+  Let ph_ge_refl_preserves_reduces_register:
     forall t r ph ph',
     Ge ph ph ->
     Reduces ph t (REGISTER r) ph' ->
@@ -720,13 +718,13 @@ Module Phaser.
     remember (as_tv_op o) as o'.
     symmetry in Heqo'.
     destruct o' as [o'|].
-    - eauto using ph_ge_refl_preserves_reduce_some.
+    - eauto using ph_ge_refl_preserves_reduces_some.
     - destruct o; try (simpl in Heqo'; inversion Heqo'); clear Heqo'.
-      + eauto using ph_ge_refl_preserves_reduce_drop.
-      + eauto using ph_ge_refl_preserves_reduce_register.
+      + eauto using ph_ge_refl_preserves_reduces_drop.
+      + eauto using ph_ge_refl_preserves_reduces_register.
   Qed.
 
-  Let ph_ge_reduce_some:
+  Let ph_ge_reduces_some:
     forall ph t o o' ph',
     Welformed ph ->
     Ge ph ph ->
@@ -738,8 +736,8 @@ Module Phaser.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
-    assert (Semantics.Reduce v o' (Semantics.eval o' v)) by
-    eauto using ph_reduce_to_tv_reduce.
+    assert (Taskview.Semantics.Reduces v o' (Taskview.Semantics.eval o' v)) by
+    eauto using ph_reduces_to_tv_reduce.
     assert (ph' = Map_TID.add t (Semantics.eval o' v) ph) by
     eauto using ph_to_tv_correct.
     subst.
@@ -764,7 +762,7 @@ Module Phaser.
     intros ? ? ? ? WF Hge R.
     remember(as_tv_op o) as o'.
     symmetry in Heqo'.
-    destruct o' as [o'|]; eauto using ph_ge_reduce_some.
+    destruct o' as [o'|]; eauto using ph_ge_reduces_some.
     (destruct o; simpl in Heqo'; inversion Heqo'); clear Heqo'.
     - inversion R; subst.
       unfold drop in *.
@@ -960,8 +958,8 @@ Module Phaser.
       destruct e as (o', (Hv, (_, Hmt))).
       assert (vz = Semantics.eval o' v) by eauto using Map_TID_Facts.MapsTo_fun.
       subst.
-      assert (Semantics.Reduce v o' (Semantics.eval o' v))
-      by (inversion R; eauto using ph_reduce_to_tv_reduce).
+      assert (Taskview.Semantics.Reduces v o' (Semantics.eval o' v))
+      by (inversion R; eauto using ph_reduces_to_tv_reduce).
       assert (Taskview.Ge v vx) by (inversion H0; eauto).
       assert (Taskview.Welformed v) by (inversion H; eauto).
       eauto using tv_ge_eval_lhs.
@@ -1031,7 +1029,7 @@ Module Phaser.
     intros.
     induction H0; auto.
     destruct H0.
-    eauto using ph_reduce_preserves_welformed.
+    eauto using ph_reduces_preserves_welformed.
   Qed.
 
   Lemma ph_s_reduces_trans_refl_ge_refl:
