@@ -468,6 +468,7 @@ Module Taskview.
       assumption.
   Qed.
 
+
   (**
     In a wellformed phaser there is a well-defined difference
     between wait-phases. Let [vm] be the minimum wait-phase of a
@@ -1068,31 +1069,170 @@ Module Phaser.
     Qed.
   End Trans.
 
-End Phaser.
 
-(*
-Module Phasermap.
+  Lemma ph_reduces_update_preserves_ge_right:
+    forall z x y t o,
+    Ge z y ->
+    ReducesUpdates x t o y ->
+    Ge z x.
+  Proof.
+    intros ? ? ? ? ? G1 r.
+    apply ph_rel_def.
+    intros t1 tx v1 vx; intros.
+    destruct (TID.eq_dec t tx). {
+        subst.
+        assert (i: Map_TID.In tx x) by (inversion r; eauto using ph_in).
+        apply Map_TID_Extra.in_to_mapsto in i.
+        destruct i as (v, mt).
+        assert (R:=r).
+        apply reduces_update_inv with (t:=tx) (v:=v) in r; auto.
+        destruct r. {
+          assert (v = vx) by eauto using Map_TID_Facts.MapsTo_fun.
+          subst.
+          inversion G1; eauto.
+        }
+        destruct e as (o', (Hv, (_, Hmt))).
+        assert (vx = v) by eauto using Map_TID_Facts.MapsTo_fun.
+        subst; clear mt.
+        assert (Semantics.Reduce v o' (Semantics.eval o' v))
+        by (inversion R; eauto using ph_reduce_to_tv_reduce).
+        assert (Taskview.Ge v1 (Semantics.eval o' v)) by (inversion G1; eauto).
+        eauto using tv_ge_eval_rhs.
+      }
+      inversion r.
+      inversion G1.
+      eauto using reduces_mapsto_neq.
+  Qed.
 
-  Import Taskview.
-  Require Import HJ.Phasers.Taskview.
-  Import Welformedness.Taskview.
+  Lemma ph_reduces_updates_preserves_ge_left:
+    forall x y z t o,
+    Welformed y ->
+    Ge y x ->
+    ReducesUpdates y t o z ->
+    Ge z x.
+  Proof.
+    intros.
+    apply ph_rel_def.
+    intros tz tx vz vx; intros.
+    destruct (TID.eq_dec t tz). {
+      subst.
+      rename H1 into r.
+      assert (i: Map_TID.In tz y) by (inversion r; eauto using ph_in).
+      apply Map_TID_Extra.in_to_mapsto in i.
+      destruct i as (v, mt).
+      assert (R:=r).
+      apply reduces_update_inv with (t:=tz) (v:=v) in r; auto.
+      destruct r. {
+        assert (v = vz) by eauto using Map_TID_Facts.MapsTo_fun.
+        subst.
+        inversion H0; eauto.
+      }
+      destruct e as (o', (Hv, (_, Hmt))).
+      assert (vz = Semantics.eval o' v) by eauto using Map_TID_Facts.MapsTo_fun.
+      subst.
+      assert (Semantics.Reduce v o' (Semantics.eval o' v))
+      by (inversion R; eauto using ph_reduce_to_tv_reduce).
+      assert (Taskview.Ge v vx) by (inversion H0; eauto).
+      assert (Taskview.Welformed v) by (inversion H; eauto).
+      eauto using tv_ge_eval_lhs.
+    }
+    destruct H1.
+    assert (R := H4).
+    apply reduces_mapsto_neq_rtl with (t:=tz) (v:=vz) in H4; auto.
+    destruct H4. { inversion H0; eauto. }
+    destruct H4 as (r, (?, ?)).
+    subst.
+    clear H1.
+    inversion R; subst.
+    apply ph_register_spec with (v:=v) in R; auto; rewrite R in *; clear R.
+    assert (vz = set_mode v (get_mode r)). {
+      apply Map_TID_Facts.add_mapsto_iff in H2.
+      destruct H2.
+      + destruct H1.
+        subst.
+        trivial.
+      + destruct H1.
+        contradiction H1.
+        trivial.
+    }
+    subst.
+    assert (Taskview.Ge v vx)
+    by (inversion H0; eauto).
+    eauto using tv_ge_register_left.
+  Qed.
 
-  Require Import HJ.Phasers.Phaser.
-  Import Phaser.Semantics.
-  Import Welformedness.Phaser.
+  Lemma ph_reduces_drop_preserves_ge_left:
+    forall x y z t,
+    Ge y x ->
+    Reduces y t DROP z ->
+    Ge z x.
+  Proof.
+    intros.
+    apply ph_rel_def; intros tz tx vz vx; intros.
+    apply reduces_drop_mapsto_eq with (t:=tz) (v:=vz) in H0; auto.
+    destruct H0.
+    inversion H; eauto.
+  Qed.
 
-  Inductive PmRel (R: phaser -> phaser -> Prop) (m1 m2:phasermap) : Prop :=
-    pm_rel_def:
-      (forall p ph1 ph2,
-        Map_PHID.MapsTo p ph1 m1 ->
-        Map_PHID.MapsTo p ph2 m2 ->
-        R ph1 ph2) ->
-      PmRel R m1 m2.
+  Require Import Coq.Relations.Relation_Operators.
+  Require Import Coq.Relations.Operators_Properties.
 
-  Definition PmGe := PmRel PhGe.
+  Lemma ph_s_reduces_preserves_ge_left:
+    forall x y z,
+    Welformed y ->
+    Ge y x ->
+    SReduces y z ->
+    Ge z x.
+  Proof.
+    intros.
+    destruct H1.
+    apply case_reduces in H1.
+    destruct H1.
+    - eauto using ph_reduces_updates_preserves_ge_left.
+    - destruct r; eauto using ph_reduces_drop_preserves_ge_left.
+  Qed.
+  
+  Lemma ph_s_reduces_trans_refl_welformed:
+    forall x y,
+    Welformed x ->
+    clos_refl_trans phaser SReduces x y ->
+    Welformed y.
+  Proof.
+    intros.
+    induction H0; auto.
+    destruct H0.
+    eauto using ph_reduce_preserves_welformed.
+  Qed.
 
-End Phasermap.
-*)
+  Lemma ph_s_reduces_trans_refl_ge_refl:
+    forall x y,
+    Welformed x ->
+    Ge x x ->
+    clos_refl_trans phaser SReduces x y ->
+    Ge y y.
+  Proof.
+    intros.
+    induction H1; auto.
+    - destruct H1.
+      eauto using ph_ge_refl_preserves_reduce.
+    - assert (Welformed y) by eauto using ph_s_reduces_trans_refl_welformed.
+      eauto.
+  Qed.
+
+  Lemma ph_s_reduces_trans_refl:
+    forall x y,
+    Welformed x ->
+    Ge x x ->
+    clos_refl_trans phaser SReduces x y ->
+    Ge y x.
+  Proof.
+    intros.
+    rewrite clos_rt_rtn1_iff in H1.
+    induction H1; auto.
+    assert (Welformed y) by (rewrite <- clos_rt_rtn1_iff in H2; eauto using ph_s_reduces_trans_refl_welformed).
+    apply ph_s_reduces_preserves_ge_left with (y); auto.
+  Qed.
+
 (*
  Is it possible for i1 < i2 an i2 < i1?
 *)
