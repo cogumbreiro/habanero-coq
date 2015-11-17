@@ -1049,7 +1049,7 @@ Module Phaser.
       eauto.
   Qed.
 
-  Lemma ph_s_reduces_trans_refl:
+  Lemma ph_s_reduces_trans_refl_ge:
     forall x y,
     Welformed x ->
     Ge x x ->
