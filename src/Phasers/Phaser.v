@@ -91,7 +91,15 @@ Module Semantics.
     Map_TID.MapsTo t v ph ->
     get_mode r <= mode v ->
     Reduces ph t (REGISTER r) (register t r ph).
-  
+
+  (** The silent-reduces relation omits the tid and the op. *)
+
+  Inductive SReduces (ph1:phaser) (ph2:phaser) : Prop :=
+    s_reduces:
+      forall t o,
+      Reduces ph1 t o ph2 ->
+      SReduces ph1 ph2.
+
   Definition as_tv_op (o:op) :=
   match o with
   | SIGNAL => Some Taskview.Semantics.SIGNAL
