@@ -72,7 +72,7 @@ Inductive Reduce (m:phasermap) (t:tid): op -> phasermap -> Prop :=
 
  | reduce_wait_all:
     (* check if it can synchronize on every phaser *)
-    (forall p ph, Map_PHID.MapsTo p ph m -> Sync ph t) ->
+    (forall p ph, Map_PHID.MapsTo p ph m -> Map_TID.In t ph -> Sync ph t) ->
     (* --------------- *)
     Reduce m t WAIT_ALL (wait_all t m)
 

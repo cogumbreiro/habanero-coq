@@ -1,16 +1,46 @@
+(* begin hide *)
+
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Taskview.
 
 Section Defs.
 Import HJ.Vars.Map_TID.
 
-Definition phaser := t taskview.
+(* end hide *)
 
-Definition Await (ph:phaser) (n:nat) : Prop :=
-  forall t v,
-  MapsTo t v ph ->
-  SignalCap (mode v) ->
-  v.(signal_phase) >= n.
+(**
+  A phaser is a map from task names [tid] into taskviews, represented
+  by parametric type [Map_TID.t].
+*)
+
+Definition phaser := Map_TID.t taskview.
+
+(**
+  Predicate [Await] holds when all tasks registered in phaser [ph] 
+  that have a signal capability have a signal phase of at least [n].
+  By only awaiting tasks with a signal capability, predicate [Await]
+  does *not* wait for any task registered with [WAIT_ONLY] mode, regardless
+  of its signal phase. Intuitively, this predicate lets a task to wait for
+  all members of a phaser to reach a given phase.
+  *)
+
+Inductive Await ph n : Prop :=
+  await_def:
+    (forall t v,
+      MapsTo t v ph ->
+      SignalCap (mode v) ->
+      signal_phase v >= n) ->
+    Await ph n.
+
+(**
+  Now predicate [Sync] defines what happens when a
+  task synchronizes with the other members of a phaser, which depends
+  on the registration mode of the task.
+  Tasks registered in [SIGNAL_ONLY] mode do not block, so predicate [Sync] always
+  hold. Tasks that are not registered in [SIGNAL_ONLY] mode
+  (that is tasks with a wait capability) must await on the phaser for their
+  signal phase.
+  *)
 
 Inductive Sync : phaser -> tid -> Prop :=
   | sync_so:
@@ -23,10 +53,6 @@ Inductive Sync : phaser -> tid -> Prop :=
     Map_TID.MapsTo t v ph ->
     WaitCap (mode v) ->
     Await ph (S (wait_phase v)) ->
-    Sync ph t
-  | sync_skip:
-    forall t ph,
-    ~ Map_TID.In t ph ->
     Sync ph t.
 
 Definition make (t:tid) := add t Taskview.make (Map_TID.empty taskview).
@@ -235,21 +261,21 @@ Module Semantics.
       auto using ph_wait_spec.
   Qed.
 
-  Lemma ph_reduce_to_tv_reduce:
+  Lemma ph_reduces_to_tv_reduce:
     forall ph t o o' ph' v,
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
-    Semantics.Reduce v o' (Semantics.eval o' v).
+    Taskview.Semantics.Reduces v o' (Semantics.eval o' v).
   Proof.
     intros.
     destruct o'; simpl.
     - apply as_tv_op_inv_signal in H0; subst.
-      apply Semantics.reduce_signal.
+      apply Semantics.tv_reduces_signal.
     - apply as_tv_op_inv_wait in H0; subst.
       inversion H.
       subst.
-      apply Semantics.reduce_wait.
+      apply Semantics.tv_reduces_wait.
       assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun.
       subst.
       intuition.
