@@ -66,9 +66,9 @@ Inductive Sync : phaser -> tid -> Prop :=
 Definition make t := add t Taskview.make (Map_TID.empty taskview).
 
 (**
-  Function [update] targets a phaser [ph and is used internal to mutate
+  Function [update] targets a phaser [ph] and is used internal to mutate
   the taskview associated with the given task [t] with function [f].
-  If task [t] is not registered in [ph], then the phaser is left unhaltered.
+  If task [t] is not registered in [ph], then the phaser is left unchanged.
 *)
 
 Definition update (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
@@ -102,7 +102,7 @@ Record registry := mk_registry {
   get_mode: regmode
 }.
 
-Definition register (t:tid) (r:registry) (ph:phaser) : phaser := 
+Definition register (r:registry) (t:tid) (ph:phaser) : phaser := 
   match find t ph with
   | Some v => add (get_task r) (set_mode v (get_mode r)) ph
   | None => ph
@@ -114,16 +114,28 @@ End Defs.
 
 Module Semantics.
 
+  Import Taskview.Semantics.
   Import Regmode.Notations.
   Open Scope reg_scope.
 (* end hide *)
 
 (** * Small-step Operational Semantics *)
 
-(** The operational semantics define a set of four possible operations: signal, wait, drop (that deregisters the issuer),
-and register (that adds a new task to the phaser). *)
+  (** The operational semantics define a set of four possible operations:
+    signal, wait, drop (that deregisters the issuer),
+    and register (that adds a new task to the phaser). *)
 
   Inductive op := SIGNAL | WAIT | DROP | REGISTER : registry -> op.
+
+  (** Function [eval] interprets operation [o] as its respective function. *)
+
+  Definition eval o :=
+  match o with
+  | SIGNAL => signal
+  | WAIT => wait
+  | DROP => drop
+  | REGISTER r => register r
+  end.
 
   (**
     Relation [Reduces] defines the operational semantics. Two operations are worth detailing.
@@ -151,7 +163,7 @@ and register (that adds a new task to the phaser). *)
     ~ Map_TID.In (get_task r) ph ->
     Map_TID.MapsTo t v ph ->
     get_mode r <= mode v ->
-    Reduces ph t (REGISTER r) (register t r ph).
+    Reduces ph t (REGISTER r) (register r t ph).
 
   (** Relation [SReducess] simply omits the task and operation of relation [Reduces]. *)
 
@@ -188,6 +200,16 @@ and register (that adds a new task to the phaser). *)
   Proof.
     intros.
     destruct o; auto; simpl in *; try (inversion H).
+  Qed.
+
+  Lemma ph_reduces_spec:
+    forall ph t o ph',
+    Reduces ph t o ph' ->
+    ph' = eval o t ph.
+  Proof.
+    intros.
+    destruct o;
+    simpl; inversion H; auto.
   Qed.
 
   Lemma ph_update_spec:
@@ -290,8 +312,7 @@ and register (that adds a new task to the phaser). *)
   (**
     The importance of function [as_tv_op] is captured by the following two properties.
     If the phaser operation is convertible to a taskview operation, then
-    the resulting phaser the result of updating the taskview of tasks [t]
-    with [Semantics.eval o' v].
+    then resulting taskview update is [Taskview.Semantics.eval o' v].
   *)
 
   Lemma ph_to_tv_correct:
@@ -299,7 +320,7 @@ and register (that adds a new task to the phaser). *)
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
-    ph' = Map_TID.add t (Semantics.eval o' v) ph.
+    ph' = Map_TID.add t (Taskview.Semantics.eval o' v) ph.
   Proof.
     intros.
     destruct o'; simpl.
@@ -319,7 +340,7 @@ and register (that adds a new task to the phaser). *)
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
-    Taskview.Semantics.Reduces v o' (Semantics.eval o' v).
+    Taskview.Semantics.Reduces v o' (Taskview.Semantics.eval o' v).
   Proof.
     intros.
     destruct o'; simpl.
