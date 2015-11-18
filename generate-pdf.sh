@@ -1,3 +1,3 @@
 #!/bin/sh
 make all
-make COQDOCFLAGS="--title 'HJ Formalization in Coq' -l --no-lib-name --toc-depth 0 " all.pdf
+make COQDOCFLAGS="--interpolate --title 'HJ Formalization in Coq' -l --lib-subtitles " all.pdf
