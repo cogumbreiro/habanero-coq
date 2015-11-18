@@ -434,9 +434,9 @@ Module Phaser.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
-    assert (Taskview.Semantics.Reduces v o' (Semantics.eval o' v)) by
+    assert (Taskview.Semantics.Reduces v o' (Taskview.Semantics.eval o' v)) by
         eauto using ph_reduces_to_tv_reduce.
-      assert (ph' = Map_TID.add t (Semantics.eval o' v) ph) by
+      assert (ph' = Map_TID.add t (Taskview.Semantics.eval o' v) ph) by
         eauto using ph_to_tv_correct.
       subst.
       apply ph_rel_def.
@@ -624,7 +624,7 @@ Module Phaser.
     destruct Hin as (v, Hmt).
     assert (Taskview.Semantics.Reduces v o' (Taskview.Semantics.eval o' v)) by
     eauto using ph_reduces_to_tv_reduce.
-    assert (ph' = Map_TID.add t (Semantics.eval o' v) ph) by
+    assert (ph' = Map_TID.add t (Taskview.Semantics.eval o' v) ph) by
     eauto using ph_to_tv_correct.
     subst.
     apply ph_rel_def.
@@ -787,7 +787,7 @@ Module Phaser.
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph1 ->
       ReducesUpdates ph1 t' o ph2 ->
-      { Map_TID.MapsTo t v ph2 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Semantics.eval o' v) ph2) }.
+      { Map_TID.MapsTo t v ph2 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Taskview.Semantics.eval o' v) ph2) }.
     Proof.
       intros.
       destruct H0.
@@ -842,9 +842,9 @@ Module Phaser.
         inversion H0; eauto.
       }
       destruct e as (o', (Hv, (_, Hmt))).
-      assert (vz = Semantics.eval o' v) by eauto using Map_TID_Facts.MapsTo_fun.
+      assert (vz = Taskview.Semantics.eval o' v) by eauto using Map_TID_Facts.MapsTo_fun.
       subst.
-      assert (Taskview.Semantics.Reduces v o' (Semantics.eval o' v))
+      assert (Taskview.Semantics.Reduces v o' (Taskview.Semantics.eval o' v))
       by (inversion R; eauto using ph_reduces_to_tv_reduce).
       assert (Taskview.Ge v vx) by (inversion H0; eauto).
       assert (Taskview.Welformed v) by (inversion H; eauto).
