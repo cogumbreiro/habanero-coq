@@ -134,22 +134,18 @@ and register (that adds a new task to the phaser). *)
   *)
 
   Inductive Reduces (ph:phaser) (t:tid) : op -> phaser -> Prop :=
-
   | reduces_signal:
     Map_TID.In t ph ->
     Reduces ph t SIGNAL (signal t ph)
-
   | reduces_wait:
     forall v,
     Map_TID.MapsTo t v ph ->
     wait_phase v < signal_phase v ->
     Sync ph t ->
     Reduces ph t WAIT (wait t ph)
-
   | reduces_drop:
     Map_TID.In t ph ->
     Reduces ph t DROP (drop t ph)
-
   | reduces_register:
     forall v r,
     ~ Map_TID.In (get_task r) ph ->
