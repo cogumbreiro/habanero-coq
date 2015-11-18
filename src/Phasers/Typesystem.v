@@ -15,8 +15,6 @@ Inductive CanRegister: tid -> phasermap -> phased -> Prop :=
     r <= (mode v) ->
     CanRegister t pm (p, r).
 
-Definition eq_phid (p p':phased) := (fst p) = (fst p').
-
 Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
   | check_ph_new:
     forall p,

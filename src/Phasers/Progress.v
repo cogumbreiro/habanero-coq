@@ -226,24 +226,24 @@ Require Coq.FSets.FMapFacts.
 Module M := FMapFacts.WProperties_fun TID Map_TID.
 
 Section PROGRESS.
-
+(*
 Let async_preserves_pm:
-  forall l p ph r pm t t' pm',
+  forall l p ph r pm t t',
   ~ SetoidList.InA eq_phid (p, r) l ->
-  Async pm t l t' pm' ->
+  Phased pm t l ->
   Map_PHID.MapsTo p ph pm ->
-  Map_PHID.MapsTo p ph pm'.
+  Map_PHID.MapsTo p ph (async l t' t pm).
 Proof.
   intros l.
   induction l.
   - intros.
-    inversion H0; subst.
     auto.
   - intros.
     inversion H0; subst; clear H0.
-    apply IHl with (r:=r) (t:=t) (t':=t') (pm':=m') in H1; auto; clear IHl.
+    simpl.
     rename p0 into p'.
     rename ph0 into ph'.
+    assert (Map_PHID.MapsTo p ph (async l t' t pm)) by eauto.
     destruct (PHID.eq_dec p p').
     + subst.
       intuition.
@@ -252,10 +252,16 @@ Proof.
         unfold eq_phid.
         auto.
       }
-      contradiction H0.
-    + apply Map_PHID_Facts.add_neq_mapsto_iff; repeat auto.
+      contradiction.
+    + unfold async_1.
+      simpl.
+      remember (Map_PHID.find (elt:=phaser) p' (async l t' t pm)).
+      symmetry in Heqo.
+      destruct o.
+      * apply Map_PHID_Facts.add_neq_mapsto_iff; repeat auto.
+      * assumption.
 Qed.
-
+*)
 Lemma progress_unblocking_simple:
   forall pm t i,
   Valid pm ->
@@ -267,33 +273,29 @@ Proof.
   destruct i.
   - inversion H0.
     subst.
-    eauto using reduce_new.
+    eauto using reduce_ph_new.
   - inversion H0.
     subst.
-    eauto using reduce_signal.
+    eauto using reduce_ph_signal.
   - inversion H0; subst.
-    eauto using reduce_drop.
+    eauto using reduce_ph_drop.
   - eauto using reduce_signal_all.
   - contradiction H1; auto.
   - eauto using reduce_drop_all.
   - inversion H0; subst; clear H0.
     clear H1.
     rename t0 into t'.
-    assert (Hpm : exists pm', Async pm t l t' pm'). {
+    assert (Hpm : Phased pm t l). {
       induction l.
-      + exists pm.
-        auto using async_nil.
+      + auto using phased_nil.
       + inversion H6; subst; clear H6.
         inversion H5; subst; clear H5.
         apply IHl in H7; auto; clear IHl.
-        destruct H7 as (pm', Ha).
+        rename H7 into Ha.
         destruct a as (p, r).
         inversion H2; subst; clear H2.
-        exists  (Map_PHID.add p (Map_TID.add t' (Taskview.set_mode v r) ph0) pm').
-        apply async_step; repeat auto.
-        eauto using async_preserves_pm.
+        apply phased_step with (v) (ph0); repeat auto.
    }
-   destruct Hpm as (pm', ?).
    eauto using reduce_async.
 Qed.
 
