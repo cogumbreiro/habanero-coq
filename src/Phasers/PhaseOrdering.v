@@ -178,35 +178,6 @@ Module Taskview.
     auto using tv_not_lt_to_ge.
   Qed.
 
-(*
-  Let signal_preserves_rhs:
-    forall v v',
-    Ge v v' ->
-    Ge v (Taskview.signal v').
-  Proof.
-    intros.
-    unfold Taskview.signal.
-    destruct v';
-    inversion H; simpl in *;
-    first [
-      solve [(apply tv_ge_ge;
-      simpl in  *;
-      destruct mode; (simpl in *; auto))] |
-      (subst; auto using tv_ge_so, tv_ge_wo) ].
-  Qed.
-
-  Let wait_preserves_rhs:
-    forall v,
-    (wait_phase v < signal_phase v) % nat ->
-    Welformed v ->
-    Ge v (Taskview.wait v).
-  Proof.
-    intros.
-    apply tv_ge_ge.
-    rewrite wait_wait_phase.
-    intuition.
-  Qed.
-*)
   Lemma tv_welformed_to_ge_refl:
     forall v,
     Welformed v ->
@@ -233,24 +204,7 @@ Module Taskview.
     - rewrite <- signal_preserves_mode in *.
       auto using tv_ge_wo.
   Qed.
-(*
-  Lemma tv_ge_reduce:
-    forall v o v',
-    Welformed v ->
-    Reduce v o v' ->
-    Ge v v'.
-  Proof.
-    intros.
-    assert (Hx := H0).
-    apply reduce_spec in Hx.
-    subst.
-    assert (Ge v v) by auto using tv_welformed_to_ge_refl.
-    destruct o; simpl.
-    - auto using signal_preserves_rhs.
-    - inversion H0.
-      auto using wait_preserves_rhs.
-  Qed.
-*)
+
   Let tv_signal_ge_lhs:
     forall v v',
     Welformed v ->
@@ -360,45 +314,7 @@ Module Taskview.
     }
     auto using tv_ge_ge.
   Qed.
-(*
-  Lemma tv_ge_reduces_trans:
-    forall x o y o' z,
-    Welformed x ->
-    Welformed y ->
-    Welformed z ->
-    Reduce x o y ->
-    Reduce y o' z ->
-    z >= x.
-  Proof.
-    intros.
-    assert (Ge z y) by eauto using tv_ge_reduce.
-    assert (Ge y x) by eauto using tv_ge_reduce.
-    assert (R1: mode y = mode x) by
-      eauto using reduces_preserves_mode.
-    assert (R2: mode z = mode y). {
-      eauto using reduces_preserves_mode.
-    }
-    assert (R3: mode x = mode z) by
-      (transitivity (mode y); auto).
-    apply tv_ge_trans_helper with (y); auto.
-    intros.
-    assert (mode y = SIGNAL_WAIT). {
-      destruct (mode y).
-      - rewrite R1 in H7.
-        contradiction H7.
-        trivial.
-      - rewrite R2 in H6.
-        contradiction H6.
-        trivial.
-      - trivial.
-    }
-    assert (mode x = SIGNAL_WAIT). {
-      rewrite <- R1.
-      assumption.
-    }
-    eauto using tv_ge_reduces_trans_sw.
-  Qed.
-*)
+
   Lemma tv_eval_preserves_le:
     forall v1 v2 o,
     Welformed v1 ->
@@ -469,39 +385,6 @@ Module Taskview.
       assumption.
   Qed.
 
-
-  (**
-    In a wellformed phaser there is a well-defined difference
-    between wait-phases. Let [vm] be the minimum wait-phase of a
-    phaser, then the wait-phase of any phaser is given by
-
-    Example 1:
-     WO:(0, 0)
-        (1, 0)
-        (1, 1)
-        (2, 1)
-     SO:(5, 3)
-
-   (*1, 0) >= (2, 1*)
-   (*2, 1) >= (1, 0*)
-   (1,0) >= (2+k, 3)
-   (*1, 0) >= (1, 1*)
-   (*2, 1) >= (1, 0*)
-   
-   (1,0) >= (0,0) WO (OK)
- WO:(0,0) >= *
- SO:(5, 3) >= (1, 0 )
-   * >= (5,3):SO
-   
-
-    Example 2, if the smallest is not-signalled, then
-    the wait phase difference is the same. The biggest
-    signal-difference is 1.
-    
-        (0, 0)
-        (1, 0)
-    
-  *)
   End Facts.
 End Taskview.
 
