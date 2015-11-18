@@ -1,12 +1,11 @@
 Require Import HJ.Phasers.Regmode.
 
-(** * Taskviews *)
-
 (**
-  A taskview is the local view of a task over a phaser.
-  It records: the number of signals the task issued,
-  the number of waits the task issued, and the task's
-  registration mode.
+  The taskview represents the local view of a phaser that a registered
+  task has. It records: the number of signals
+  the task issued, the number of waits the task issued, and the task's
+  registration mode. The taskview is changed by invoking signal and wait
+  on a phaser (or next). 
 *)
 
 Record taskview := TV {
@@ -17,24 +16,24 @@ Record taskview := TV {
 
 (**
   When creating a phaser, the creator is the only task registered in that phaser.
-  The first taskview is initialized in [SIGNAL_WAIT] mode and accounts for zero signals
-  and zero waits.
+  Value [make] represents the first taskview that is initialized in [SIGNAL_WAIT] mode
+  and accounts for zero signals and zero waits.
  *)
 
 Definition make := TV 0 0 SIGNAL_WAIT.
 
-(** We define the mutators of a taskview, although they are only used internally. *)
+(** We define the mutators of a taskview. These are only used internally. *)
 
 Definition set_signal_phase v n := TV n (wait_phase v) (mode v).
 Definition set_wait_phase v n := TV (signal_phase v) n (mode v).
 Definition set_mode v m := TV (signal_phase v) (wait_phase v) m.
 
 (** 
-  The two available mutators of taskviews are signal and wait, defined following.
+  The two mutators available of taskviews are signal and wait, defined following.
   The semantics of signal depends on the
   registration mode of the issuer: when the issuer is registered in signal-only mode,
   a signal increments the signal phase; otherwise, the signal becomes sets the signal-phase
-  one phase ahead of the wait phase.
+  one phase ahead of the wait phase (this is to "absord" consecutive signals before a wait).
 *)
 
 Definition signal v :=
@@ -49,9 +48,7 @@ end.
   another the task invokes a waits, which is why the signal phase in relation to the wait phase.
   We postpone discussing the error-conditions of invoking signal and wait to
   the presentation of the operational semantics of task view operations.
-*)
 
-(**
   The wait operation increments the wait-phase. Altough the semantics of wait does not depends
   on the registration mode, invoking wait should be guarded by a precondition that we postpone
   its definition to the following section.
@@ -230,26 +227,26 @@ Module Semantics.
 
   (**
   The operational semantics of taskviews defines a closed set of operations [op]
-  that can change taskviews, that is signal and  wait.
+  that can change taskviews, signal and  wait.
   *)
 
   Inductive op := SIGNAL | WAIT.
 
   (**
-  The of these operations can actually be represented by an interpreter function
-  [eval] that given an operation and a taskview applies the appropried operation to the given
-  taskview.
+  Function [eval] interprets the given operation [o] and applies the respective
+  operation to the given taskview.
   *)
 
-  Definition eval (o:op) :=
+  Definition eval o :=
   match o with
   | SIGNAL => signal
   | WAIT => wait
   end.
 
   (**
-  The operational semantics not only define a closed set of operations that
-  can operate on a value (here a taskview), but also the preconditions of each operation.
+  The operational semantics not only defines a closed set of operations that
+  can operate on a value (here a taskview), but also defines the preconditions of
+  each operation.
   Contrary to [eval], relation [Reduces] defines a precondition
   to [wait]: in order to issue a wait, the wait phase must be behind (smaller than)
   the signal phase.
