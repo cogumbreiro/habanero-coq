@@ -1,6 +1,7 @@
 (* begin hide *)
 
 Require Import HJ.Vars.
+Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Taskview.
 
 Section Defs.
@@ -113,7 +114,7 @@ End Defs.
 
 Module Semantics.
 
-  Import Taskview.Notations.
+  Import Regmode.Notations.
   Open Scope reg_scope.
 (* end hide *)
 
@@ -156,13 +157,15 @@ and register (that adds a new task to the phaser). *)
     get_mode r <= mode v ->
     Reduces ph t (REGISTER r) (register t r ph).
 
-  (** The silent-reduces relation omits the tid and the op. *)
+  (** Relation [SReducess] simply omits the task and operation of relation [Reduces]. *)
 
   Inductive SReduces (ph1:phaser) (ph2:phaser) : Prop :=
     s_reduces:
       forall t o,
       Reduces ph1 t o ph2 ->
       SReduces ph1 ph2.
+
+  (** Finally, we declare a function that converts a [Phaser.op] to a [Taskview.op]. *)
 
   Definition as_tv_op (o:op) :=
   match o with
@@ -171,6 +174,8 @@ and register (that adds a new task to the phaser). *)
   | _ => None
   end.
   
+  (* begin hide *)
+
   Lemma as_tv_op_inv_signal:
     forall o,
     as_tv_op o = Some Taskview.Semantics.SIGNAL ->
@@ -284,6 +289,15 @@ and register (that adds a new task to the phaser). *)
     inversion H; eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
+  (* end hide *)
+
+  (**
+    The importance of function [as_tv_op] is captured by the following two properties.
+    If the phaser operation is convertible to a taskview operation, then
+    the resulting phaser the result of updating the taskview of tasks [t]
+    with [Semantics.eval o' v].
+  *)
+
   Lemma ph_to_tv_correct:
     forall ph t o o' ph' v,
     Reduces ph t o ph' ->
@@ -298,6 +312,11 @@ and register (that adds a new task to the phaser). *)
     - apply as_tv_op_inv_wait in H0; subst.
       auto using ph_wait_spec.
   Qed.
+  
+  (**
+    The second property states that if the phaser-operation is convertible to
+    a taskview-operation, then the taskview reduces with the resulting operation.
+  *)
 
   Lemma ph_reduces_to_tv_reduce:
     forall ph t o o' ph' v,
@@ -318,5 +337,6 @@ and register (that adds a new task to the phaser). *)
       subst.
       intuition.
   Qed.
-
+(* begin hide *)
 End Semantics.
+(* end hide *)

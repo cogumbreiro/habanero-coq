@@ -2,8 +2,8 @@ Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
-
-Import Taskview.Notations.
+Import Phasermap.Semantics.
+Import Regmode.Notations.
 
 Open Scope reg_scope.
 
@@ -48,7 +48,7 @@ Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
 
   | check_async:
     forall t' ps,
-    ~ Lang.In t' pm ->
+    ~ In t' pm ->
     NoDupA eq_phid ps ->
     Forall (CanRegister t pm) ps ->
     Check pm t (ASYNC ps t').

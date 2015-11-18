@@ -7,6 +7,7 @@ Require Import Aniceto.Map.
 Require Import Aniceto.ListSet.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
+Import HJ.Phasers.Phasermap.Semantics.
 
 Open Local Scope Z.
 

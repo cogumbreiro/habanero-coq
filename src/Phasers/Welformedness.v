@@ -1,10 +1,31 @@
+
 Require Import HJ.Vars.
 
+(**
+  Welformedness catpures a local property of taskviews, the relationship between
+  signal-phase, wait-phase, and mode.
+  It is an invariant of the various languages we defined, thus preserved by
+  reduction at the taskview-level, at the phaser-level, and at the phasermap-level.
+  
+ *)
+
+(** We first define the notion of welformed for taskviews. *)
+
 Module Taskview.
+  Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
   Import Taskview.Semantics.
 
-  (** Valid task view *)
+(* end hide *)
+
+  (** A welformed taskview has three possible cases:
+  (i) the task has wait-capability and is ready to issue a signal,
+  in which case the signal-phase and wait-phase match;
+  (ii) the  task has wait-capability and has issued a signal, in which case
+  the signal-phase is ahead of the wait-phase exactly one phase;
+  (iii) the task is registered in signal-only mode, in which case the wait-phase
+  cannot be ahead of the signal-phase.*)
+
   Inductive Welformed v : Prop :=
     | tv_welformed_wait_cap_eq:
       WaitCap (mode v) ->
@@ -21,6 +42,10 @@ Module Taskview.
 
   Hint Constructors Welformed.
 
+  (**
+    Actually, regardless of the registration mode, the wait-phase cannot be
+    greater than the signal-phase. *)
+
   Lemma welformed_wait_phase_le_signal_phase:
     forall v,
     Welformed v ->
@@ -29,6 +54,8 @@ Module Taskview.
     intros.
     inversion H; intuition.
   Qed.
+
+(* begin hide *)
 
   Lemma tv_welformed_eq:
     forall v,
@@ -118,10 +145,14 @@ Module Taskview.
       intuition.
   Qed.
 
+  (* end hide*)
+
+  (** The operational semantics of taskviews preserves the property of [Welformed]. *)
+
   Theorem tv_reduces_preserves_welformed:
     forall v o v',
     Welformed v ->
-    Semantics.Reduces v o v' ->
+    Reduces v o v' ->
     Welformed v'.
   Proof.
     intros.
@@ -129,6 +160,8 @@ Module Taskview.
     subst; 
     auto using signal_preserves_welformed, wait_preserves_welformed.
   Qed.
+
+  (* begin hide *)
 
   Lemma signal_phase_signal_inv:
     forall v,
@@ -244,7 +277,12 @@ Module Taskview.
       inversion H1.
   Qed.
 
+(* end hide *)
+
 End Taskview.
+
+(** We now define the notion of welformed for phasers, which states that
+  every taskview mentioned in the phaser must be also welformed. *)
 
 Module Phaser.
   Import Taskview.
@@ -257,6 +295,8 @@ Module Phaser.
         Map_TID.MapsTo t v ph ->
         Taskview.Welformed v) ->
       Welformed ph.
+
+  (* begin hide *)
 
   Lemma ph_welformed_to_tv_welformed:
     forall t v ph,
@@ -367,6 +407,8 @@ Module Phaser.
       * eauto using ph_welformed_to_tv_welformed.
   Qed.
 
+  (* end hide *)
+
   Lemma ph_reduces_preserves_welformed:
     forall ph t o ph',
     Welformed ph ->
@@ -396,18 +438,12 @@ Module Phasermap.
         Map_PHID.MapsTo p ph m ->
         Phaser.Welformed ph) ->
       Welformed m.
-
-  Lemma pm_welformed_to_tv_welformed:
-    forall m p ph t v,
-    Welformed m ->
-    Map_PHID.MapsTo p ph m ->
-    Map_TID.MapsTo t v ph ->
-    Taskview.Welformed v.
+(*
+  Lemma ph_reduces_preserves_welformed:
+    forall m t o m',
+    Welformed ph ->
+    Reduction m t o m' ->
+    Welformed m'.
   Proof.
-    intros.
-    inversion H.
-    assert (W: Phaser.Welformed ph) by eauto.
-    inversion W; eauto.
-  Qed.
-
+*)
 End Phasermap.

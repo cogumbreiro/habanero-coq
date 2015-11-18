@@ -1,6 +1,7 @@
 -R src HJ
 
 src/Vars.v
+src/Phasers/Regmode.v
 src/Phasers/Taskview.v
 src/Phasers/Phaser.v
 src/Phasers/Lang.v

@@ -6,6 +6,7 @@ Require Import Coq.Lists.SetoidList.
 
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
+Import HJ.Phasers.Phasermap.Semantics.
 Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.LEDec.
 Require HJ.Phasers.Rel.

@@ -7,6 +7,7 @@ Require Import HJ.Phasers.Welformedness.
 Set Implict Arguments.
 
 Module Taskview.
+  Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
   Import Taskview.Semantics.
   Import Welformedness.Taskview.
@@ -506,6 +507,7 @@ End Taskview.
 
 Module Phaser.
   Import Taskview.
+  Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
   Import Welformedness.Taskview.
 
