@@ -4,6 +4,7 @@ src/Vars.v
 src/Phasers/Regmode.v
 src/Phasers/Taskview.v
 src/Phasers/Phaser.v
+src/Phasers/Phasermap.v
 src/Phasers/Lang.v
 src/Phasers/Welformedness.v
 src/Phasers/PhaseOrdering.v
