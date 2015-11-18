@@ -233,8 +233,7 @@ Module Semantics.
   Inductive op := SIGNAL | WAIT.
 
   (**
-  Function [eval] interprets the given operation [o] and applies the respective
-  operation to the given taskview.
+  Function [eval] interprets the given operation [o] as the appropriate function.
   *)
 
   Definition eval o :=
