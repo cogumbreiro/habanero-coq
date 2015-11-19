@@ -14,7 +14,6 @@ Require Import HJ.Vars.
 Module Taskview.
   Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
-  Import Taskview.Semantics.
 
 (* end hide *)
 
@@ -125,17 +124,18 @@ Module Taskview.
   Lemma wait_preserves_welformed:
     forall v,
     Welformed v ->
-    wait_phase v < signal_phase v ->
+    WaitPre v ->
     Welformed (Taskview.wait v).
   Proof.
     intros.
+    destruct H0.
     inversion H.
     - assert (wait_phase v <> signal_phase v) by intuition.
       contradiction.
     - apply tv_welformed_wait_cap_eq.
       rewrite wait_preserves_mode; auto.
       rewrite wait_preserves_signal_phase.
-      rewrite <- H2.
+      rewrite <- H1.
       rewrite wait_wait_phase.
       trivial.
     - apply tv_welformed_so.
@@ -157,7 +157,7 @@ Module Taskview.
   Proof.
     intros.
     inversion H0;
-    subst; 
+    subst;
     auto using signal_preserves_welformed, wait_preserves_welformed.
   Qed.
 
@@ -189,11 +189,12 @@ Module Taskview.
   Lemma reduces_wait_post:
     forall v v',
     Welformed v ->
-    Semantics.Reduces v Semantics.WAIT v' ->
+    Reduces v WAIT v' ->
     (mode v' = SIGNAL_ONLY \/ WaitCap (mode v') /\ wait_phase v' = signal_phase v').
   Proof.
     intros.
     inversion H0.
+    destruct H1.
     inversion H.
     - assert (wait_phase v <> signal_phase v) by intuition.
       contradiction H4.
@@ -210,7 +211,7 @@ Module Taskview.
     forall v v',
     Welformed v ->
     WaitCap (mode v) ->
-    Semantics.Reduces v Semantics.WAIT v' ->
+    Reduces v WAIT v' ->
     signal_phase v' = wait_phase v'.
   Proof.
     intros.
@@ -230,9 +231,9 @@ Module Taskview.
     forall x y z o,
     Welformed x ->
     WaitCap (mode x) ->
-    Semantics.Reduces x Semantics.WAIT y ->
-    Semantics.Reduces y o z ->
-    o = Semantics.SIGNAL.
+    Reduces x WAIT y ->
+    Reduces y o z ->
+    o = SIGNAL.
   Proof.
     intros.
     inversion H1; subst.
@@ -244,7 +245,9 @@ Module Taskview.
       - rewrite wait_cap_rw in *.
         rewrite wait_preserves_mode in *.
         contradiction.
-      - rewrite wait_preserves_signal_phase in *.
+      - destruct H3 as [H3].
+        destruct H4 as [H4].
+        rewrite wait_preserves_signal_phase in *.
         rewrite H5 in *.
         assert (signal_phase x <> signal_phase x). {
           intuition.
@@ -287,7 +290,6 @@ End Taskview.
 Module Phaser.
   Import Taskview.
   Require Import HJ.Phasers.Phaser.
-  Import Phaser.Semantics.
 
   Inductive Welformed (ph:phaser) : Prop :=
     ph_welformed_def:
@@ -316,7 +318,8 @@ Module Phaser.
     Welformed ph'.
   Proof.
     intros.
-    inversion H0; subst.
+    inversion H0; subst; simpl in *.
+    destruct H1 as [H1].
     apply Map_TID_Extra.in_to_mapsto in H1.
     destruct H1 as (v, Hmt).
     assert (R: signal t ph = Map_TID.add t (Taskview.signal v) ph) by auto using ph_signal_spec.
@@ -344,7 +347,8 @@ Module Phaser.
     Welformed ph'.
   Proof.
     intros.
-    inversion H0; subst.
+    inversion H0; subst; simpl in *.
+    destruct H1.
     assert (R: wait t ph = Map_TID.add t (Taskview.wait v) ph) by auto using ph_wait_spec.
     rewrite R; clear R.
     apply ph_welformed_def.
@@ -370,8 +374,9 @@ Module Phaser.
     Welformed ph'.
   Proof.
     intros.
-    inversion H0; subst.
+    inversion H0; subst; simpl in *.
     unfold drop in *.
+    destruct H1.
     apply ph_welformed_def.
     intros.
     rewrite Map_TID_Facts.remove_mapsto_iff in H2.
@@ -386,7 +391,8 @@ Module Phaser.
     Welformed ph'.
   Proof.
     intros.
-    inversion H0; subst.
+    inversion H0; subst; simpl in *.
+    destruct H1.
     assert (R:= H0).
     apply ph_register_spec with (v:=v) in R; auto.
     rewrite R; clear R.
@@ -394,14 +400,14 @@ Module Phaser.
     intros.
     destruct (TID.eq_dec t0 t).
     + subst.
-      rewrite Map_TID_Facts.add_mapsto_iff in H1.
-      destruct H1 as [(?,?)|(?,?)].
+      rewrite Map_TID_Facts.add_mapsto_iff in H4.
+      destruct H4 as [(?,?)|(?,?)].
       * subst.
-        contradiction H2.
+        contradiction H1.
         eauto using Map_TID_Extra.mapsto_to_in.
       * eauto using ph_welformed_to_tv_welformed.
-    + rewrite Map_TID_Facts.add_mapsto_iff in H1.
-      destruct H1 as [(?,?)|(?,?)].
+    + rewrite Map_TID_Facts.add_mapsto_iff in H4.
+      destruct H4 as [(?,?)|(?,?)].
       * subst.
         eauto using set_mode_preserves_welformed, ph_welformed_to_tv_welformed.
       * eauto using ph_welformed_to_tv_welformed.
@@ -416,7 +422,7 @@ Module Phaser.
     Welformed ph'.
   Proof.
     intros.
-    inversion H0; subst; inversion H.
+    destruct o; subst; inversion H; simpl in *.
     - eauto using
       ph_signal_preserves_welformed.
     - eauto using

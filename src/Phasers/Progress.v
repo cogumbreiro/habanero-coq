@@ -6,7 +6,6 @@ Require Import Coq.Lists.SetoidList.
 
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
-Import HJ.Phasers.Phasermap.Semantics.
 Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.LEDec.
 Require HJ.Phasers.Rel.
@@ -200,7 +199,7 @@ Qed.
 Theorem has_unblocked:
   tids <> nil ->
   exists t, List.In t tids /\
-  exists m, Reduce pm t WAIT_ALL m.
+  exists m, Reduces pm t WAIT_ALL m.
 Proof.
   intros.
   assert (Hisa : Forall IsA tids). {
@@ -214,9 +213,15 @@ Proof.
   exists t.
   intuition.
   exists (Phasermap.wait_all t pm).
-  apply reduce_wait_all.
+  apply reduces.
+  simpl.
+  apply wait_all_pre.
   intros.
-  eauto using smallest_to_sync.
+  unfold AllSignalled in *.
+  assert (i := H1).
+  apply Map_TID_Extra.in_to_mapsto in H1.
+  destruct H1 as (v, mt).
+  eauto using wait_pre, Taskview.wait_pre, smallest_to_sync.
 Qed.
 End HAS_SMALLEST.
 
@@ -226,77 +231,20 @@ Require Coq.FSets.FMapFacts.
 Module M := FMapFacts.WProperties_fun TID Map_TID.
 
 Section PROGRESS.
-(*
-Let async_preserves_pm:
-  forall l p ph r pm t t',
-  ~ SetoidList.InA eq_phid (p, r) l ->
-  Phased pm t l ->
-  Map_PHID.MapsTo p ph pm ->
-  Map_PHID.MapsTo p ph (async l t' t pm).
-Proof.
-  intros l.
-  induction l.
-  - intros.
-    auto.
-  - intros.
-    inversion H0; subst; clear H0.
-    simpl.
-    rename p0 into p'.
-    rename ph0 into ph'.
-    assert (Map_PHID.MapsTo p ph (async l t' t pm)) by eauto.
-    destruct (PHID.eq_dec p p').
-    + subst.
-      intuition.
-      assert ( InA eq_phid (p', r) ((p', r0) :: l)). {
-        apply InA_cons_hd.
-        unfold eq_phid.
-        auto.
-      }
-      contradiction.
-    + unfold async_1.
-      simpl.
-      remember (Map_PHID.find (elt:=phaser) p' (async l t' t pm)).
-      symmetry in Heqo.
-      destruct o.
-      * apply Map_PHID_Facts.add_neq_mapsto_iff; repeat auto.
-      * assumption.
-Qed.
-*)
+
 Lemma progress_unblocking_simple:
   forall pm t i,
   Valid pm ->
   Check pm t i ->
   i <> WAIT_ALL ->
-  exists m, Reduce pm t i m.
+  exists m, Reduces pm t i m.
 Proof.
   intros.
-  destruct i.
-  - inversion H0.
-    subst.
-    eauto using reduce_ph_new.
-  - inversion H0.
-    subst.
-    eauto using reduce_ph_signal.
-  - inversion H0; subst.
-    eauto using reduce_ph_drop.
-  - eauto using reduce_signal_all.
-  - contradiction H1; auto.
-  - eauto using reduce_drop_all.
-  - inversion H0; subst; clear H0.
-    clear H1.
-    rename t0 into t'.
-    assert (Hpm : Phased pm t l). {
-      induction l.
-      + auto using phased_nil.
-      + inversion H6; subst; clear H6.
-        inversion H5; subst; clear H5.
-        apply IHl in H7; auto; clear IHl.
-        rename H7 into Ha.
-        destruct a as (p, r).
-        inversion H2; subst; clear H2.
-        apply phased_step with (v) (ph0); repeat auto.
-   }
-   eauto using reduce_async.
+  exists (run (get_impl i) t pm).
+  apply reduces.
+  destruct i; simpl; inversion H0; auto.
+  contradiction H1.
+  trivial.
 Qed.
 
 Structure state := {
@@ -311,7 +259,7 @@ Structure state := {
 Inductive RReduce (s:state) (t:tid) (o:op) (m:phasermap) : Prop :=
   r_reduce_def:
     Map_TID.MapsTo t o (get_requests s) ->
-    Reduce (get_state s) t o m ->
+    Reduces (get_state s) t o m ->
     RReduce s t o m.
 
 Variable s:state.
@@ -406,7 +354,8 @@ Proof.
     assumption.
  }
  inversion Hcheck; subst.
- eauto using Hin.
+ assert (Taskview.WaitPre v) by eauto.
+ inversion H3; auto.
 Qed.
 
 Lemma nonempty_to_tids_not_nil:
@@ -482,7 +431,7 @@ Proof.
   - destruct e as (t, (o, (Hmt, Hneq))).
     exists t; exists o.
     intuition.
-    assert (R : exists m, Reduce pm t o m). {
+    assert (R : exists m, Reduces pm t o m). {
       apply Bool.negb_true_iff in Hneq.
       rewrite eq_wait_all_false in Hneq.
       auto using progress_unblocking_simple, IsValid, reqs_spec_3.

@@ -219,7 +219,7 @@ Section Facts.
   Qed.
 End Facts.
 
-Module Semantics.
+Section Semantics.
 
 (* end hide *)
   
@@ -247,15 +247,21 @@ Module Semantics.
   can operate on a value (here a taskview), but also defines the preconditions of
   each operation.
   Contrary to [eval], relation [Reduces] defines a precondition
-  to [wait]: in order to issue a wait, the wait phase must be behind (smaller than)
-  the signal phase.
+  to [wait], called [WaitPre]: in order to issue a wait, the wait phase must be
+  behind (smaller than) the signal phase. We define [CanWait] so it can be reused
+  in other developments.
   *)
+
+  Inductive WaitPre v :=
+    wait_pre:
+      wait_phase v < signal_phase v ->
+      WaitPre v.
 
   Inductive Reduces v : op -> taskview -> Prop :=
     | tv_reduces_signal:
       Reduces v SIGNAL (signal v)
     | tv_reduces_wait:
-      wait_phase v < signal_phase v ->
+      WaitPre v ->
       Reduces v WAIT (wait v).
 
   (**

@@ -2,53 +2,35 @@ Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
-Import Phasermap.Semantics.
 Import Regmode.Notations.
 
 Open Scope reg_scope.
 
-Inductive CanRegister: tid -> phasermap -> phased -> Prop :=
-  can_register_def:
-    forall p (ph:phaser) pm t v ph r,
-    Map_PHID.MapsTo p ph pm ->
-    Map_TID.MapsTo t v ph ->
-    r <= (mode v) ->
-    CanRegister t pm (p, r).
-
 Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
   | check_ph_new:
     forall p,
-    ~ Map_PHID.In p pm ->
+    PhNewPre p t pm ->
     Check pm t (PH_NEW p)
-
   | check_ph_signal:
-    forall p ph,
-    Map_PHID.MapsTo p ph pm ->
-    Map_TID.In t ph ->
+    forall p,
+    PhSignalPre p t pm ->
     Check pm t (PH_SIGNAL p)
-  
   | check_ph_drop:
-    forall p ph,
-    Map_PHID.MapsTo p ph pm ->
-    Map_TID.In t ph ->
+    forall p,
+    PhDropPre p t pm ->
     Check pm t (PH_DROP p)
-
   | check_signal_all:
     Check pm t SIGNAL_ALL
-
   | check_wait_all:
     (forall p ph,
       Map_PHID.MapsTo p ph pm ->
       forall v,
       Map_TID.MapsTo t v ph ->
-      v.(wait_phase) < v.(signal_phase)) ->
+      Taskview.WaitPre v) ->
     Check pm t WAIT_ALL
-
   | check_async:
     forall t' ps,
-    ~ In t' pm ->
-    NoDupA eq_phid ps ->
-    Forall (CanRegister t pm) ps ->
+    AsyncPre ps t' t pm ->
     Check pm t (ASYNC ps t').
 
 Section Valid.

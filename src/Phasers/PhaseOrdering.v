@@ -9,7 +9,6 @@ Set Implict Arguments.
 Module Taskview.
   Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
-  Import Taskview.Semantics.
   Import Welformedness.Taskview.
 
   Inductive Lt v1 v2 : Prop :=
@@ -219,10 +218,11 @@ Module Taskview.
 
   Let tv_wait_ge_lhs:
     forall v,
-    (wait_phase v < signal_phase v) % nat ->
+    WaitPre v ->
     Ge (wait v) v.
   Proof.
     intros.
+    destruct H.
     apply tv_ge_ge.
     intuition.
  Qed.
@@ -349,8 +349,8 @@ Module Taskview.
 
   Lemma tv_ge_eval_rhs:
     forall v1 v2 o,
-    Ge v1 (Semantics.eval o v2) ->
-    Reduces v2 o (Semantics.eval o v2) ->
+    Ge v1 (eval o v2) ->
+    Reduces v2 o (eval o v2) ->
     Ge v1 v2.
   Proof.
     intros.
@@ -370,8 +370,8 @@ Module Taskview.
     forall v1 v2 o,
     Welformed v1 ->
     Ge v1 v2 ->
-    Reduces v1 o (Semantics.eval o v1) ->
-    Ge (Semantics.eval o v1) v2.
+    Reduces v1 o (eval o v1) ->
+    Ge (eval o v1) v2.
   Proof.
     intros.
     inversion H0.
@@ -395,7 +395,6 @@ Module Phaser.
   Import Welformedness.Taskview.
 
   Require Import HJ.Phasers.Phaser.
-  Import Phaser.Semantics.
   Import Welformedness.Phaser.
 
   Inductive Rel (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
@@ -434,9 +433,9 @@ Module Phaser.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
-    assert (Taskview.Semantics.Reduces v o' (Taskview.Semantics.eval o' v)) by
+    assert (Taskview.Reduces v o' (eval o' v)) by
         eauto using ph_reduces_to_tv_reduce.
-      assert (ph' = Map_TID.add t (Taskview.Semantics.eval o' v) ph) by
+      assert (ph' = Map_TID.add t (Taskview.eval o' v) ph) by
         eauto using ph_to_tv_correct.
       subst.
       apply ph_rel_def.
@@ -466,7 +465,7 @@ Module Phaser.
             }
             apply as_tv_op_inv_wait in H2.
             subst.
-            inversion H1.
+            inversion H1; simpl in *; destruct H7.
             assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun.
             subst.
             inversion H9; subst.
@@ -478,6 +477,7 @@ Module Phaser.
             {
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
               destruct (signal_cap_wo_dec (mode v1)). {
+                destruct H8.
                 apply tv_ge_ge.
                 assert (signal_phase v1 >= (signal_phase v)) by (inversion H12; eauto).
                 rewrite wait_wait_phase.
@@ -486,7 +486,7 @@ Module Phaser.
               auto using tv_ge_wo.
             }
           - apply tv_ge_so.
-            rewrite Semantics.eval_preserves_mode.
+            rewrite eval_preserves_mode.
             assumption.
           - auto using tv_ge_wo.
         * inversion H0; eauto.
@@ -503,7 +503,7 @@ Module Phaser.
     subst.
     unfold drop in *.
     apply ph_rel_def.
-    intros.
+    intros; simpl in *.
     apply Map_TID.remove_3 in H3.
     apply Map_TID.remove_3 in H2.
     inversion H; eauto.
@@ -570,7 +570,8 @@ Module Phaser.
     Ge ph' ph'.
   Proof.
     intros ? ? ? ? Hge R.
-    inversion R; subst.
+    inversion R; subst; simpl in *.
+    destruct H.
     apply ph_register_spec with (v:=v) in R; auto.
     rewrite R; clear R.
     apply ph_rel_def.
@@ -597,7 +598,7 @@ Module Phaser.
     forall ph t o ph',
     Welformed ph ->
     Ge ph ph ->
-    Phaser.Semantics.Reduces ph t o ph' ->
+    Phaser.Reduces ph t o ph' ->
     Ge ph' ph'.
   Proof.
     intros.
@@ -622,9 +623,9 @@ Module Phaser.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
-    assert (Taskview.Semantics.Reduces v o' (Taskview.Semantics.eval o' v)) by
+    assert (Taskview.Reduces v o' (Taskview.eval o' v)) by
     eauto using ph_reduces_to_tv_reduce.
-    assert (ph' = Map_TID.add t (Taskview.Semantics.eval o' v) ph) by
+    assert (ph' = Map_TID.add t (Taskview.eval o' v) ph) by
     eauto using ph_to_tv_correct.
     subst.
     apply ph_rel_def.
@@ -650,19 +651,19 @@ Module Phaser.
     symmetry in Heqo'.
     destruct o' as [o'|]; eauto using ph_ge_reduces_some.
     (destruct o; simpl in Heqo'; inversion Heqo'); clear Heqo'.
-    - inversion R; subst.
+    - inversion R; subst;  simpl in *.
       unfold drop in *.
       apply ph_rel_def.
       intros.
       apply Map_TID.remove_3 in H0.
       inversion Hge; eauto.
-    - inversion R.
-      subst.
+    - inversion R; subst;  simpl in *.
+      destruct H.
       apply ph_register_spec with (v:=v) in R; auto.
       rewrite R; clear R.
       apply ph_rel_def; intros.
-      apply Map_TID_Facts.add_mapsto_iff in H;
-      destruct H as [(?,?)|(?,?)].
+      apply Map_TID_Facts.add_mapsto_iff in H2;
+      destruct H2 as [(?,?)|(?,?)].
       + subst.
         assert (Taskview.Ge v v2) by (inversion Hge; eauto).
         auto using tv_ge_register_left.
@@ -724,14 +725,14 @@ Module Phaser.
         auto using Map_TID.add_2.
       - apply ph_wait_spec with (v:=v') in H1; auto; rewrite H1.
         auto using Map_TID.add_2.
-      - inversion H1; unfold drop in *.
+      - inversion H1; destruct H2; subst; simpl in *; unfold drop in *.
         auto using Map_TID.remove_2.
-      - inversion H1; subst.
+      - inversion H1; destruct H2; simpl in *; subst.
         apply ph_register_spec with (v:=v') in H1; auto; rewrite H1.
         apply Map_TID.add_2; auto.
         intuition.
         subst.
-        contradiction H3.
+        contradiction H2.
         eauto using Map_TID_Extra.mapsto_to_in.
     Qed.
 
@@ -753,8 +754,8 @@ Module Phaser.
         eauto using Map_TID.add_3.
       - apply ph_wait_spec with (v:=v') in H1; auto; rewrite H1 in H.
         left; eauto using Map_TID.add_3.
-      - inversion H1; unfold drop in *.
-        rewrite <- H4 in *.
+      - inversion H1; simpl in *; destruct H2; unfold drop in *.
+        rewrite <- H3 in *.
         left; eauto using Map_TID.remove_3.
       - inversion H1; subst.
         destruct (TID.eq_dec t (get_task r)).
@@ -776,9 +777,8 @@ Module Phaser.
       t' <> t /\ Map_TID.MapsTo t v ph1.
     Proof.
       intros.
-      inversion H0.
-      unfold drop in *.
-      rewrite <- H3 in H.
+      inversion H0; simpl in *; subst; unfold drop in *.
+      destruct H1.
       rewrite Map_TID_Facts.remove_mapsto_iff in H.
       assumption.
     Qed.
@@ -787,7 +787,7 @@ Module Phaser.
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph1 ->
       ReducesUpdates ph1 t' o ph2 ->
-      { Map_TID.MapsTo t v ph2 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Taskview.Semantics.eval o' v) ph2) }.
+      { Map_TID.MapsTo t v ph2 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Taskview.eval o' v) ph2) }.
     Proof.
       intros.
       destruct H0.
@@ -795,22 +795,22 @@ Module Phaser.
         subst.
         destruct o.
         - right.
-          exists Taskview.Semantics.SIGNAL.
+          exists Taskview.SIGNAL.
           intuition.
           apply ph_signal_spec with (v:=v) in H1; auto; rewrite H1.
           auto using Map_TID.add_1.
-        - right; exists Taskview.Semantics.WAIT; intuition.
+        - right; exists Taskview.WAIT; intuition.
           apply ph_wait_spec with (v:=v) in H1; auto; rewrite H1.
           auto using Map_TID.add_1.
         - left.
           inversion H0.
         - left.
-          inversion H1; subst.
+          inversion H1; simpl in *; destruct H2; subst.
           apply ph_register_spec with (v:=v) in H1; auto; rewrite H1.
           apply Map_TID.add_2; auto.
           remember (set_mode _ _) as v'.
           intuition; subst.
-          contradiction H3.
+          contradiction H2.
           eauto using Map_TID_Extra.mapsto_to_in.
       }
       left.
@@ -842,9 +842,9 @@ Module Phaser.
         inversion H0; eauto.
       }
       destruct e as (o', (Hv, (_, Hmt))).
-      assert (vz = Taskview.Semantics.eval o' v) by eauto using Map_TID_Facts.MapsTo_fun.
+      assert (vz = Taskview.eval o' v) by eauto using Map_TID_Facts.MapsTo_fun.
       subst.
-      assert (Taskview.Semantics.Reduces v o' (Taskview.Semantics.eval o' v))
+      assert (Taskview.Reduces v o' (Taskview.eval o' v))
       by (inversion R; eauto using ph_reduces_to_tv_reduce).
       assert (Taskview.Ge v vx) by (inversion H0; eauto).
       assert (Taskview.Welformed v) by (inversion H; eauto).
@@ -857,16 +857,14 @@ Module Phaser.
     destruct H4 as (r, (?, ?)).
     subst.
     clear H1.
-    inversion R; subst.
+    inversion R; simpl in *; destruct H1;  subst.
     apply ph_register_spec with (v:=v) in R; auto; rewrite R in *; clear R.
     assert (vz = set_mode v (get_mode r)). {
       apply Map_TID_Facts.add_mapsto_iff in H2.
       destruct H2.
-      + destruct H1.
-        subst.
-        trivial.
-      + destruct H1.
-        contradiction H1.
+      + intuition.
+      + destruct H2.
+        contradiction H2.
         trivial.
     }
     subst.

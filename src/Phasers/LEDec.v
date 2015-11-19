@@ -7,7 +7,6 @@ Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.PhaseDiff.
 Require HJ.Phasers.TransClosure.
-Import Phasermap.Semantics.
 Open Local Scope Z.
 
 Section LE_DEC.
