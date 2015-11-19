@@ -13,12 +13,19 @@ Definition phasermap := Map_PHID.t phaser.
 
 Definition make : phasermap := Map_PHID.empty phaser.
 
+(**
+  We now define phasermap operations, first with a pre-condition and
+  then a function that executes the operation.
+  *)
+
 Record Op := mk_op {
   can_run: tid -> phasermap -> Prop;
   run: tid -> phasermap -> phasermap
 }.
 
-(** Function [new_phaser] places a new empty phaser in the phasermap. *)
+(**
+  Function [new_phaser] places a new empty phaser in the phasermap.
+  The pre-condition is that [p] is not in phasermap [m]. *)
 
 Inductive PhNewPre p (t:tid) (m:phasermap) : Prop :=
   ph_new_pre:
@@ -30,8 +37,8 @@ Definition ph_new (p:phid) (t:tid) : phasermap -> phasermap := Map_PHID.add p (P
 Definition ph_new_op p := mk_op (PhNewPre p) (ph_new p).
 
 (**
-  Similarly, to [Phaser.update] function [update] mutates the phaser associated to [p]
-  with function [f].
+  Function [update] mutates the phaser associated to [p] by applying
+  parameter [f] to the phaser.
  *)
 
 Definition update p (f:phaser -> phaser) m : phasermap := 
@@ -40,7 +47,11 @@ match Map_PHID.find p m with
 | None => m
 end.
 
-(** We defined signaling a phaser. *)
+(**
+  Signal applies the phaser-signal to the phaser associated with [p].
+  The pre-condition is that [p] must be in the phasermap and
+  we must meet the pre-conditions of the phaser-signal.
+  *)
 
 Inductive PhSignalPre p t m : Prop :=
   ph_signal_pre:
@@ -53,7 +64,7 @@ Definition ph_signal p t := update p (Phaser.signal t).
 
 Definition ph_signal_op p := mk_op (PhSignalPre p) (ph_signal p).
 
-(** And droping a phaser. *)
+(** Droping a phaser has a similar implementation and pre-conditions. *)
 
 Inductive PhDropPre p t m : Prop :=
   ph_drop_pre:
@@ -66,80 +77,67 @@ Definition ph_drop p t := update p (Phaser.drop t).
 
 Definition ph_drop_op p := mk_op (PhDropPre p) (ph_drop p).
 
-(** Function [foreach] updates all phasers in the phasermap using function [f]. *)
+(**
+  We now introduce functions that act on all phasers the task is regitered  with.
+  Function [foreach] updates all phasers in the phasermap by applying function [f].
+  *)
 
-Definition foreach (f:phaser -> phaser) : phasermap -> phasermap := Map_PHID.mapi (fun _ ph => f ph).
+Definition foreach (f:phaser -> phaser) : phasermap -> phasermap :=
+Map_PHID.mapi (fun _ ph => f ph).
 
-(** Function [signal_all] lets task [t] perform a [Phaser.signal] on all phasers it is registered with. *)
+(** Function [signal_all] lets task [t] perform a [Phaser.signal] on all phasers
+    it is registered with. There are no pre-conditions to this operation. *)
 
 Definition signal_all (t:tid) := foreach (Phaser.signal t).
 
 Definition signal_all_op := mk_op (fun _ _ => True) signal_all.
+
+(**
+  Wait-all invokes a wait on every phaser the task is registered with.
+  The pre-condition of wait-all is the pre-condition of each phaser the
+  task is registered with. *)
 
 Inductive WaitAllPre t m : Prop :=
   wait_all_pre:
     (forall p ph, Map_PHID.MapsTo p ph m -> Map_TID.In t ph -> WaitPre t ph) ->
     WaitAllPre t m.
 
-(** Function [wait_all] lets task [t] perform a [Phaser.wait] on all phasers it is registered with. *)
-
 Definition wait_all (t:tid) := foreach (Phaser.wait t).
 
 Definition wait_all_op := mk_op WaitAllPre wait_all.
 
-(** Function [drop_all] deregisters task [t] from all phasers in the phasermap. *)
+(**
+  Function [drop_all] deregisters task [t] from all phasers in the phasermap; it
+  has no pre-conditions.
+  *)
 
 Definition drop_all (t:tid) := foreach (Phaser.drop t).
 
 Definition drop_all_op := mk_op (fun _ _ => True) drop_all.
 
-  (** Predicate [In t m] holds when task [t] is registered in a phaser of [m]. *)
-
-  Inductive In (t:tid) (pm:phasermap) : Prop :=
-    in_def:
-      forall p ph,
-      Map_PHID.MapsTo p ph pm ->
-      Map_TID.In t ph ->
-      In t pm.
-
-  (**
-    Predicate [Phased m t t' ps] holds when:
-    1. task [t] is registered with phaser [fst ps]
-    2. task [t] can register [t'] according to mode [snd ps]
-   *)
-
 (**
-  Function [async] applies [async_1] to each element of [l], converting
-  each pair to a [registry] object. *)
+  Finally, we define async. To be able to spawn a task we must ensure
+  that the spawned task name is unknown in all phasers, so we need to
+  define a task membership for phasermaps.
+  Predicate [In t m] holds when task [t] is registered in a phaser of [m]. *)
+
+Inductive In (t:tid) (pm:phasermap) : Prop :=
+  in_def:
+    forall p ph,
+    Map_PHID.MapsTo p ph pm ->
+    Map_TID.In t ph ->
+    In t pm.
+
+(** The parameter of a phased async is list of pairs, each of which
+  consists of a phaser name and a registration  mode. *)
 
 Definition phased := (phid * regmode) % type.
 
-Inductive Phased (m:phasermap) (t t':tid) (ps:phased) : Prop := 
-  phased_def:
-    forall ph v,
-    Map_PHID.MapsTo (fst ps) ph m ->
-    Map_TID.MapsTo t v ph ->
-    RegisterPre (mk_registry t' (snd ps)) t ph ->
-    Phased m t t' ps.
-
-Definition eq_phid (p p':phased) := (fst p) = (fst p').
-
-Inductive AsyncPre ps t' t m : Prop :=
-  async_pre:
-    Forall (Phased m t t') ps ->
-    NoDupA eq_phid ps ->
-    ~ In t' m -> 
-    AsyncPre ps t' t m.
-
-(**
-  We define async phased in two functions: [async] ranges over each phaser in the list 
-  of phasers and uses [async_1] to registers the spawned
-  task in a single phaser. Task [t] registers task [t'] in phaser [first ps]
-  with mode [snd ps].
- *)
-
-(** Function [async_1] expects the name of the phaser where
-  to register [r]; task [t] is the issuer; phasermap [pm] is the target. *)
+(** 
+  Async phased register a new task in a list of [phased].
+  Function [async_1] registers task [t] with phaser named by [p] according
+  to mode [r].
+  *)
 
 Definition async_1 p r t pm :=
 match Map_PHID.find p pm with
@@ -147,11 +145,46 @@ match Map_PHID.find p pm with
 | _ => pm
 end.
 
+(**
+  Function [async] implements the phased async, by applying function
+  [async_1] to each pair of the list of [phased] objects.
+*)
+
 Fixpoint async (l:list phased) t' t pm :=
 match l with
 | cons (p, r) l => async_1 p (mk_registry t' r) t (async l t' t pm)
 | nil => pm
 end.
+
+
+(**
+  Predicate [PhasedPre] ensures that task [t] can register task [t']
+  using the phased object [ps].
+   *)
+
+Inductive PhasedPre (m:phasermap) (t t':tid) (ps:phased) : Prop := 
+  phased_def:
+    forall ph v,
+    Map_PHID.MapsTo (fst ps) ph m ->
+    Map_TID.MapsTo t v ph ->
+    RegisterPre (mk_registry t' (snd ps)) t ph ->
+    PhasedPre m t t' ps.
+
+(**
+  The pre-condition of executing an async are three:
+  (i) all phased pairs in [ps] must meet the preconditions of [PhasedPre],
+  (ii) the phaser names in [ps] cannot be appear multiple times in [ps],
+  (iii) the spawned task [t'] cannot be known in the phasermap.
+  *)
+
+Definition eq_phid (p p':phased) := (fst p) = (fst p').
+
+Inductive AsyncPre ps t' t m : Prop :=
+  async_pre:
+    Forall (PhasedPre m t t') ps ->
+    NoDupA eq_phid ps ->
+    ~ In t' m -> 
+    AsyncPre ps t' t m.
 
 Definition async_op l t := mk_op (AsyncPre l t) (async l t).
 
@@ -168,7 +201,7 @@ Inductive op : Type :=
 | DROP_ALL
 | ASYNC : list phased -> tid -> op.
   
-(** Function [eval] interprets an operation as a function. *)
+(** Function [get_impl] yields the [Op] object. *)
 
 Definition get_impl o :=
 match o with
@@ -182,7 +215,7 @@ match o with
 end.
 
 
-(** Finally, we define the [Reduce] relation. *)
+(** In closing, we define the [Reduces] relation. *)
 
 Inductive Reduces m t o : phasermap -> Prop :=
   reduces:

@@ -23,9 +23,10 @@ Definition phaser := Map_TID.t taskview.
   a given phaser.
   *)
 
+
 Record Op := mk_op {
-  can_run: tid -> phaser -> Prop;
-  run: tid -> phaser -> phaser
+  can_run: phaser -> Prop;
+  run: phaser -> phaser
 }.
 
 (**
@@ -34,6 +35,8 @@ Record Op := mk_op {
 *)
 
 Definition make t := add t Taskview.make (Map_TID.empty taskview).
+
+(** * Signal *)
 
 (**
   Function [update] targets a phaser [ph] and is used internally to mutate
@@ -66,16 +69,16 @@ Definition signal (t:tid) : phaser -> phaser := update t Taskview.signal.
   in the definition of the operational semantics.
   *)
 
-Definition signal_op := mk_op SignalPre signal.
+Definition signal_op t := mk_op (SignalPre t) (signal t).
 
+(** * Wait *)
 
 (**
   Predicate [Await] holds when all tasks registered in phaser [ph] 
-  that have a signal capability have a signal phase of at least [n].
+  with a signal capability have a signal phase of at least [n].
   By only awaiting tasks with a signal capability, predicate [Await]
-  does _not_ wait for any task registered with [WAIT_ONLY] mode, regardless
-  of its signal phase. Intuitively, this predicate lets a task to wait for
-  all members of a phaser to reach a given phase.
+  _disregards_ any task registered with a [WAIT_ONLY] mode, regardless
+  of its signal phase.
   *)
 
 Inductive Await ph n : Prop :=
@@ -112,8 +115,9 @@ Inductive Sync : phaser -> tid -> Prop :=
     Sync ph t.
 
 (**
-  Operation wait has two pre-conditions: (i) the issuer must have signalled previously,
-  and (ii) the issuer must synchronize by means of the given phaser with [Sync t ph].
+  Wait consists of thee pre-conditions: (i) task [t] is registered in phaser [ph],
+  (ii) task [t] has signalled as per [Taskview.WaitPre],
+  and (iii) task [t] must be able to synchronize with the other members through phaser [ph].
   *)
 
 Inductive WaitPre t ph : Prop  := 
@@ -124,12 +128,14 @@ Inductive WaitPre t ph : Prop  :=
     Sync ph t ->
     WaitPre t ph.
 
-(** Wait then applies wait on the taskview associated with task [t].*)
+(** Operationally, wait applies [Taskview.wait] on the taskview associated with task [t].*)
 
 Definition wait (t:tid) : phaser -> phaser := update t Taskview.wait.
 
-Definition wait_op := mk_op WaitPre wait.
+Definition wait_op t := mk_op (WaitPre t) (wait t).
 
+
+(** * Drop *)
 
 (**
   Function [drop] removes the taskview associated with the given task.
@@ -144,7 +150,9 @@ Inductive DropPre t (ph:phaser) : Prop :=
 
 Definition drop : tid -> phaser -> phaser := @remove taskview.
 
-Definition drop_op := mk_op DropPre drop.
+Definition drop_op t := mk_op (DropPre t) (drop t).
+
+(** * Register *)
 
 (**
   Function [register] embodies the invocation of an async phased, and
@@ -184,12 +192,14 @@ Definition register (r:registry) (t:tid) (ph:phaser) : phaser :=
   | None => ph
   end.
 
-Definition register_op r := mk_op (RegisterPre r) (register r).
+Definition register_op r t := mk_op (RegisterPre r t) (register r t).
 
+(** * Operational semantics *)
+(* begin hide *)
 End Defs.
+(* end hide *)
 
-
-(** The operational semantics define a set of four possible operations:
+(** The operational semantics defines a closed set of the possible operations:
   signal, wait, drop (that deregisters the issuer),
   and register (that adds a new task to the phaser). *)
 
@@ -204,15 +214,15 @@ match o with
 | DROP => drop_op
 | REGISTER r => register_op r
 end.
-  
+
 (**
-  Relation [Reduces] defines the operational semantics. Two operations are worth detailing.
+  Relation [Reduces] defines the operational semantics.
 *)
 
 Inductive Reduces ph t o : phaser -> Prop :=
   reduces:
-    can_run (get_impl o) t ph ->
-    Reduces ph t o (run (get_impl o) t ph).
+    can_run (get_impl o t) ph ->
+    Reduces ph t o (run (get_impl o t) ph).
 
 (** Relation [SReducess] simply omits the task and operation of relation [Reduces]. *)
 
@@ -255,7 +265,7 @@ Section Facts.
   Lemma ph_reduces_spec:
     forall ph t o ph',
     Reduces ph t o ph' ->
-    ph' = run (get_impl o) t ph.
+    ph' = run (get_impl o t) ph.
   Proof.
     intros.
     destruct o;
