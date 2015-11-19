@@ -220,14 +220,14 @@ end.
 *)
 
 Inductive Reduces ph t o : phaser -> Prop :=
-  reduces:
+  ph_reduces:
     can_run (get_impl o t) ph ->
     Reduces ph t o (run (get_impl o t) ph).
 
 (** Relation [SReducess] simply omits the task and operation of relation [Reduces]. *)
 
 Inductive SReduces (ph1:phaser) (ph2:phaser) : Prop :=
-  s_reduces:
+  ph_s_reduces:
     forall t o,
     Reduces ph1 t o ph2 ->
     SReduces ph1 ph2.
@@ -272,7 +272,7 @@ Section Facts.
     simpl; inversion H; auto.
   Qed.
 
-  Lemma ph_update_spec:
+  Lemma ph_update_rw:
     forall t v f ph,
     Map_TID.MapsTo t v ph ->
     update t f ph = Map_TID.add t (f v) ph.
@@ -293,52 +293,37 @@ Section Facts.
       eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
-  Lemma ph_signal_spec:
-    forall t v ph ph',
+  Lemma ph_signal_rw:
+    forall t v ph,
     Map_TID.MapsTo t v ph ->
-    Reduces ph t SIGNAL ph' ->
-    ph' = Map_TID.add t (Taskview.signal v) ph.
+    signal t ph = Map_TID.add t (Taskview.signal v) ph.
   Proof.
     intros.
-    inversion H0.
-    subst.
-    simpl in *.
-    unfold signal.
-    auto using ph_update_spec.
+    eauto using ph_update_rw.
   Qed.
 
-  Lemma ph_wait_spec:
-    forall t v ph ph',
+  Lemma ph_wait_rw:
+    forall t v ph,
     Map_TID.MapsTo t v ph ->
-    Reduces ph t WAIT ph' ->
-    ph' = Map_TID.add t (Taskview.wait v) ph.
+    wait t ph = Map_TID.add t (Taskview.wait v) ph.
   Proof.
     intros.
-    inversion H0.
-    subst; simpl in *.
-    unfold wait.
-    auto using ph_update_spec.
+    eauto using ph_update_rw.
   Qed.
 
-  Lemma ph_drop_spec:
-    forall t ph ph',
-    Map_TID.In t ph ->
-    Reduces ph t DROP ph' ->
-    ph' = Map_TID.remove t ph.
+  Lemma ph_drop_rw:
+    forall t ph,
+    drop t ph = Map_TID.remove t ph.
   Proof.
-    intros.
-    inversion H0; subst.
     unfold drop; auto.
   Qed.
 
-  Lemma ph_register_spec:
-    forall t v r ph ph',
+  Lemma ph_register_rw:
+    forall t v r ph,
     Map_TID.MapsTo t v ph ->
-    Reduces ph t (REGISTER r) ph' ->
-    ph' = Map_TID.add (get_task r) (set_mode v (get_mode r)) ph.
+    register r t ph = Map_TID.add (get_task r) (set_mode v (get_mode r)) ph.
   Proof.
     intros.
-    inversion H0; subst; simpl in *.
     unfold register in *.
     remember (Map_TID.find _ _ ).
     symmetry in Heqo.
@@ -351,10 +336,9 @@ Section Facts.
       }
       subst.
       trivial.
-    - inversion H1.
-      apply Map_TID_Extra.mapsto_to_in in H3.
-      apply Map_TID_Facts.not_find_in_iff in Heqo.
-      contradiction.
+    - apply Map_TID_Facts.not_find_in_iff in Heqo.
+      contradiction Heqo.
+      eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
   Lemma ph_in:
@@ -386,9 +370,11 @@ Section Facts.
     intros.
     destruct o'; simpl.
     - apply as_tv_op_inv_signal in H0; subst.
-      auto using ph_signal_spec.
+      destruct H. simpl in *.
+      auto using ph_signal_rw.
     - apply as_tv_op_inv_wait in H0; subst.
-      auto using ph_wait_spec.
+      destruct H. simpl in *.
+      auto using ph_wait_rw.
   Qed.
   
   (**

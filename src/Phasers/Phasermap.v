@@ -163,7 +163,7 @@ end.
    *)
 
 Inductive PhasedPre (m:phasermap) (t t':tid) (ps:phased) : Prop := 
-  phased_def:
+  phased_pre:
     forall ph v,
     Map_PHID.MapsTo (fst ps) ph m ->
     Map_TID.MapsTo t v ph ->
@@ -222,3 +222,69 @@ Inductive Reduces m t o : phasermap -> Prop :=
     can_run (get_impl o) t m ->
     Reduces m t o (run (get_impl o) t m).
 
+(* begin hide *)
+Section Facts.
+  Lemma pm_update_rw:
+    forall p f ph m,
+    Map_PHID.MapsTo p ph m ->
+    update p f m = Map_PHID.add p (f ph) m.
+  Proof.
+    intros.
+    unfold update.
+    remember (Map_PHID.find _ _) as o.
+    symmetry in Heqo.
+    destruct o.
+    - rewrite <- Map_PHID_Facts.find_mapsto_iff in Heqo.
+      assert (p0 = ph) by eauto using Map_PHID_Facts.MapsTo_fun.
+      subst.
+      trivial.
+    - rewrite <- Map_PHID_Facts.not_find_in_iff in Heqo.
+      contradiction Heqo.
+      eauto using Map_PHID_Extra.mapsto_to_in.
+  Qed.
+
+  Lemma pm_ph_signal_rw:
+    forall p t ph m,
+    Map_PHID.MapsTo p ph m ->
+    ph_signal p t m = Map_PHID.add p (Phaser.signal t ph) m.
+  Proof.
+    intros.
+    unfold ph_signal.
+    rewrite pm_update_rw with (ph:=ph); auto.
+  Qed.
+
+  Lemma pm_ph_drop_rw:
+    forall p t ph m,
+    Map_PHID.MapsTo p ph m ->
+    ph_drop p t m = Map_PHID.add p (Phaser.drop t ph) m.
+  Proof.
+    intros.
+    unfold ph_drop.
+    rewrite pm_update_rw with (ph:=ph); auto.
+  Qed.
+
+  Lemma pm_foreach_mapsto_rw:
+    forall p ph f m,
+    Map_PHID.MapsTo p ph (foreach f m) <->
+    exists ph', ph = f ph' /\ Map_PHID.MapsTo p ph' m.
+  Proof.
+    intros.
+    unfold foreach in *.
+    rewrite Map_PHID_Facts.mapi_mapsto_iff; auto.
+    split; eauto.
+  Qed.
+
+  Lemma async_pre_inv:
+    forall p l t' t m,
+    AsyncPre (p :: l) t' t m ->
+    AsyncPre l t' t m.
+  Proof.
+    intros.
+    destruct H.
+    inversion H0.
+    inversion H.
+    apply async_pre; auto.
+  Qed.
+End Facts.
+
+(* end hide *)

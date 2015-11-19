@@ -572,7 +572,10 @@ Module Phaser.
     intros ? ? ? ? Hge R.
     inversion R; subst; simpl in *.
     destruct H.
-    apply ph_register_spec with (v:=v) in R; auto.
+    destruct R.
+    simpl in *.
+    assert (R:=H0).
+    apply ph_register_rw with (r:=r) in R; auto.
     rewrite R; clear R.
     apply ph_rel_def.
     intros ? ? ? ? Hmt1 Hmt2.
@@ -657,9 +660,10 @@ Module Phaser.
       intros.
       apply Map_TID.remove_3 in H0.
       inversion Hge; eauto.
-    - inversion R; subst;  simpl in *.
+    - destruct R; simpl in *.
       destruct H.
-      apply ph_register_spec with (v:=v) in R; auto.
+      assert (R:=H0).
+      apply ph_register_rw with (r:=r) in R; auto.
       rewrite R; clear R.
       apply ph_rel_def; intros.
       apply Map_TID_Facts.add_mapsto_iff in H2;
@@ -720,19 +724,21 @@ Module Phaser.
       assert (Hin : Map_TID.In t' ph1) by eauto using ph_in.
       apply Map_TID_Extra.in_to_mapsto in Hin.
       destruct Hin as (v', Hmt').
-      destruct o.
-      - apply ph_signal_spec with (v:=v') in H1; auto; rewrite H1.
+      assert (R:=Hmt').
+      destruct H1.
+      destruct o; simpl in *.
+      - apply ph_signal_rw in R. rewrite R.
         auto using Map_TID.add_2.
-      - apply ph_wait_spec with (v:=v') in H1; auto; rewrite H1.
+      - apply ph_wait_rw in R; rewrite R.
         auto using Map_TID.add_2.
       - inversion H1; destruct H2; subst; simpl in *; unfold drop in *.
         auto using Map_TID.remove_2.
-      - inversion H1; destruct H2; simpl in *; subst.
-        apply ph_register_spec with (v:=v') in H1; auto; rewrite H1.
+      - destruct H1.
+        apply ph_register_rw with (r:=r) in R. rewrite R.
         apply Map_TID.add_2; auto.
         intuition.
         subst.
-        contradiction H2.
+        contradiction H1.
         eauto using Map_TID_Extra.mapsto_to_in.
     Qed.
 
@@ -747,21 +753,21 @@ Module Phaser.
       assert (Hin : Map_TID.In t' ph1) by eauto using ph_in.
       apply Map_TID_Extra.in_to_mapsto in Hin.
       destruct Hin as (v', Hmt').
-      destruct o.
-      - apply ph_signal_spec with (v:=v') in H1; auto.
-        rewrite H1 in H.
-        left;
+      destruct H1.
+      assert (R:=Hmt').
+      destruct o; simpl in *;  destruct H1.
+      - left.
+        apply ph_signal_rw in R.
+        rewrite R in H.
         eauto using Map_TID.add_3.
-      - apply ph_wait_spec with (v:=v') in H1; auto; rewrite H1 in H.
+      - apply ph_wait_rw in R; rewrite R in H.
         left; eauto using Map_TID.add_3.
-      - inversion H1; simpl in *; destruct H2; unfold drop in *.
-        rewrite <- H3 in *.
+      - unfold drop in *.
         left; eauto using Map_TID.remove_3.
-      - inversion H1; subst.
-        destruct (TID.eq_dec t (get_task r)).
+      - destruct (TID.eq_dec t (get_task r)).
         + eauto.
         + left.
-          apply ph_register_spec with (v:=v') in H1; auto; rewrite H1 in *.
+          apply ph_register_rw with (r:=r) in R; auto; rewrite R in *.
           rewrite Map_TID_Facts.add_mapsto_iff in H.
           destruct H.
           * destruct H.
@@ -793,21 +799,24 @@ Module Phaser.
       destruct H0.
       destruct (TID.eq_dec t' t). {
         subst.
-        destruct o.
+        assert (rw:=H).
+        destruct H1.
+        destruct o; simpl in *; try destruct H1.
         - right.
           exists Taskview.SIGNAL.
           intuition.
-          apply ph_signal_spec with (v:=v) in H1; auto; rewrite H1.
+          apply ph_signal_rw in rw; auto; rewrite rw.
           auto using Map_TID.add_1.
         - right; exists Taskview.WAIT; intuition.
-          apply ph_wait_spec with (v:=v) in H1; auto; rewrite H1.
+          apply ph_wait_rw in rw; rewrite rw.
           auto using Map_TID.add_1.
         - left.
           inversion H0.
         - left.
-          inversion H1; simpl in *; destruct H2; subst.
-          apply ph_register_spec with (v:=v) in H1; auto; rewrite H1.
+          apply ph_register_rw with (r:=r) in rw.
+          rewrite rw in *.
           apply Map_TID.add_2; auto.
+          inversion H1.
           remember (set_mode _ _) as v'.
           intuition; subst.
           contradiction H2.
@@ -857,8 +866,11 @@ Module Phaser.
     destruct H4 as (r, (?, ?)).
     subst.
     clear H1.
-    inversion R; simpl in *; destruct H1;  subst.
-    apply ph_register_spec with (v:=v) in R; auto; rewrite R in *; clear R.
+    destruct R.
+    simpl in *.
+    destruct H1.
+    assert (R:=H4).
+    apply ph_register_rw with (r:=r) in R; auto; rewrite R in *; clear R.
     assert (vz = set_mode v (get_mode r)). {
       apply Map_TID_Facts.add_mapsto_iff in H2.
       destruct H2.
