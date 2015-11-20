@@ -157,6 +157,28 @@ Proof.
   contradiction.
 Qed.
 
+Lemma ph_wait_in:
+  forall t t' ph,
+  Map_TID.In t (wait t' ph) ->
+  Map_TID.In t ph.
+Proof.
+  intros.
+  apply Map_TID_Extra.in_to_mapsto in H.
+  destruct H as (v, mt).
+  unfold wait, Phaser.update in *.
+  remember (Map_TID.find _ _).
+  symmetry in Heqo.
+  destruct o as [v'|].
+  - apply Map_TID_Facts.add_mapsto_iff in mt.
+    rewrite <- Map_TID_Facts.find_mapsto_iff in Heqo.
+    destruct mt.
+    + destruct H.
+      subst.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    + destruct H; eauto using Map_TID_Extra.mapsto_to_in.
+  - eauto using Map_TID_Extra.mapsto_to_in.
+Qed.
+
 Lemma ph_diff_apply_wait:
   forall t t1 t2 z ph,
   ph_diff (wait t ph) t1 t2 z ->
@@ -166,19 +188,22 @@ Proof.
   remember (Map_TID.find t ph).
   symmetry in Heqo.
   destruct o as [v|].
-  - assert (Map_TID.MapsTo t v ph). {
-      rewrite Map_TID_Facts.find_mapsto_iff; assumption.
-    }
-    clear Heqo.
+  - apply Map_TID_Facts.find_mapsto_iff in Heqo.
+    assert (R:=Heqo).
+    apply ph_wait_rw in R; rewrite R in *.
     eauto using ph_diff_add_wait.
- - rewrite <- Map_TID_Facts.not_find_in_iff in Heqo.
+ - unfold wait, Phaser.update in *.
+   rewrite Heqo in *.
+   rewrite <- Map_TID_Facts.not_find_in_iff in Heqo.
    assert (t <> t1). {
      apply ph_diff_inv_left in H.
-     apply in_neq with (ph:=ph); repeat auto.
+     intuition; subst.
+     contradiction.
    }
    assert (t <> t2). {
      apply ph_diff_inv_right in H.
-     apply in_neq with (ph:=ph); repeat auto.
+     intuition; subst.
+     contradiction.
    }
    rewrite wait_delta_neq; repeat auto.
    assert (Heq: ((z + 0 = z) % Z)); intuition.
@@ -188,12 +213,12 @@ Qed.
 
 Lemma pm_diff_mapi_wait:
   forall t t1 t2 z pm,
-  pm_diff (mapi t wait pm) t1 t2 z ->
+  pm_diff (foreach (wait t) pm) t1 t2 z ->
   pm_diff pm t1 t2 (z + wait_delta t (t1, t2)).
 Proof.
   intros.
   inversion H; subst; clear H.
-  unfold mapi in *.
+  unfold foreach in *.
   apply Map_PHID_Facts.mapi_inv in H0.
   destruct H0 as (ph', (p', (?, (?, ?)))).
   subst.
@@ -203,7 +228,7 @@ Qed.
 
 Lemma diff_mapi_wait:
   forall t e z pm,
-  diff (mapi t wait pm) e z ->
+  diff (foreach (wait t) pm) e z ->
   diff pm e (z + wait_delta t e).
 Proof.
   intros.
@@ -215,11 +240,11 @@ Qed.
 
 Lemma walk2_mapi:
   forall t pm t1 t2 w,
-  Walk2 (HasDiff (diff (mapi t wait pm))) t1 t2 w ->
+  Walk2 (HasDiff (diff (foreach (wait t) pm))) t1 t2 w ->
   Walk2 (HasDiff (diff pm)) t1 t2 w.
 Proof.
   intros.
-  apply walk2_impl with (E:=HasDiff (diff (mapi t wait pm))); repeat auto.
+  apply walk2_impl with (E:=HasDiff (diff (foreach (wait t) pm))); repeat auto.
   intros.
   unfold HasDiff in *.
   destruct e as (ta, tb).
@@ -230,7 +255,7 @@ Qed.
 
 Lemma pm_diff_mapi_sig:
   forall t t1 t2 pm z,
-  pm_diff (mapi t wait pm) t1 t2 z ->
+  pm_diff (foreach (wait t) pm) t1 t2 z ->
   pm_diff pm t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
 Proof.
   intros.
@@ -245,7 +270,7 @@ Qed.
 
 Lemma diff_sum_mapi:
   forall w t t1 tn pm z,
-  DiffSum (diff (mapi t wait pm)) w z ->
+  DiffSum (diff (foreach (wait t) pm)) w z ->
   StartsWith w t1 ->
   EndsWith w tn ->
   DiffSum (diff pm) w (z - (tid_eq_sig t1 t) + (tid_eq_sig tn t)).
@@ -293,7 +318,7 @@ Qed.
 
 Lemma transdiff_mapi:
   forall t pm t1 t2 z,
-  TransDiff tid (diff (mapi t wait pm)) t1 t2 z ->
+  TransDiff tid (diff (foreach (wait t) pm)) t1 t2 z ->
   TransDiff tid (diff pm) t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
 Proof.
   intros.
@@ -304,14 +329,15 @@ Proof.
   eauto using trans_diff_def.
 Qed.
 
-Lemma simpl_sr:
+Lemma wait_all_sr:
   forall pm t,
   Valid pm ->
-  Valid (mapi t wait pm).
+  Valid (wait_all t pm).
 Proof.
   intros.
   unfold Valid in *.
   unfold TransDiffFun in *.
+  unfold wait_all.
   intros.
   apply transdiff_mapi in H0.
   apply transdiff_mapi in H1.
@@ -319,15 +345,5 @@ Proof.
   intuition.
 Qed.
 
-Theorem sr :
-  forall pm t pm',
-  Valid pm ->
-  Reduce pm t WAIT_ALL pm' ->
-  Valid pm'.
-Proof.
-  intros.
-  inversion H0; subst; clear H0.
-  auto using simpl_sr.
-Qed.
 
 End SR.

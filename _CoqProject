@@ -14,7 +14,7 @@ src/Phasers/TransClosure.v
 src/Phasers/Progress.v
 src/Phasers/LEDec.v
 src/Phasers/TransDiff.v
-#src/Phasers/SubjectReduction.v
+src/Phasers/SubjectReduction.v
 src/Phasers/Typesystem.v
 #src/ReverseSemaphore.v
 src/AsyncFinish/Lang.v
