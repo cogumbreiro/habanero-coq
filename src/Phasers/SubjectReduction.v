@@ -344,4 +344,224 @@ Proof.
   intuition.
 Qed.
 
+Lemma update_mapsto_eq:
+  forall t f v ph,
+  Map_TID.MapsTo t v (Phaser.update t f ph) ->
+  exists v', v = f v' /\ Map_TID.MapsTo t v' ph.
+Proof.
+  intros.
+  unfold Phaser.update in *.
+  remember (Map_TID.find _ _).
+  symmetry in Heqo.
+  destruct o as [v'|].
+  - exists v'.
+    assert (Map_TID.MapsTo t (f v') (Map_TID.add t (f v') ph)) by eauto using Map_TID.add_1.
+    assert (v = f v') by eauto using Map_TID_Facts.MapsTo_fun.
+    intuition.
+    subst.
+    apply Map_TID_Facts.find_mapsto_iff.
+    assumption.
+  - apply Map_TID_Facts.not_find_mapsto_iff in Heqo.
+    contradiction Heqo.
+    eauto using Map_TID_Extra.mapsto_to_in.
+Qed.
+
+Lemma update_mapsto_neq:
+  forall t v t' f ph,
+  Map_TID.MapsTo t v (Phaser.update t' f ph) ->
+  t' <> t ->
+  Map_TID.MapsTo t v ph.
+Proof.
+  intros.
+  unfold Phaser.update in *.
+  remember (Map_TID.find _ _).
+  symmetry in Heqo.
+  destruct o as [v'|];
+  eauto using Map_TID.add_3.
+Qed.
+
+Lemma signal_mapsto_eq:
+  forall t v ph,
+  Map_TID.MapsTo t v (signal t ph) ->
+  exists v', v = Taskview.signal v' /\ Map_TID.MapsTo t v' ph.
+Proof.
+  intros.
+  unfold signal in *.
+  eauto using update_mapsto_eq.
+Qed.
+
+Lemma signal_mapsto_neq:
+  forall t v t' ph,
+  Map_TID.MapsTo t v (signal t' ph) ->
+  t' <> t ->
+  Map_TID.MapsTo t v ph.
+Proof.
+  intros.
+  unfold signal in *.
+  eauto using update_mapsto_neq.
+Qed.
+
+Lemma signal_mapsto_inv:
+  forall  t v t' ph,
+  Map_TID.MapsTo t v (signal t' ph) ->
+  { t' = t /\ exists v', (v = Taskview.signal v' /\ Map_TID.MapsTo t v' ph) } +
+  { t' <> t /\ Map_TID.MapsTo t v ph }.
+Proof.
+  intros.
+  destruct (TID.eq_dec t' t). {
+    subst; left. intuition.
+    auto using signal_mapsto_eq.
+  }
+  right.
+  intuition.
+  eauto using signal_mapsto_neq.
+Qed.
+
+Lemma ph_diff_apply_signal:
+  forall t t1 t2 z ph,
+  ph_diff (signal t ph) t1 t2 z ->
+  ph_diff ph t1 t2 z.
+Proof.
+  intros.
+  inversion H; subst.
+  apply signal_mapsto_inv in H0.
+  apply signal_mapsto_inv in H1.
+  destruct H0.
+  - destruct H1.
+    + destruct a as (?, (?,(?,?))).
+      destruct a0 as (?, (?,(?,?))).
+      subst.
+      repeat rewrite signal_preserves_wait_phase in *.
+      auto using ph_diff_def.
+    + destruct a as (?, (?,(?,?))).
+      destruct a0 as (?, ?).
+      subst.
+      repeat rewrite signal_preserves_wait_phase in *.
+      auto using ph_diff_def.
+  - destruct H1.
+    + destruct a0 as (?, (?,(?,?))).
+      destruct a as (?, ?).
+      subst.
+      repeat rewrite signal_preserves_wait_phase in *.
+      auto using ph_diff_def.
+    + destruct a0 as (?, ?).
+      destruct a as (?, ?).
+      subst.
+      repeat rewrite signal_preserves_wait_phase in *.
+      auto using ph_diff_def.
+Qed.
+
+Let pm_diff_signal_all:
+  forall t t1 t2 z pm,
+  pm_diff (signal_all t pm) t1 t2 z ->
+  pm_diff pm t1 t2 z.
+Proof.
+  intros.
+  inversion H; subst; clear H.
+  unfold foreach in *.
+  apply Map_PHID_Facts.mapi_inv in H0.
+  destruct H0 as (ph', (p', (?, (?, ?)))).
+  subst.
+  rename ph' into ph.
+  eauto using ph_diff_apply_signal, pm_diff_def.
+Qed.
+
+Let diff_signal_all:
+  forall t e z pm,
+  diff (signal_all t pm) e z ->
+  diff pm e z.
+Proof.
+  intros.
+  unfold diff in *.
+  destruct e as (t1, t2).
+  simpl in *.
+  eauto using pm_diff_signal_all.
+Qed.
+
+
+Let walk2_signal_all:
+  forall t pm t1 t2 w,
+  Walk2 (HasDiff (diff (signal_all t pm))) t1 t2 w ->
+  Walk2 (HasDiff (diff pm)) t1 t2 w.
+Proof.
+  intros.
+  apply walk2_impl with (E:=HasDiff (diff (foreach (signal t) pm))); repeat auto.
+  intros.
+  unfold HasDiff in *.
+  destruct e as (ta, tb).
+  destruct H0 as (z, ?).
+  eauto using diff_signal_all.
+Qed.
+
+Let diff_sum_signal_all:
+  forall w t t1 tn pm z,
+  DiffSum (diff (signal_all t pm)) w z ->
+  StartsWith w t1 ->
+  EndsWith w tn ->
+  DiffSum (diff pm) w z.
+Proof.
+  intros w.
+  induction w.
+  { (* absurd case *)
+    intros.
+    inversion H; subst.
+    apply ends_with_nil_inv in H1.
+    inversion H1.
+  }
+  intros.
+  destruct a as (t1', t2).
+  assert (t1' = t1). { eauto using starts_with_eq. }
+  destruct w.
+  - subst.
+    inversion H.
+    subst.
+    assert (t2 = tn). {
+      eauto using ends_with_eq.
+    }
+    subst.
+    apply pm_diff_signal_all in H5.
+    auto using diff_sum_pair.
+  - subst.
+    destruct p as (t2', t3).
+    inversion H; subst; clear H.
+    rename t2' into t2.
+    assert (StartsWith ((t2, t3) :: w) t2). {
+      eauto using starts_with_def.
+    }
+    apply ends_with_inv in H1.
+    assert ( DiffSum (diff pm) ((t2, t3) :: w) s) by eauto.
+    apply pm_diff_signal_all in H9. (* invert diff_mapi *)
+    simpl in *.
+    auto using diff_sum_cons.
+Qed.
+
+Let transdiff_signal_all:
+  forall t pm t1 t2 z,
+  TransDiff tid (diff (signal_all t pm)) t1 t2 z ->
+  TransDiff tid (diff pm) t1 t2 z.
+Proof.
+  intros.
+  inversion H; subst; clear H.
+  apply walk2_signal_all in H1.
+  inversion H1; subst.
+  apply diff_sum_signal_all with (t1:=t1) (tn:=t2) in H0; repeat auto.
+  eauto using trans_diff_def.
+Qed.
+
+Lemma signal_all_sr:
+  forall pm t,
+  Valid pm ->
+  Valid (signal_all t pm).
+Proof.
+  intros.
+  unfold Valid in *.
+  unfold TransDiffFun in *.
+  intros.
+  apply transdiff_signal_all in H0.
+  apply transdiff_signal_all in H1.
+  assert (Hx := H _ _ _ _ H0 H1).
+  intuition.
+Qed.
+
+
 End SR.
