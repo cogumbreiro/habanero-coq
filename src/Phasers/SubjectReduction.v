@@ -211,9 +211,9 @@ Proof.
    assumption.
 Qed.
 
-Lemma pm_diff_mapi_wait:
+Lemma pm_diff_wait_all:
   forall t t1 t2 z pm,
-  pm_diff (foreach (wait t) pm) t1 t2 z ->
+  pm_diff (wait_all t pm) t1 t2 z ->
   pm_diff pm t1 t2 (z + wait_delta t (t1, t2)).
 Proof.
   intros.
@@ -226,21 +226,21 @@ Proof.
   eauto using ph_diff_apply_wait, pm_diff_def.
 Qed.
 
-Lemma diff_mapi_wait:
+Lemma diff_wait_all:
   forall t e z pm,
-  diff (foreach (wait t) pm) e z ->
+  diff (wait_all t pm) e z ->
   diff pm e (z + wait_delta t e).
 Proof.
   intros.
   unfold diff in *.
   destruct e as (t1, t2).
   simpl in *.
-  auto using pm_diff_mapi_wait.
+  auto using pm_diff_wait_all.
 Qed.
 
-Lemma walk2_mapi:
+Lemma walk2_wait_all:
   forall t pm t1 t2 w,
-  Walk2 (HasDiff (diff (foreach (wait t) pm))) t1 t2 w ->
+  Walk2 (HasDiff (diff (wait_all t pm))) t1 t2 w ->
   Walk2 (HasDiff (diff pm)) t1 t2 w.
 Proof.
   intros.
@@ -250,12 +250,12 @@ Proof.
   destruct e as (ta, tb).
   destruct H0 as (z, ?).
   exists (z + wait_delta t (ta, tb))%Z.
-  auto using diff_mapi_wait.
+  auto using diff_wait_all.
 Qed.
 
 Lemma pm_diff_mapi_sig:
   forall t t1 t2 pm z,
-  pm_diff (foreach (wait t) pm) t1 t2 z ->
+  pm_diff (wait_all t pm) t1 t2 z ->
   pm_diff pm t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
 Proof.
   intros.
@@ -265,12 +265,12 @@ Proof.
     intuition.
   }
   rewrite Heq.
-  eauto using pm_diff_mapi_wait.
+  eauto using pm_diff_wait_all.
 Qed.
 
-Lemma diff_sum_mapi:
+Lemma diff_sum_wait_all:
   forall w t t1 tn pm z,
-  DiffSum (diff (foreach (wait t) pm)) w z ->
+  DiffSum (diff (wait_all t pm)) w z ->
   StartsWith w t1 ->
   EndsWith w tn ->
   DiffSum (diff pm) w (z - (tid_eq_sig t1 t) + (tid_eq_sig tn t)).
@@ -316,16 +316,16 @@ Proof.
     auto using diff_sum_cons.
 Qed.
 
-Lemma transdiff_mapi:
+Lemma transdiff_wait_all:
   forall t pm t1 t2 z,
-  TransDiff tid (diff (foreach (wait t) pm)) t1 t2 z ->
+  TransDiff tid (diff (wait_all t pm)) t1 t2 z ->
   TransDiff tid (diff pm) t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
 Proof.
   intros.
   inversion H; subst; clear H.
-  apply walk2_mapi in H1.
+  apply walk2_wait_all in H1.
   inversion H1; subst.
-  apply diff_sum_mapi with (t1:=t1) (tn:=t2) in H0; repeat auto.
+  apply diff_sum_wait_all with (t1:=t1) (tn:=t2) in H0; repeat auto.
   eauto using trans_diff_def.
 Qed.
 
@@ -337,13 +337,11 @@ Proof.
   intros.
   unfold Valid in *.
   unfold TransDiffFun in *.
-  unfold wait_all.
   intros.
-  apply transdiff_mapi in H0.
-  apply transdiff_mapi in H1.
+  apply transdiff_wait_all in H0.
+  apply transdiff_wait_all in H1.
   assert (Hx := H _ _ _ _ H0 H1).
   intuition.
 Qed.
-
 
 End SR.
