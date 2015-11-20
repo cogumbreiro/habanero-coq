@@ -363,6 +363,80 @@ Section Facts.
     assumption.
   Qed.
 
+  Lemma update_mapsto_eq:
+    forall t f v ph,
+    Map_TID.MapsTo t v (Phaser.update t f ph) ->
+    exists v', v = f v' /\ Map_TID.MapsTo t v' ph.
+  Proof.
+    intros.
+    unfold Phaser.update in *.
+    remember (Map_TID.find _ _).
+    symmetry in Heqo.
+    destruct o as [v'|].
+    - exists v'.
+      assert (Map_TID.MapsTo t (f v') (Map_TID.add t (f v') ph)) by eauto using Map_TID.add_1.
+      assert (v = f v') by eauto using Map_TID_Facts.MapsTo_fun.
+      intuition.
+      subst.
+      apply Map_TID_Facts.find_mapsto_iff.
+      assumption.
+    - apply Map_TID_Facts.not_find_mapsto_iff in Heqo.
+      contradiction Heqo.
+      eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
+  Lemma update_mapsto_neq:
+    forall t v t' f ph,
+    Map_TID.MapsTo t v (Phaser.update t' f ph) ->
+    t' <> t ->
+    Map_TID.MapsTo t v ph.
+  Proof.
+    intros.
+    unfold Phaser.update in *.
+    remember (Map_TID.find _ _).
+    symmetry in Heqo.
+    destruct o as [v'|];
+    eauto using Map_TID.add_3.
+  Qed.
+
+  Lemma signal_mapsto_eq:
+    forall t v ph,
+    Map_TID.MapsTo t v (signal t ph) ->
+    exists v', v = Taskview.signal v' /\ Map_TID.MapsTo t v' ph.
+  Proof.
+    intros.
+    unfold signal in *.
+    eauto using update_mapsto_eq.
+  Qed.
+
+  Lemma signal_mapsto_neq:
+    forall t v t' ph,
+    Map_TID.MapsTo t v (signal t' ph) ->
+    t' <> t ->
+    Map_TID.MapsTo t v ph.
+  Proof.
+    intros.
+    unfold signal in *.
+    eauto using update_mapsto_neq.
+  Qed.
+
+  Lemma signal_mapsto_inv:
+    forall  t v t' ph,
+    Map_TID.MapsTo t v (signal t' ph) ->
+    { t' = t /\ exists v', (v = Taskview.signal v' /\ Map_TID.MapsTo t v' ph) } +
+    { t' <> t /\ Map_TID.MapsTo t v ph }.
+  Proof.
+    intros.
+    destruct (TID.eq_dec t' t). {
+      subst; left. intuition.
+      auto using signal_mapsto_eq.
+    }
+    right.
+    intuition.
+    eauto using signal_mapsto_neq.
+  Qed.
+
+
   (* end hide *)
 
   (**

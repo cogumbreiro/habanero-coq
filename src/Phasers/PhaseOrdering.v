@@ -411,15 +411,6 @@ Module Phaser.
         R v1 v2) ->
       Rel R ph1 ph2.
 
-  Inductive ExistsRel (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
-    ph_one_rel_def:
-      forall t1 t2 v1 v2,
-      Map_TID.MapsTo t1 v1 ph1 ->
-      Map_TID.MapsTo t2 v2 ph2 ->
-      R v1 v2 ->
-      ExistsRel R ph1 ph2.
-
-
   Lemma ph_rel_inv:
     forall R ph1 ph2 t1 t2 v1 v2,
     Map_TID.MapsTo t1 v1 ph1 ->
@@ -791,19 +782,6 @@ Module Phaser.
           * destruct H; assumption.
     Qed.
 
-    Lemma reduces_drop_mapsto_eq:
-      forall t v ph1 ph2 t',
-      Map_TID.MapsTo t v ph2 ->
-      Reduces ph1 t' DROP ph2 ->
-      t' <> t /\ Map_TID.MapsTo t v ph1.
-    Proof.
-      intros.
-      inversion H0; simpl in *; subst; unfold drop in *.
-      destruct H1.
-      rewrite Map_TID_Facts.remove_mapsto_iff in H.
-      assumption.
-    Qed.
-
     Lemma reduces_update_inv:
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph1 ->
@@ -908,8 +886,9 @@ Module Phaser.
   Proof.
     intros.
     apply ph_rel_def; intros tz tx vz vx; intros.
-    apply reduces_drop_mapsto_eq with (t:=tz) (v:=vz) in H0; auto.
-    destruct H0.
+    destruct H0; simpl in *.
+    apply drop_mapsto in H1.
+    destruct H1.
     inversion H; eauto.
   Qed.
 
