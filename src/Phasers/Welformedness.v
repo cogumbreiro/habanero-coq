@@ -283,8 +283,8 @@ Module Taskview.
 
 End Taskview.
 
-(** We now define the notion of welformed for phasers, which states that
-  every taskview mentioned in the phaser must be also welformed. *)
+(** A welformed phaser is such that
+  every taskview mentioned in this phaser is welformed. *)
 
 Module Phaser.
   Import Taskview.
@@ -429,6 +429,10 @@ Module Phaser.
   Qed.
 
 End Phaser.
+
+(** Nonsurprisingly, a welformed phasermap is such that
+  every phaser mentioned in this phasermap is welformed. *)
+
 
 Module Phasermap.
   Require Import HJ.Phasers.Lang.

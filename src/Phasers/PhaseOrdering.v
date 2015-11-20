@@ -6,6 +6,12 @@ Require Import HJ.Phasers.Welformedness.
 
 Set Implict Arguments.
 
+(**
+  Phase-ordering is a phaser-level property that considers the
+  relationship between two arbitrary taskviews.
+  It is a correctness property that lets us reason about the "temporal" ordering
+  of a taskview, with respect to a given reduction relation.
+*)
 Module Taskview.
   Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
@@ -404,6 +410,15 @@ Module Phaser.
         Map_TID.MapsTo t2 v2 ph2 ->
         R v1 v2) ->
       Rel R ph1 ph2.
+
+  Inductive ExistsRel (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
+    ph_one_rel_def:
+      forall t1 t2 v1 v2,
+      Map_TID.MapsTo t1 v1 ph1 ->
+      Map_TID.MapsTo t2 v2 ph2 ->
+      R v1 v2 ->
+      ExistsRel R ph1 ph2.
+
 
   Lemma ph_rel_inv:
     forall R ph1 ph2 t1 t2 v1 v2,
