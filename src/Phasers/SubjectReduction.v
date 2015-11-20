@@ -484,7 +484,7 @@ Proof.
   eauto using transdiff_signal_all.
 Qed.
 
-Lemma ph_diff_apply_drop:
+Let ph_diff_apply_drop:
   forall t t1 t2 z ph,
   ph_diff (drop t ph) t1 t2 z ->
   ph_diff ph t1 t2 z.
@@ -605,4 +605,116 @@ Proof.
   eauto using transdiff_drop_all.
 Qed.
 
+Section PreservesDiff.
+Variable f : phasermap -> phasermap.
+
+Variable preserves_ph_diff:
+  forall p ph pm z t1 t2,
+  Map_PHID.MapsTo p ph (f pm) ->
+  exists ph', Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
+
+Let preserves_pm_diff:
+  forall t1 t2 z pm,
+  pm_diff (f pm) t1 t2 z ->
+  pm_diff pm t1 t2 z.
+Proof.
+  intros.
+  inversion H; subst; clear H.
+  apply preserves_ph_diff with (z:=z) (t1:=t1) (t2:=t2) in H0.
+  destruct H0 as (ph', (mt, d)).
+  eauto using pm_diff_def.
+Qed.
+
+Let preserves_diff:
+  forall e z pm,
+  diff (f pm) e z ->
+  diff pm e z.
+Proof.
+  intros.
+  unfold diff in *.
+  destruct e as (t1, t2).
+  simpl in *.
+  auto using preserves_pm_diff.
+Qed.
+
+Let preserves_walk2:
+  forall pm t1 t2 w,
+  Walk2 (HasDiff (diff (f pm))) t1 t2 w ->
+  Walk2 (HasDiff (diff pm)) t1 t2 w.
+Proof.
+  intros.
+  apply walk2_impl with (E:=HasDiff (diff (f pm))); repeat auto.
+  intros.
+  unfold HasDiff in *.
+  destruct e as (ta, tb).
+  destruct H0 as (z, ?).
+  eauto using preserves_diff.
+Qed.
+
+Let preserves_diff_sum:
+  forall w t1 tn pm z,
+  DiffSum (diff (f pm)) w z ->
+  StartsWith w t1 ->
+  EndsWith w tn ->
+  DiffSum (diff pm) w z.
+Proof.
+  intros w.
+  induction w.
+  { (* absurd case *)
+    intros.
+    inversion H; subst.
+    apply ends_with_nil_inv in H1.
+    inversion H1.
+  }
+  intros.
+  destruct a as (t1', t2).
+  assert (t1' = t1). { eauto using starts_with_eq. }
+  destruct w.
+  - subst.
+    inversion H.
+    subst.
+    assert (t2 = tn). {
+      eauto using ends_with_eq.
+    }
+    subst.
+    apply preserves_pm_diff in H5.
+    auto using diff_sum_pair.
+  - subst.
+    destruct p as (t2', t3).
+    inversion H; subst; clear H.
+    rename t2' into t2.
+    assert (StartsWith ((t2, t3) :: w) t2). {
+      eauto using starts_with_def.
+    }
+    apply ends_with_inv in H1.
+    assert ( DiffSum (diff pm) ((t2, t3) :: w) s) by eauto.
+    apply preserves_pm_diff in H9. (* invert diff_mapi *)
+    simpl in *.
+    auto using diff_sum_cons.
+Qed.
+
+Let preserves_transdiff:
+  forall pm t1 t2 z,
+  TransDiff tid (diff (f pm)) t1 t2 z ->
+  TransDiff tid (diff pm) t1 t2 z.
+Proof.
+  intros.
+  inversion H; subst; clear H.
+  apply preserves_walk2 in H1.
+  inversion H1; subst.
+  apply preserves_diff_sum with (t1:=t1) (tn:=t2) in H0; repeat auto.
+  eauto using trans_diff_def.
+Qed.
+
+Lemma preserves_diff_sr:
+  forall pm,
+  Valid pm ->
+  Valid (f pm).
+Proof.
+  unfold Valid in *.
+  unfold TransDiffFun in *.
+  intros.
+  eauto using preserves_transdiff.
+Qed.
+End PreservesDiff.
 End SR.
