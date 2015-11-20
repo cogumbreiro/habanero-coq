@@ -352,6 +352,17 @@ Section Facts.
     simpl in *; inversion H0; eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
+  Lemma drop_mapsto:
+    forall t v ph t',
+    Map_TID.MapsTo t v (drop t' ph) ->
+    t' <> t /\ Map_TID.MapsTo t v ph.
+  Proof.
+    intros.
+    unfold drop in *.
+    rewrite Map_TID_Facts.remove_mapsto_iff in H.
+    assumption.
+  Qed.
+
   (* end hide *)
 
   (**
