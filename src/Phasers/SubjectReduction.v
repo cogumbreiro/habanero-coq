@@ -492,7 +492,7 @@ Proof.
   eauto using preserves_diff_sr, ph_diff_drop_all.
 Qed.
 
-Let ph_diff_apply_signal:
+Let ph_diff_signal:
   forall t t1 t2 z ph,
   ph_diff (signal t ph) t1 t2 z ->
   ph_diff ph t1 t2 z.
@@ -537,7 +537,7 @@ Proof.
   apply Map_PHID_Facts.mapi_inv in H0.
   destruct H0 as (ph', (p', (?, (?, ?)))).
   subst.
-  eauto using ph_diff_apply_signal.
+  eauto using ph_diff_signal.
 Qed.
 
 Lemma signal_all_sr:
@@ -547,6 +547,37 @@ Lemma signal_all_sr:
 Proof.
   intros.
   eauto using preserves_diff_sr, ph_diff_signal_all.
+Qed.
+
+Let ph_diff_preserves_signal:
+  forall p' p ph t pm t1 t2 z,
+  ph_diff ph t1 t2 z ->
+  Map_PHID.MapsTo p ph (ph_signal p' t pm) ->
+  exists ph' : phaser, Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
+Proof.
+  intros.
+  unfold ph_signal, update in *.
+  remember (Map_PHID.find  _ _).
+  symmetry in Heqo.
+  destruct o as [ph'|].
+  - rewrite <- Map_PHID_Facts.find_mapsto_iff in Heqo.
+    apply Map_PHID_Facts.add_mapsto_iff in H0.
+    destruct H0.
+    + destruct H0.
+      subst.
+      eauto.
+    + destruct H0.
+      eauto.
+  - eauto.
+Qed.
+
+Lemma ph_signal_sr:
+  forall pm p t,
+  Valid pm ->
+  Valid (ph_signal p t pm).
+Proof.
+  intros.
+  eauto using preserves_diff_sr.
 Qed.
 
 End SR.
