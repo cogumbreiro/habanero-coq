@@ -343,241 +343,419 @@ Proof.
 Qed.
 
 Section PreservesDiff.
-Variable f : phasermap -> phasermap.
-
-Variable preserves_ph_diff:
-  forall p ph pm z t1 t2,
-  ph_diff ph t1 t2 z ->
-  Map_PHID.MapsTo p ph (f pm) ->
-  exists ph', Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
-
-Let preserves_pm_diff:
-  forall t1 t2 z pm,
-  pm_diff (f pm) t1 t2 z ->
-  pm_diff pm t1 t2 z.
-Proof.
-  intros.
-  inversion H; subst; clear H.
-  apply preserves_ph_diff with (z:=z) (t1:=t1) (t2:=t2) in H0; auto.
-  destruct H0 as (ph', (mt, d)).
-  eauto using pm_diff_def.
-Qed.
-
-Let preserves_diff:
-  forall e z pm,
-  diff (f pm) e z ->
-  diff pm e z.
-Proof.
-  intros.
-  unfold diff in *.
-  destruct e as (t1, t2).
-  simpl in *.
-  auto using preserves_pm_diff.
-Qed.
-
-Let preserves_walk2:
-  forall pm t1 t2 w,
-  Walk2 (HasDiff (diff (f pm))) t1 t2 w ->
-  Walk2 (HasDiff (diff pm)) t1 t2 w.
-Proof.
-  intros.
-  apply walk2_impl with (E:=HasDiff (diff (f pm))); repeat auto.
-  intros.
-  unfold HasDiff in *.
-  destruct e as (ta, tb).
-  destruct H0 as (z, ?).
-  eauto using preserves_diff.
-Qed.
-
-Let preserves_diff_sum:
-  forall w t1 tn pm z,
-  DiffSum (diff (f pm)) w z ->
-  StartsWith w t1 ->
-  EndsWith w tn ->
-  DiffSum (diff pm) w z.
-Proof.
-  intros w.
-  induction w.
-  { (* absurd case *)
+  Variable f : phasermap -> phasermap.
+(*
+  Variable preserves_ph_diff:
+    forall p ph pm z t1 t2,
+    ph_diff ph t1 t2 z ->
+    Map_PHID.MapsTo p ph (f pm) ->
+    exists ph', Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
+*)
+(*
+  Let preserves_pm_diff:
+    forall t1 t2 z pm,
+    pm_diff (f pm) t1 t2 z ->
+    pm_diff pm t1 t2 z.
+  Proof.
     intros.
-    inversion H; subst.
-    apply ends_with_nil_inv in H1.
-    inversion H1.
-  }
-  intros.
-  destruct a as (t1', t2).
-  assert (t1' = t1). { eauto using starts_with_eq. }
-  destruct w.
-  - subst.
-    inversion H.
-    subst.
-    assert (t2 = tn). {
-      eauto using ends_with_eq.
-    }
-    subst.
-    apply preserves_pm_diff in H5.
-    auto using diff_sum_pair.
-  - subst.
-    destruct p as (t2', t3).
     inversion H; subst; clear H.
-    rename t2' into t2.
-    assert (StartsWith ((t2, t3) :: w) t2). {
-      eauto using starts_with_def.
-    }
-    apply ends_with_inv in H1.
-    assert ( DiffSum (diff pm) ((t2, t3) :: w) s) by eauto.
-    apply preserves_pm_diff in H9. (* invert diff_mapi *)
+    apply preserves_ph_diff with (z:=z) (t1:=t1) (t2:=t2) in H0; auto.
+    destruct H0 as (ph', (mt, d)).
+    eauto using pm_diff_def.
+  Qed.
+*)
+  Variable preserves_pm_diff:
+    forall t1 t2 z pm,
+    pm_diff (f pm) t1 t2 z ->
+    pm_diff pm t1 t2 z.
+
+  Let preserves_diff:
+    forall e z pm,
+    diff (f pm) e z ->
+    diff pm e z.
+  Proof.
+    intros.
+    unfold diff in *.
+    destruct e as (t1, t2).
     simpl in *.
-    auto using diff_sum_cons.
-Qed.
+    auto using preserves_pm_diff.
+  Qed.
 
-Let preserves_transdiff:
-  forall pm t1 t2 z,
-  TransDiff tid (diff (f pm)) t1 t2 z ->
-  TransDiff tid (diff pm) t1 t2 z.
-Proof.
-  intros.
-  inversion H; subst; clear H.
-  apply preserves_walk2 in H1.
-  inversion H1; subst.
-  apply preserves_diff_sum with (t1:=t1) (tn:=t2) in H0; repeat auto.
-  eauto using trans_diff_def.
-Qed.
+  Lemma preserves_walk2:
+    forall pm t1 t2 w,
+    Walk2 (HasDiff (diff (f pm))) t1 t2 w ->
+    Walk2 (HasDiff (diff pm)) t1 t2 w.
+  Proof.
+    intros.
+    apply walk2_impl with (E:=HasDiff (diff (f pm))); repeat auto.
+    intros.
+    unfold HasDiff in *.
+    destruct e as (ta, tb).
+    destruct H0 as (z, ?).
+    eauto using preserves_diff.
+  Qed.
 
-Lemma preserves_diff_sr:
-  forall pm,
-  Valid pm ->
-  Valid (f pm).
-Proof.
-  unfold Valid in *.
-  unfold TransDiffFun in *.
-  intros.
-  eauto using preserves_transdiff.
-Qed.
+  Let preserves_diff_sum:
+    forall w t1 tn pm z,
+    DiffSum (diff (f pm)) w z ->
+    StartsWith w t1 ->
+    EndsWith w tn ->
+    DiffSum (diff pm) w z.
+  Proof.
+    intros w.
+    induction w.
+    { (* absurd case *)
+      intros.
+      inversion H; subst.
+      apply ends_with_nil_inv in H1.
+      inversion H1.
+    }
+    intros.
+    destruct a as (t1', t2).
+    assert (t1' = t1) by eauto using starts_with_eq.
+    destruct w; subst.
+    - inversion H.
+      assert (t2 = tn) by eauto using ends_with_eq.
+      subst.
+      auto using preserves_pm_diff, diff_sum_pair.
+    - destruct p as (t2', t3).
+      inversion H; subst; clear H.
+      rename t2' into t2.
+      assert (StartsWith ((t2, t3) :: w) t2). {
+        eauto using starts_with_def.
+      }
+      apply ends_with_inv in H1.
+      assert ( DiffSum (diff pm) ((t2, t3) :: w) s) by eauto.
+      apply preserves_pm_diff in H9. (* invert diff_mapi *)
+      simpl in *.
+      auto using diff_sum_cons.
+  Qed.
+
+  Let preserves_transdiff:
+    forall pm t1 t2 z,
+    TransDiff tid (diff (f pm)) t1 t2 z ->
+    TransDiff tid (diff pm) t1 t2 z.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply preserves_walk2 in H1.
+    inversion H1; subst.
+    apply preserves_diff_sum with (t1:=t1) (tn:=t2) in H0; auto.
+    eauto using trans_diff_def.
+  Qed.
+
+  Lemma preserves_diff_sr:
+    forall pm,
+    Valid pm ->
+    Valid (f pm).
+  Proof.
+    unfold Valid in *.
+    unfold TransDiffFun in *.
+    intros.
+    eauto using preserves_transdiff.
+  Qed.
+
+
 End PreservesDiff.
 
-Let ph_diff_apply_drop:
-  forall t t1 t2 z ph,
-  ph_diff (drop t ph) t1 t2 z ->
-  ph_diff ph t1 t2 z.
-Proof.
-  intros.
-  inversion H; subst.
-  apply drop_mapsto in H0.
-  apply drop_mapsto in H1.
-  destruct H0; destruct H1.
-  auto using ph_diff_def.
-Qed.
+Section Drop.
+  Let ph_diff_apply_drop:
+    forall t t1 t2 z ph,
+    ph_diff (drop t ph) t1 t2 z ->
+    ph_diff ph t1 t2 z.
+  Proof.
+    intros.
+    inversion H; subst.
+    apply drop_mapsto in H0.
+    apply drop_mapsto in H1.
+    destruct H0; destruct H1.
+    auto using ph_diff_def.
+  Qed.
 
-Let ph_diff_drop_all:
-  forall p ph t pm t1 t2 z,
-  ph_diff ph t1 t2 z ->
-  Map_PHID.MapsTo p ph (drop_all t pm) ->
-  exists ph' : phaser, Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
-Proof.
-  intros.
-  unfold drop_all, foreach in *.
-  apply Map_PHID_Facts.mapi_inv in H0.
-  destruct H0 as (ph', (p', (?, (?, ?)))).
-  subst.
-  eauto.
-Qed.
+  Let ph_diff_drop_all:
+    forall t t1 t2 z pm,
+    pm_diff (drop_all t pm) t1 t2 z ->
+    pm_diff pm t1 t2 z.
+  Proof.
+    intros.
+    unfold drop_all, foreach in *.
+    inversion H; subst; clear H.
+    inversion H1; subst; clear H1.
+    apply Map_PHID_Facts.mapi_inv in H0.
+    destruct H0 as (ph', (p', (?, (?, ?)))).
+    subst.
+    eauto using pm_diff_def, ph_diff_def.
+  Qed.
 
-Lemma drop_all_sr:
-  forall pm t,
-  Valid pm ->
-  Valid (drop_all t pm).
-Proof.
-  intros.
-  eauto using preserves_diff_sr, ph_diff_drop_all.
-Qed.
+  Lemma drop_all_sr:
+    forall pm t,
+    Valid pm ->
+    Valid (drop_all t pm).
+  Proof.
+    intros.
+    eauto using preserves_diff_sr, ph_diff_drop_all.
+  Qed.
 
-Let ph_diff_signal:
-  forall t t1 t2 z ph,
-  ph_diff (signal t ph) t1 t2 z ->
-  ph_diff ph t1 t2 z.
-Proof.
-  intros.
-  inversion H; subst.
-  apply signal_mapsto_inv in H0.
-  apply signal_mapsto_inv in H1.
-  destruct H0.
-  - destruct H1.
-    + destruct a as (?, (?,(?,?))).
-      destruct a0 as (?, (?,(?,?))).
+  Let pm_diff_preserves_drop:
+    forall p t pm t1 t2 z,
+    pm_diff (ph_drop p t pm) t1 t2 z ->
+    pm_diff pm t1 t2 z.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    unfold ph_drop, update in *.
+    remember (Map_PHID.find  _ _).
+    symmetry in Heqo.
+    destruct o as [ph'|].
+    - rewrite <- Map_PHID_Facts.find_mapsto_iff in Heqo.
+      apply Map_PHID_Facts.add_mapsto_iff in H0.
+      destruct H0.
+      + destruct H.
+        subst.
+        eauto using pm_diff_def, ph_diff_def.
+      + destruct H.
+        eauto using pm_diff_def, ph_diff_def.
+    - eauto using pm_diff_def, ph_diff_def.
+  Qed.
+
+  Lemma ph_drop_sr:
+    forall pm p t,
+    Valid pm ->
+    Valid (ph_drop p t pm).
+  Proof.
+    intros.
+    eauto using preserves_diff_sr.
+  Qed.
+
+End Drop.
+
+Section Signal.
+
+  Let ph_diff_signal:
+    forall t t1 t2 z ph,
+    ph_diff (signal t ph) t1 t2 z ->
+    ph_diff ph t1 t2 z.
+  Proof.
+    intros.
+    inversion H; subst.
+    apply signal_mapsto_inv in H0.
+    apply signal_mapsto_inv in H1.
+    destruct H0.
+    - destruct H1.
+      + destruct a as (?, (?,(?,?))).
+        destruct a0 as (?, (?,(?,?))).
+        subst.
+        repeat rewrite signal_preserves_wait_phase in *.
+        auto using ph_diff_def.
+      + destruct a as (?, (?,(?,?))).
+        destruct a0 as (?, ?).
+        subst.
+        repeat rewrite signal_preserves_wait_phase in *.
+        auto using ph_diff_def.
+    - destruct H1.
+      + destruct a0 as (?, (?,(?,?))).
+        destruct a as (?, ?).
+        subst.
+        repeat rewrite signal_preserves_wait_phase in *.
+        auto using ph_diff_def.
+      + destruct a0 as (?, ?).
+        destruct a as (?, ?).
+        subst.
+        repeat rewrite signal_preserves_wait_phase in *.
+        auto using ph_diff_def.
+  Qed.
+
+  Let pm_diff_signal_all:
+    forall t t1 t2 z pm,
+    pm_diff (signal_all t pm) t1 t2 z ->
+    pm_diff pm t1 t2 z.
+  Proof.
+    intros.
+    unfold signal_all, foreach in *.
+    inversion H; subst; clear H.
+    apply Map_PHID_Facts.mapi_inv in H0.
+    destruct H0 as (ph', (p', (?, (?, ?)))).
+    subst.
+    eauto using pm_diff_def, ph_diff_def, ph_diff_signal.
+  Qed.
+
+  Lemma signal_all_sr:
+    forall pm t,
+    Valid pm ->
+    Valid (signal_all t pm).
+  Proof.
+    eauto using preserves_diff_sr, pm_diff_signal_all.
+  Qed.
+
+  Let pm_diff_ph_signal:
+    forall p' t t1 t2 z pm,
+    pm_diff (ph_signal p' t pm) t1 t2 z ->
+    pm_diff pm t1 t2 z.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    unfold ph_signal, update in *.
+    remember (Map_PHID.find  _ _).
+    symmetry in Heqo.
+    destruct o as [ph'|].
+    - rewrite <- Map_PHID_Facts.find_mapsto_iff in Heqo.
+      apply Map_PHID_Facts.add_mapsto_iff in H0.
+      destruct H0.
+      + destruct H.
+        subst.
+        eauto using pm_diff_def, ph_diff_def.
+      + destruct H.
+        eauto using pm_diff_def, ph_diff_def.
+    - eauto using pm_diff_def, ph_diff_def.
+  Qed.
+
+  Lemma ph_signal_sr:
+    forall pm p t,
+    Valid pm ->
+    Valid (ph_signal p t pm).
+  Proof.
+    intros.
+    eauto using preserves_diff_sr, pm_diff_ph_signal.
+  Qed.
+
+End Signal.
+(*
+Section PhNew.
+  Let ph_diff_ph_new:
+    forall p' p ph t pm t1 t2 z,
+    ph_diff ph t1 t2 z ->
+    Map_PHID.MapsTo p ph (ph_new p' t pm) ->
+    exists ph' : phaser, Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
+  Proof.
+    intros.
+    unfold ph_new in *.
+    assert (Hx := H0).
+    apply Map_PHID_Facts.add_mapsto_iff in H0.
+    destruct H0.
+    - destruct H0.
       subst.
-      repeat rewrite signal_preserves_wait_phase in *.
-      auto using ph_diff_def.
-    + destruct a as (?, (?,(?,?))).
-      destruct a0 as (?, ?).
-      subst.
-      repeat rewrite signal_preserves_wait_phase in *.
-      auto using ph_diff_def.
-  - destruct H1.
-    + destruct a0 as (?, (?,(?,?))).
-      destruct a as (?, ?).
-      subst.
-      repeat rewrite signal_preserves_wait_phase in *.
-      auto using ph_diff_def.
-    + destruct a0 as (?, ?).
-      destruct a as (?, ?).
-      subst.
-      repeat rewrite signal_preserves_wait_phase in *.
-      auto using ph_diff_def.
-Qed.
+  Qed.
 
-Let ph_diff_signal_all:
-  forall p ph t pm t1 t2 z,
-  ph_diff ph t1 t2 z ->
-  Map_PHID.MapsTo p ph (signal_all t pm) ->
-  exists ph' : phaser, Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
-Proof.
-  intros.
-  unfold signal_all, foreach in *.
-  apply Map_PHID_Facts.mapi_inv in H0.
-  destruct H0 as (ph', (p', (?, (?, ?)))).
-  subst.
-  eauto using ph_diff_signal.
-Qed.
+End PhNew.
+*)
 
-Lemma signal_all_sr:
-  forall pm t,
-  Valid pm ->
-  Valid (drop_all t pm).
-Proof.
-  intros.
-  eauto using preserves_diff_sr, ph_diff_signal_all.
-Qed.
-
-Let ph_diff_preserves_signal:
-  forall p' p ph t pm t1 t2 z,
-  ph_diff ph t1 t2 z ->
-  Map_PHID.MapsTo p ph (ph_signal p' t pm) ->
-  exists ph' : phaser, Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
-Proof.
-  intros.
-  unfold ph_signal, update in *.
-  remember (Map_PHID.find  _ _).
-  symmetry in Heqo.
-  destruct o as [ph'|].
-  - rewrite <- Map_PHID_Facts.find_mapsto_iff in Heqo.
+Section Async.
+(*
+  Let ph_diff_register:
+    forall t' r t t1 t2 z ph,
+    ph_diff (register {| get_task := t'; get_mode := r |} t ph) t1 t2 z ->
+    ph_diff ph t1 t2 z.
+  Proof.
+    intros.
+    unfold register in *.
+    remember (Map_TID.find _ _).
+    symmetry in Heqo.
+    destruct o as [v'|].
+    - apply Map_TID_Facts.find_mapsto_iff in Heqo.
+      inversion H.
+      subst.
+      simpl in *.
+      apply Map_TID_Facts.add_mapsto_iff in H0.
+      apply Map_TID_Facts.add_mapsto_iff in H1.
+      destruct H0, H1.
+      + destruct H0, H1.
+        repeat subst.
+        rewrite set_mode_preserves_wait_phase in *.
+        apply ph_diff_def.
+  Qed.
+*)
+(*
+  Let ph_diff_preserves_new:
+    forall l p ph t t' pm t1 t2 z,
+    ph_diff ph t1 t2 z ->
+    Map_PHID.MapsTo p ph (async l t' t pm) ->
+    exists ph' : phaser, Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
+  Proof.
+    intros l.
+    induction l; intros; eauto.
+    destruct a as (p', r).
+    simpl in *.
+    unfold async_1 in *.
+    remember (Map_PHID.find _ _).
+    symmetry in Heqo.
+    destruct o as [ph'|].
+    - rewrite Map_PHID_Facts.add_mapsto_iff in H0.
+      destruct H0.
+      + destruct H0.
+        subst.
+        apply Map_PHID_Facts.find_mapsto_iff in Heqo.
+        exists ph'.
+        apply Map_PHID_Facts.find_mapsto_iff in Heqo.
+        assert (Hx := Heqo).
+        apply Map_PHID_Facts.MapsTo_fun with (e:=(register {| get_task := t'; get_mode := r |} t ph')) in Heqo.
+        rewrite Heqo.
+        assumption.
+        apply ph_register_rw in Heqo.
+        apply pre_async_rw with (t:=t) (t':=t') (r:=r)in Heqo.
+    rewrite pre_async_rw with (ph:=ph) in H0. 
+    unfold as in *.
     apply Map_PHID_Facts.add_mapsto_iff in H0.
     destruct H0.
     + destruct H0.
       subst.
-      eauto.
-    + destruct H0.
-      eauto.
-  - eauto.
-Qed.
+      exists (Phaser.make t).
+        intuition.
+        eauto.
+      + destruct H0.
+        eauto.
+  Qed.
+*)
+(*
+  Let async_transdiff:
+    forall pm t1 t2 z,
+    In t1 pm ->
+    In t2  pm ->
+    TransDiff tid (diff (f pm)) t1 t2 z ->
+    TransDiff tid (diff pm) t1 t2 z.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply preserves_walk2 in H1.
+    inversion H1; subst.
+    apply preserves_diff_sum with (t1:=t1) (tn:=t2) in H0; repeat auto.
+    eauto using trans_diff_def.
+  Qed.
+*)
 
-Lemma ph_signal_sr:
-  forall pm p t,
-  Valid pm ->
-  Valid (ph_signal p t pm).
-Proof.
-  intros.
-  eauto using preserves_diff_sr.
-Qed.
+  Let ph_new_transdiff:
+    forall p t pm t1 t2 z,
+    TransDiff tid (diff (ph_new p t pm)) t1 t2 z ->
+    TransDiff tid (diff pm) t1 t2 z.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply preserves_walk2 in H1.
+    - inversion H1; subst.
+      apply preserves_diff_sum with (t1:=t1) (tn:=t2) in H0; repeat auto.
+    eauto using trans_diff_def.
+  Qed.
+
+  Lemma ph_new_sr:
+    forall p t pm,
+    Valid pm ->
+    Valid (ph_new p t pm).
+  Proof.
+    unfold Valid in *.
+    unfold TransDiffFun in *.
+    intros.
+    inversion H0; subst; clear H0.
+    inversion H1; subst; clear H1.
+    eauto using preserves_transdiff.
+  Qed.
+
+  Lemma ph_new_sr:
+    forall pm p t,
+    Valid pm ->
+    Valid (ph_new p t pm).
+  Proof.
+    intros.
+    eauto using preserves_diff_sr.
+  Qed.
+End Async.
 
 End SR.
