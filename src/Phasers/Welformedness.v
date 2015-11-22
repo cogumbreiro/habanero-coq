@@ -580,61 +580,6 @@ Module Phasermap.
     eauto using ph_drop_preserves_welformed.
   Qed.
 
-  Lemma pre_async_rw:
-    forall m t t' p ph r,
-    Map_PHID.MapsTo p ph m ->
-    async_1 p {| get_task := t'; get_mode := r |} t m =
-    Map_PHID.add p (register {| get_task := t'; get_mode := r |} t ph) m.
-  Proof.
-    intros.
-    unfold async_1.
-    remember (Map_PHID.find _ _).
-    symmetry in Heqo.
-    destruct o as [ph'|].
-    - rewrite Map_PHID_Facts.find_mapsto_iff in H.
-      rewrite H in Heqo.
-      inversion Heqo; subst; auto.
-    - rewrite <- Map_PHID_Facts.not_find_in_iff in Heqo.
-      contradiction Heqo.
-      eauto using Map_PHID_Extra.mapsto_to_in.
-  Qed.
-
-  Lemma async_notina_mapsto:
-    forall p r l t' m t ph ph',
-    ~ SetoidList.InA eq_phid (p, r) l ->
-    Map_PHID.MapsTo p ph m ->
-    Map_PHID.MapsTo p ph' (async l t' t m) ->
-    ph' = ph.
-  Proof.
-    intros ? ? ? ? ? ? ? ?.
-    intros Hina mt1 mt2.
-    induction l.
-    - simpl in *.
-      eauto using Map_PHID_Facts.MapsTo_fun.
-    - destruct a as (p', r').
-      simpl in *.
-      assert (~ SetoidList.InA eq_phid (p, r) l ). {
-        intuition.
-      }
-      apply IHl; auto.
-      unfold async_1 in *.
-      remember (Map_PHID.find _ _).
-      symmetry in Heqo.
-      destruct o.
-      + rewrite Map_PHID_Facts.add_mapsto_iff in mt2.
-        destruct mt2 as [Hx|Hx].
-        * destruct Hx.
-          subst.
-          contradiction Hina.
-          rewrite SetoidList.InA_alt.
-          exists (p, r').
-          intuition.
-          compute.
-          trivial.
-        * destruct Hx; auto.
-      + auto.
-  Qed.
-
   Lemma pm_async_preserves_welformed:
     forall l t' t m,
     Welformed m ->
