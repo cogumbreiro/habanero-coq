@@ -1,3 +1,5 @@
+Set Implicit Arguments.
+
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
 
@@ -329,3 +331,20 @@ End DIFF_SUM.
 Implicit Arguments DiffSum.
 Implicit Arguments HasDiff.
 Implicit Arguments NegDiff.
+
+Lemma diff_sum_impl:
+  forall {A:Type} (D D': (A*A) -> Z -> Prop) ,
+  (forall e z, D e z -> D' e z) ->
+  forall l z,
+  DiffSum D l z ->
+  DiffSum D' l z.
+Proof.
+  induction l; intros.
+  - inversion H0.
+    apply diff_sum_nil.
+  - inversion H0.
+    + subst.
+      auto using diff_sum_pair.
+    + subst.
+      auto using diff_sum_cons.
+Qed.

@@ -341,6 +341,14 @@ Section Facts.
       + auto.
   Qed.
 
+  Lemma ph_new_impl_mapsto:
+    forall p t pm,
+    Map_PHID.MapsTo p (Phaser.make t) (ph_new p t pm).
+  Proof.
+    intros.
+    unfold ph_new.
+    auto using Map_PHID.add_1.
+  Qed.
 End Facts.
 
 (* end hide *)

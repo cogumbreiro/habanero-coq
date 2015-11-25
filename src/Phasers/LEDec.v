@@ -42,7 +42,7 @@ Qed.
 
 Lemma ph_diff_dec:
   forall ph t t',
-  { exists z, ph_diff ph t t' z } + { ~ exists z, ph_diff ph t t' z }.
+  { exists z, ph_diff ph (t, t') z } + { ~ exists z, ph_diff ph (t, t') z }.
 Proof.
   intros.
   destruct (map_tid_in t ph).
@@ -57,15 +57,15 @@ Proof.
     + right.
       intuition.
       destruct H as (z, H).
-      inversion H.
-      apply Map_TID_Extra.mapsto_to_in in H1.
-      contradiction H1.
+      inversion H; subst.
+      apply Map_TID_Extra.mapsto_to_in in H4.
+      contradiction H4.
   - right.
     intuition.
     destruct H as (?, H).
     inversion H.
-    apply Map_TID_Extra.mapsto_to_in in H0.
-    contradiction H0.
+    apply Map_TID_Extra.mapsto_to_in in H2.
+    contradiction H2.
 Qed.
 
 Section GET_DIFF.
@@ -76,9 +76,9 @@ Variable t2: tid.
 
 Definition get_diff_nil := { _:unit | get_ph_diff ph t1 t2 = None }.
 
-Definition get_diff_pos := { z | ph_diff ph t1 t2 z /\ ~ (z <= 0) % Z }.
+Definition get_diff_pos := { z | ph_diff ph (t1, t2) z /\ ~ (z <= 0) % Z }.
 
-Definition get_diff_ok := { z | ph_diff ph t1 t2 z /\ (z <= 0) % Z }.
+Definition get_diff_ok := { z | ph_diff ph (t1, t2) z /\ (z <= 0) % Z }.
 
 Inductive get_diff_result : Type :=
   | GET_DIFF_NIL : get_diff_nil -> get_diff_result
@@ -382,19 +382,20 @@ Require Import HJ.Phasers.TransDiff.
 
 Variable pm:phasermap.
 Notation t_edge := (tid * tid) % type.
-Let diff (e:t_edge) : Z -> Prop := pm_diff pm (fst e) (snd e).
+Notation diff := (pm_diff pm).
 Let get_diff (e:t_edge) : option Z := get_pm_diff pm (fst e) (snd e).
 
 Variable trans_diff_fun:
-  TransDiffFun tid diff.
+  TransDiffFun diff.
 
 Let pm_diff_fun:
-  forall t1 t2 z z',
-  pm_diff pm t1 t2 z ->
-  pm_diff pm t1 t2 z' ->
+  forall e z z',
+  pm_diff pm e z ->
+  pm_diff pm e z' ->
   z = z'.
 Proof.
   intros.
+  destruct e as (t1, t2).
   eauto using trans_diff_fun_2.
 Qed.
 
@@ -403,7 +404,7 @@ Let get_diff_spec :
   get_diff e = Some z <-> diff e z.
 Proof.
   intros.
-  unfold diff, get_diff.
+  unfold get_diff.
   destruct e.
   simpl.
   rewrite (get_pm_diff_spec pm t t0 pm_diff_fun).
@@ -426,7 +427,6 @@ Proof.
     apply walk2_neg_diff_to_has_diff in H; eauto using has_diff_to_diff_sum.
   - intros.
     unfold NegDiff.
-    unfold diff.
     simpl.
     apply wp_le_spec.
 Qed.
@@ -435,13 +435,13 @@ Lemma LE_to_pm_diff:
   forall t1 t2,
   LE pm t1 t2 ->
   forall z,
-  pm_diff pm t1 t2 z ->
+  pm_diff pm (t1, t2) z ->
   (z <= 0) %Z.
 Proof.
   intros.
   apply LE_to_walk in H.
   destruct H as (w, (Hd, (Hw, (z', Hn)))).
-  assert (TransDiff tid diff t1 t2 z'). {
+  assert (TransDiff diff t1 t2 z'). {
     eauto using trans_diff_def.
   }
   assert (z' = z). {

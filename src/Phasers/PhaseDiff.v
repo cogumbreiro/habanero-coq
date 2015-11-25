@@ -19,12 +19,12 @@ Section PhDiff.
   a phaser [ph], a task [t1], and a task [t2] yields some displacement [z].
   *)
 
-Inductive ph_diff : phaser -> tid -> tid -> Z -> Prop :=
+Inductive ph_diff (ph:phaser): (tid * tid) -> Z -> Prop :=
   ph_diff_def:
-    forall t1 t2 v1 v2 ph,
+    forall t1 t2 v1 v2,
     Map_TID.MapsTo t1 v1 ph ->
     Map_TID.MapsTo t2 v2 ph ->
-    ph_diff ph t1 t2 ((Z_of_nat (wait_phase v1)) - (Z_of_nat (wait_phase v2)))%Z.
+    ph_diff ph (t1, t2) ((Z_of_nat (wait_phase v1)) - (Z_of_nat (wait_phase v2)))%Z.
 
 (* begin hide *)
 Hint Resolve ph_diff_def.
@@ -48,7 +48,7 @@ Definition get_ph_diff (ph:phaser) (t1:tid) (t2:tid) : option Z :=
 Lemma get_ph_diff_spec_1:
   forall ph t1 t2 z,
   get_ph_diff ph t1 t2 = Some z ->
-  ph_diff ph t1 t2 z.
+  ph_diff ph (t1, t2) z.
 Proof.
   intros.
   unfold get_ph_diff in *.
@@ -68,14 +68,14 @@ Qed.
 
 Lemma get_ph_diff_spec_2:
   forall ph t1 t2 z,
-  ph_diff ph t1 t2 z ->
+  ph_diff ph (t1, t2) z ->
   get_ph_diff ph t1 t2 = Some z.
 Proof.
   intros.
   inversion H; subst; clear H.
   unfold get_ph_diff.
-  rewrite Map_TID_Facts.find_mapsto_iff in H1, H0.
-  rewrite H0, H1.
+  rewrite Map_TID_Facts.find_mapsto_iff in H2, H4.
+  rewrite H2, H4.
   auto.
 Qed.
 
@@ -85,7 +85,7 @@ Qed.
 
 Lemma get_ph_diff_spec:
   forall ph t1 t2 z,
-  get_ph_diff ph t1 t2 = Some z <-> ph_diff ph t1 t2 z.
+  get_ph_diff ph t1 t2 = Some z <-> ph_diff ph (t1, t2) z.
 Proof.
   intros.
   split.
@@ -132,7 +132,7 @@ Qed.
 Lemma get_diff_none:
   forall ph t t',
   get_ph_diff ph t t' = None ->
-  forall z, ~ ph_diff ph t t' z.
+  forall z, ~ ph_diff ph (t, t') z.
 Proof.
   intros.
   intuition.
@@ -143,8 +143,8 @@ Qed.
 
 Lemma ph_diff_fun:
   forall ph t t' z z',
-  ph_diff ph t t' z ->
-  ph_diff ph t t' z' ->
+  ph_diff ph (t, t') z ->
+  ph_diff ph (t, t') z' ->
   z = z'.
 Proof.
   intros.
@@ -162,12 +162,12 @@ Qed.
 Lemma ph_diff_refl:
   forall t ph,
   Map_TID.In t ph ->
-  ph_diff ph t t 0.
+  ph_diff ph (t, t) 0.
 Proof.
   intros.
   apply Map_TID_Extra.in_to_mapsto in H.
   destruct H as (v, H).
-  assert (ph_diff ph t t (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v))) by auto.
+  assert (ph_diff ph (t, t) (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v))) by auto.
   assert ((Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v)) = 0). { intuition. }
   rewrite H1 in *.
   assumption.
@@ -177,8 +177,8 @@ Qed.
 
 Lemma ph_diff_symm:
   forall ph t t' z,
-  ph_diff ph t t' z ->
-  ph_diff ph t' t (-z).
+  ph_diff ph (t, t') z ->
+  ph_diff ph (t', t) (-z).
 Proof.
   intros.
   inversion H; subst; clear H.
@@ -194,7 +194,7 @@ Qed.
 
 Lemma ph_diff_inv:
   forall ph t t' z,
-  ph_diff ph t t' z ->
+  ph_diff ph (t, t') z ->
   Map_TID.In t ph /\ Map_TID.In t' ph.
 Proof.
   intros.
@@ -208,7 +208,7 @@ Qed.
 
 Lemma ph_diff_inv_left:
   forall ph t t' z,
-  ph_diff ph t t' z ->
+  ph_diff ph (t, t') z ->
   Map_TID.In t ph.
 Proof.
   intros.
@@ -218,7 +218,7 @@ Qed.
 
 Lemma ph_diff_inv_right:
   forall ph t t' z,
-  ph_diff ph t t' z ->
+  ph_diff ph (t, t') z ->
   Map_TID.In t' ph.
 Proof.
   intros.
@@ -228,11 +228,11 @@ Qed.
 
 Lemma ph_diff_refl_inv:
   forall ph t z,
-  ph_diff ph t t z ->
+  ph_diff ph (t, t) z ->
   z = 0 % Z.
 Proof.
   intros.
-  assert (ph_diff ph t t 0). {
+  assert (ph_diff ph (t, t) 0). {
     apply ph_diff_inv_left in H.
     auto using ph_diff_refl.
   }
@@ -250,7 +250,7 @@ Lemma ph_diff_total:
   forall ph t t',
   Map_TID.In t ph ->
   Map_TID.In t' ph ->
-  exists z, ph_diff ph t t' z.
+  exists z, ph_diff ph (t, t') z.
 Proof.
   intros.
   apply Map_TID_Extra.in_to_mapsto in H.
@@ -265,12 +265,12 @@ Qed.
   We are now ready to define a less-than operator over a phaser.
   *)
 
-Inductive ph_le : phaser -> tid -> tid -> Prop :=
+Inductive ph_le (ph : phaser) t t' : Prop :=
   ph_le_def :
-    forall ph t1 t2 z,
-    ph_diff ph t1 t2 z ->
+    forall z,
+    ph_diff ph (t,t') z ->
     (z <= 0)%Z ->
-    ph_le ph t1 t2.
+    ph_le ph t t'.
 
 (* begin hide *)
 
@@ -282,8 +282,8 @@ Variable t1:tid.
 Variable t2:tid.
 
 Inductive ph_le_result :=
-  | ph_le_result_ok_l : {z:Z | ph_diff ph t1 t2 z /\ (z <= 0) % Z } -> ph_le_result
-  | ph_le_result_ok_r : {z:Z | ph_diff ph t2 t1 z /\ (z <= 0) % Z } -> ph_le_result
+  | ph_le_result_ok_l : {z:Z | ph_diff ph (t1, t2) z /\ (z <= 0) % Z } -> ph_le_result
+  | ph_le_result_ok_r : {z:Z | ph_diff ph (t2, t1) z /\ (z <= 0) % Z } -> ph_le_result
   | ph_le_fail : {_:unit | ~ Map_TID.In t1 ph \/ ~ Map_TID.In t2 ph } -> ph_le_result.
 
 Program Definition get_ph_le : ph_le_result :=
@@ -399,19 +399,19 @@ End PhDiff.
 Section PM_DIFF.
 Variable pm:phasermap.
 
-Inductive pm_diff : tid -> tid -> Z -> Prop :=
+Inductive pm_diff e z: Prop :=
   pm_diff_def :
-    forall p ph t t' z,
+    forall p ph,
     Map_PHID.MapsTo p ph pm ->
-    ph_diff ph t t' z ->
-    pm_diff t t' z.
+    ph_diff ph e z ->
+    pm_diff e z.
 
 Hint Resolve pm_diff_def.
 
 Lemma pm_diff_symm:
   forall t t' z,
-  pm_diff t t' z ->
-  pm_diff t' t (-z)%Z.
+  pm_diff (t, t') z ->
+  pm_diff (t', t) (-z)%Z.
 Proof.
   intros.
   inversion H; subst; clear H.
@@ -439,7 +439,7 @@ Definition get_pm_diff : option Z :=
 Lemma get_pm_diff_eq:
   forall p ph l,
   (p, ph) :: l = Map_PHID.elements (elt:=phaser) all_ph_diffs ->
-  Map_PHID.MapsTo p ph pm /\ exists z, ph_diff ph t1 t2 z.
+  Map_PHID.MapsTo p ph pm /\ exists z, ph_diff ph (t1, t2) z.
 Proof.
   intros.
   assert (Hmt: Map_PHID.MapsTo p ph all_ph_diffs). {
@@ -465,7 +465,7 @@ Qed.
 Lemma get_pm_diff_spec_1:
   forall z,
   get_pm_diff = Some z ->
-  pm_diff t1 t2 z.
+  pm_diff (t1, t2) z.
 Proof.
   intros.
   unfold get_pm_diff in *.
@@ -483,10 +483,10 @@ Lemma pm_diff_refl:
   forall t p ph,
   Map_PHID.MapsTo p ph pm ->
   Map_TID.In t ph ->
-  pm_diff t t 0.
+  pm_diff (t, t) 0.
 Proof.
   intros.
-  assert (ph_diff ph t t 0). {
+  assert (ph_diff ph (t, t) 0). {
     auto using ph_diff_refl.
   }
   eauto.
@@ -494,7 +494,7 @@ Qed.
 
 Lemma pm_diff_refl_inv:
   forall t z,
-  pm_diff t t z ->
+  pm_diff (t, t) z ->
   z = 0 % Z.
 Proof.
   intros.
@@ -503,14 +503,14 @@ Proof.
 Qed.
 
 Variable pm_diff_fun:
-  forall t t' z z',
-  pm_diff t t' z ->
-  pm_diff t t' z' ->
+  forall e z z',
+  pm_diff e z ->
+  pm_diff e z' ->
   z = z'.
 
 Lemma get_pm_diff_spec_2:
   forall z,
-  pm_diff t1 t2 z ->
+  pm_diff (t1, t2) z ->
   get_pm_diff = Some z.
 Proof.
   intros.
@@ -534,7 +534,7 @@ Proof.
   - destruct p as (p, ph).
     apply get_pm_diff_eq in Heql.
     destruct Heql as (?, (z', ?)).
-    assert (pm_diff t1 t2 z'). { eauto using pm_diff_def. }
+    assert (pm_diff (t1, t2) z'). { eauto using pm_diff_def. }
     assert (z = z'). { eauto using pm_diff_fun. }
     subst.
     apply get_ph_diff_spec.
@@ -543,7 +543,7 @@ Qed.
 
 Lemma get_pm_diff_spec:
   forall z,
-  get_pm_diff = Some z <-> pm_diff t1 t2 z.
+  get_pm_diff = Some z <-> pm_diff (t1, t2) z.
 Proof.
   intros.
   split.
@@ -556,10 +556,10 @@ Section LE.
 Variable pm:phasermap.
 
 (** Less-than-equals *)
-Inductive wp_le : tid -> tid -> Prop :=
+Inductive wp_le t t' : Prop :=
   wp_le_def :
-    forall t t' z,
-    pm_diff pm t t' z ->
+    forall z,
+    pm_diff pm (t, t') z ->
     (z <= 0 ) % Z ->
     wp_le t t'.
 
@@ -568,7 +568,7 @@ Hint Resolve wp_le_def.
 
 Lemma wp_le_spec:
   forall t t',
-  wp_le t t' <-> (exists z : Z, pm_diff pm t t' z /\ (z <= 0)%Z).
+  wp_le t t' <-> (exists z : Z, pm_diff pm (t, t') z /\ (z <= 0)%Z).
 Proof.
   intros.
   split.

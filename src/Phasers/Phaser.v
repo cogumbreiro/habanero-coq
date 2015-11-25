@@ -365,11 +365,11 @@ Section Facts.
 
   Lemma update_mapsto_eq:
     forall t f v ph,
-    Map_TID.MapsTo t v (Phaser.update t f ph) ->
+    Map_TID.MapsTo t v (update t f ph) ->
     exists v', v = f v' /\ Map_TID.MapsTo t v' ph.
   Proof.
     intros.
-    unfold Phaser.update in *.
+    unfold update in *.
     remember (Map_TID.find _ _).
     symmetry in Heqo.
     destruct o as [v'|].
@@ -387,12 +387,12 @@ Section Facts.
 
   Lemma update_mapsto_neq:
     forall t v t' f ph,
-    Map_TID.MapsTo t v (Phaser.update t' f ph) ->
+    Map_TID.MapsTo t v (update t' f ph) ->
     t' <> t ->
     Map_TID.MapsTo t v ph.
   Proof.
     intros.
-    unfold Phaser.update in *.
+    unfold update in *.
     remember (Map_TID.find _ _).
     symmetry in Heqo.
     destruct o as [v'|];
@@ -436,7 +436,20 @@ Section Facts.
     eauto using signal_mapsto_neq.
   Qed.
 
-
+  Lemma make_mapsto:
+    forall t v t',
+    Map_TID.MapsTo t v (make t') ->
+    t' = t /\ v = Taskview.make.
+  Proof.
+    intros.
+    unfold make in *.
+    rewrite Map_TID_Facts.add_mapsto_iff in H.
+    destruct H.
+    - intuition.
+    - destruct H.
+      apply Map_TID_Facts.empty_mapsto_iff in H0.
+      inversion H0.
+  Qed.
   (* end hide *)
 
   (**

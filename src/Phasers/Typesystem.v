@@ -38,7 +38,7 @@ Require Import Coq.ZArith.BinInt.
 Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.TransDiff.
 
-Definition diff (pm:phasermap) (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).
+(*Definition diff (pm:phasermap) (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).*)
 
 (**
   Our notion of a valid phaser map is such that
@@ -46,5 +46,5 @@ Definition diff (pm:phasermap) (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst
   any [t1 - ... - t2] yields the the same difference [z].
 *)
 
-Definition Valid (pm:phasermap) := TransDiffFun tid (diff pm).
+Definition Valid (pm:phasermap) := TransDiffFun (pm_diff pm).
 End Valid.

@@ -101,11 +101,11 @@ Proof.
   - assumption.
 Qed.
 
-Let diff := diff pm.
+Let diff := pm_diff pm.
 
 Variable check : Valid pm.
 
-Let diff_det : TransDiffFun tid diff.
+Let diff_det : TransDiffFun diff.
 Proof.
   unfold Valid in *.
   intuition.
@@ -124,7 +124,7 @@ Proof.
   assert (Hin': Map_TID.In t' ph) by eauto using Map_TID_Extra.mapsto_to_in.
   assert (Hle: LE pm t t') by eauto using Smallest_to_LE.
   remember ((Z.of_nat (wait_phase v)) - (Z.of_nat (wait_phase v'))) as z.
-  assert (Hdiff : ph_diff ph t t' z). {
+  assert (Hdiff : ph_diff ph (t, t') z). {
     subst.
     auto using ph_diff_def.
   }
@@ -133,7 +133,7 @@ Proof.
   - omega.
   - subst.
     remember (Z.of_nat (wait_phase v) - Z.of_nat (wait_phase v')) as z.
-    assert (Hd: pm_diff pm t t' z) by eauto using pm_diff_def.
+    assert (Hd: pm_diff pm (t, t') z) by eauto using pm_diff_def.
     assert ((z <= 0) % Z) by eauto using LE_to_pm_diff.
     intuition.
 Qed.
