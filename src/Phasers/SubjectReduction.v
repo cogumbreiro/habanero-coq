@@ -307,8 +307,8 @@ Qed.
 
 Lemma transdiff_wait_all:
   forall t pm t1 t2 z,
-  TransDiff tid (pm_diff (wait_all t pm)) t1 t2 z ->
-  TransDiff tid (pm_diff pm) t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
+  TransDiff (pm_diff (wait_all t pm)) t1 t2 z ->
+  TransDiff (pm_diff pm) t1 t2 (z - (tid_eq_sig t1 t) + (tid_eq_sig t2 t)).
 Proof.
   intros.
   inversion H; subst; clear H.
@@ -411,8 +411,8 @@ Section PreservesDiff.
 
   Let preserves_transdiff:
     forall pm t1 t2 z,
-    TransDiff tid (pm_diff (f pm)) t1 t2 z ->
-    TransDiff tid (pm_diff pm) t1 t2 z.
+    TransDiff (pm_diff (f pm)) t1 t2 z ->
+    TransDiff (pm_diff pm) t1 t2 z.
   Proof.
     intros.
     inversion H; subst; clear H.
@@ -1161,7 +1161,7 @@ Section PhNew.
 
   Let transdiff_diff_sum_ex:
     forall m tn t1 z,
-    TransDiff tid (pm_diff m) t1 tn z ->
+    TransDiff (pm_diff m) t1 tn z ->
     ((t1 = t /\ tn = t /\ z = 0%Z)
     \/ exists w, w <> nil /\ DiffSumEx (HasDiff (pm_diff m)) m t1 tn (filter skip_self w) z).
   Proof.
@@ -1208,7 +1208,22 @@ Section PhNew.
         auto.
       + auto.
   Qed.
-  
+
+  Let in_pm_diff:
+    forall p m w e z,
+    In e (filter skip_self w) ->
+    pm_diff (ph_new p t m) e z ->
+    pm_diff m e z.
+  Proof.
+    intros.
+    destruct e as (ti, tj).
+    rewrite filter_In in H.
+    destruct H.
+    apply skip_self_inv_true in H1.
+    eauto using pm_diff_ph_new.
+  Qed.
+
+
   Let has_diff_trans:
     forall p t1 tn m z w,
     DiffSumEx (HasDiff (pm_diff (ph_new p t m))) (ph_new p t m) t1 tn (filter skip_self w) z ->
@@ -1217,27 +1232,19 @@ Section PhNew.
     intros.
     destruct H.
     split.
-    - diff_sum_impl. assumption.
-    - apply walk2_impl_weak with (E:=(HasDiff (diff (ph_new p t m)))); auto.
+    - eauto using diff_sum_impl_weak.
+    - apply walk2_impl_weak with (E:=(HasDiff (pm_diff (ph_new p t m)))); auto.
       intros.
-      rewrite filter_In in H1.
-      destruct H1.
-      destruct e as (ti, tj).
-      apply skip_self_inv_true in H3.
       inversion H2.
-      assert (diff m (ti, tj) x). {
-        unfold diff in *; simpl in *.
-        eauto using pm_diff_ph_new.
-      }
       unfold HasDiff.
       eauto.
   Qed.
 
   Let transdiff_fin:
     forall p m tn t1 z,
-    TransDiff tid (diff (ph_new p t m)) t1 tn z ->
+    TransDiff (pm_diff (ph_new p t m)) t1 tn z ->
     ((t1 = t /\ tn = t /\ z = 0%Z)
-    \/ TransDiff tid (diff m) t1 tn z).
+    \/ TransDiff (pm_diff m) t1 tn z).
   Proof.
     intros.
     apply transdiff_diff_sum_ex in H.
@@ -1246,37 +1253,88 @@ Section PhNew.
     }
     right.
     destruct H as (w, (Hn, Hd)).
-    apply trans_diff_def with (w:=(filter skip_self w)).
-    - apply has_diff_trans in Hd.
+    apply has_diff_trans in Hd.
+    inversion Hd.
+    eauto using trans_diff_def.
   Qed.
-(*
-  Lemma trans_diff_ph_new:
-    forall t t1 t2 p pm z,
-    t1 <> t ->
-    t2 <> t ->
-    TransDiff tid (diff (ph_new p t pm)) t1 t2 z ->
-    TransDiff tid (diff pm) t1 t2 z.
+
+  Lemma pm_diff_to_refl_left:
+    forall t1 t2 z pm,
+    pm_diff pm (t1, t2) z ->
+    pm_diff pm (t1, t1) 0%Z.
   Proof.
     intros.
-    destruct H1.
-    induction w.
-    - inversion H1.
+    inversion H.
+    apply ph_diff_inv_left in H1.
+    eauto using pm_diff_refl.
   Qed.
-    *)
-  Lemma preserves_diff_sr:
-    forall p t pm,
+
+  Lemma edge_to_walk2:
+    forall {A:Type} (E:(A*A)->Prop) x y,
+    E (x, y) ->
+    Walk2 E x y ((x, y) :: nil).
+  Proof.
+    intros.
+    apply walk2_def.
+    + auto using starts_with_def.
+    + auto using ends_with_edge.
+    + auto using edge_to_walk.
+  Qed.
+
+  Lemma trans_diff_inv_refl:
+    forall t pm z,
+    TransDiff (pm_diff pm) t t z ->
+    TransDiff (pm_diff pm) t t 0%Z.
+  Proof.
+    intros.
+    inversion H.
+    subst.
+    inversion H0; subst; auto.
+    - assert (t1 = t0). {
+        inversion H1; eauto using starts_with_eq.
+      }
+      subst.
+      assert (pm_diff pm (t0, t0) 0%Z). {
+        eauto using pm_diff_to_refl_left.
+      }
+      apply trans_diff_def with ((t0,t0)::nil).
+      auto using diff_sum_pair.
+      apply edge_to_walk2.
+      unfold HasDiff.
+      eauto.
+    - assert (t1 = t0). {
+        inversion H1; eauto using starts_with_eq.
+      }
+      subst.
+      assert (pm_diff pm (t0, t0) 0%Z). {
+        eauto using pm_diff_to_refl_left.
+      }
+      apply trans_diff_def with ((t0,t0)::nil).
+      auto using diff_sum_pair.
+      apply edge_to_walk2.
+      unfold HasDiff.
+      eauto.
+  Qed.
+
+  Lemma pm_ph_new_sr:
+    forall p pm,
     Valid pm ->
     Valid (ph_new p t pm).
   Proof.
     unfold Valid in *.
     unfold TransDiffFun in *.
     intros.
-    destruct (TID.eq_dec t2 t). {
+    apply transdiff_fin in H0.
+    apply transdiff_fin in H1.
+    destruct H0, H1.
+    - intuition.
+    - destruct H0 as (?,(?,?)).
       subst.
-      inversion H0; subst.
-    }
-    destruct H0.
-    eauto using preserves_transdiff.
+      eauto using trans_diff_inv_refl.
+    - destruct H1 as (?,(?,?)).
+      subst.
+      eauto using trans_diff_inv_refl.
+    - eauto.
   Qed.
 
 

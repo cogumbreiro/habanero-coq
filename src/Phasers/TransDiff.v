@@ -332,10 +332,11 @@ Implicit Arguments DiffSum.
 Implicit Arguments HasDiff.
 Implicit Arguments NegDiff.
 
-Lemma diff_sum_impl:
+Lemma diff_sum_impl_weak:
   forall {A:Type} (D D': (A*A) -> Z -> Prop) ,
-  (forall e z, D e z -> D' e z) ->
-  forall l z,
+  forall l,
+  (forall e z, List.In e l -> D e z -> D' e z) ->
+  forall z,
   DiffSum D l z ->
   DiffSum D' l z.
 Proof.
@@ -344,7 +345,17 @@ Proof.
     apply diff_sum_nil.
   - inversion H0.
     + subst.
-      auto using diff_sum_pair.
+      eauto using diff_sum_pair, in_eq.
     + subst.
-      auto using diff_sum_cons.
+      auto using diff_sum_cons, in_eq, in_cons.
+Qed.
+
+Lemma diff_sum_impl:
+  forall {A:Type} (D D': (A*A) -> Z -> Prop) ,
+  (forall e z, D e z -> D' e z) ->
+  forall l z,
+  DiffSum D l z ->
+  DiffSum D' l z.
+Proof.
+  eauto using diff_sum_impl_weak.
 Qed.
