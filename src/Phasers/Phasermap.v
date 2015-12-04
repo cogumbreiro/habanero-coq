@@ -224,6 +224,24 @@ Inductive Reduces m t o : phasermap -> Prop :=
 
 (* begin hide *)
 Section Facts.
+
+  Lemma eq_phid_fst_eq:
+    forall x y z,
+    eq_phid (x, y) (x, z).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
+  Lemma eq_phid_rw:
+    forall x y z w,
+    eq_phid (x, y) (z, w) ->
+    x = z.
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
   Lemma pm_update_rw:
     forall p f ph m,
     Map_PHID.MapsTo p ph m ->
@@ -306,14 +324,13 @@ Section Facts.
   Qed.
 
   Lemma async_notina_mapsto:
-    forall p r l t' m t ph ph',
+    forall p r l t' m t ph,
     ~ SetoidList.InA eq_phid (p, r) l ->
     Map_PHID.MapsTo p ph m ->
-    Map_PHID.MapsTo p ph' (async l t' t m) ->
-    ph' = ph.
+    Map_PHID.MapsTo p ph (async l t' t m).
   Proof.
-    intros ? ? ? ? ? ? ? ?.
-    intros Hina mt1 mt2.
+    intros ? ? ? ? ? ? ?.
+    intros Hina mt1.
     induction l.
     - simpl in *.
       eauto using Map_PHID_Facts.MapsTo_fun.
@@ -322,23 +339,52 @@ Section Facts.
       assert (~ SetoidList.InA eq_phid (p, r) l ). {
         intuition.
       }
-      apply IHl; auto.
+      apply IHl in H.
       unfold async_1 in *.
       remember (Map_PHID.find _ _).
       symmetry in Heqo.
-      destruct o.
-      + rewrite Map_PHID_Facts.add_mapsto_iff in mt2.
-        destruct mt2 as [Hx|Hx].
-        * destruct Hx.
-          subst.
-          contradiction Hina.
-          rewrite SetoidList.InA_alt.
-          exists (p, r').
-          intuition.
-          compute.
-          trivial.
-        * destruct Hx; auto.
+      destruct o as [ph'|].
+      + rewrite Map_PHID_Facts.add_mapsto_iff.
+        right.
+        split; auto.
+        intuition.
+        subst.
+        auto using InA_cons_hd, eq_phid_fst_eq.
       + auto.
+  Qed.
+
+  Lemma async_notina_mapsto_rtl:
+    forall l p r t' m t ph,
+    ~ SetoidList.InA eq_phid (p, r) l ->
+    Map_PHID.MapsTo p ph (async l t' t m) ->
+    Map_PHID.MapsTo p ph m.
+  Proof.
+    induction l; intros. { auto. }
+    destruct a as (p', r').
+    simpl in *.
+    assert (~ SetoidList.InA eq_phid (p, r) l ) by
+    intuition.
+    unfold async_1 in *.
+    destruct (Map_PHID_Extra.find_rw p' (async l t' t m)). {
+      destruct a as (Hf, ?).
+      rewrite Hf in *.
+      eauto.
+    }
+    destruct e as (ph',(R,?)).
+    rewrite R in *; clear  R.
+    assert (p' <> p). {
+      intuition.
+      subst.
+      contradiction H.
+      auto using InA_cons_hd, eq_phid_fst_eq.
+    }
+    rewrite Map_PHID_Facts.add_mapsto_iff in H0.
+    destruct H0 as [(?,?)|(?,?)]. {
+      contradiction.
+    }
+    assert (~ SetoidList.InA eq_phid (p, r) l ) by
+    intuition.
+    eauto.
   Qed.
 
   Lemma ph_new_impl_mapsto:

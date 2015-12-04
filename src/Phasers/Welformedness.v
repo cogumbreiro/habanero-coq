@@ -608,7 +608,7 @@ Module Phasermap.
     - inversion H2; subst; clear H2.
       assert (ph' = ph). {
         apply Map_PHID_Facts.find_mapsto_iff in Heqo.
-        eauto using async_notina_mapsto.
+        eauto using async_notina_mapsto, Map_PHID_Facts.MapsTo_fun.
       }
       subst.
       auto.

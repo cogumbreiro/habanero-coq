@@ -11,6 +11,22 @@ Set Implict Arguments.
   relationship between two arbitrary taskviews.
   It is a correctness property that lets us reason about the "temporal" ordering
   of a taskview, with respect to a given reduction relation.
+  
+  Phase ordering is a way
+  to compare the various members, the taskviews, of a phaser. We say that
+  v1 <= v2 if (i) the wait phase of v1 is smaller than or equals the signal phase
+  of v2, (ii) v2 has signal-only mode, or (iii) v1 has wait-only mode. 
+  
+  
+  There are two important ideas behind the Phase Ordering property, both
+  capture how phaser synchronization develops. The first idea is that
+  phase ordering defines the correctness of synchronization: for any
+  taskviews v1 and v2 picked from the same phaser we have that v1 <= v2,
+  that is the wait phase of v1 is at *most* as great as the signal-phase of v2,
+  but not greater. For instance, after executing a wait, the task's signal
+  phase must be greater-than or equal other members' wait phase. 
+  
+  
 *)
 Module Taskview.
   Require Import HJ.Phasers.Regmode.
