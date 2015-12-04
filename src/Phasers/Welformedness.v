@@ -580,6 +580,33 @@ Module Phasermap.
     eauto using ph_drop_preserves_welformed.
   Qed.
 
+  Lemma ph_async_1_preserves_welformed:
+    forall l t' t m p ph,
+    AsyncPre l t' t m ->
+    Map_PHID.MapsTo p ph m ->
+    Phaser.Welformed ph ->
+    Phaser.Welformed (async_1 l t' t p ph).
+  Proof.
+    intros.
+    destruct (pm_async_1_rw l t' t p ph) as [(r,(i,R))|?]. {
+      rewrite R; clear R.
+      assert (Hx: RegisterPre {| get_task := t'; get_mode := r |} t ph). {
+        inversion H.
+        rewrite Forall_forall in H2.
+        apply H2 in i.
+        inversion i.
+        simpl in *.
+        assert (ph0 = ph) by eauto using Map_PHID_Facts.MapsTo_fun.
+        subst.
+        assumption.
+      }
+      auto using ph_register_preserves_welformed.
+    }
+    destruct a as (R,?).
+    rewrite R.
+    assumption.
+  Qed.
+
   Lemma pm_async_preserves_welformed:
     forall l t' t m,
     Welformed m ->
@@ -587,32 +614,16 @@ Module Phasermap.
     Welformed (async l t' t m).
   Proof.
     intros.
-    induction l; auto.
+    apply pm_welformed_def.
+    intros.
+    apply pm_async_mapsto_rw in H1.
+    destruct H1 as (ph', (R, mt)).
+    rewrite R in *; clear R.
+    assert (Phaser.Welformed ph') by (inversion H; eauto).
     inversion H0.
-    simpl.
-    destruct a.
-    apply async_pre_inv in H0.
-    apply IHl in H0.
-    clear IHl.
-    inversion H1; subst; clear H1.
-    inversion H6.
-    simpl in *.
-    unfold async_1.
-    remember (Map_PHID.find _ _).
-    symmetry in Heqo.
-    destruct o as [ph'|]; auto.
-    apply pm_welformed_add; auto.
-    apply ph_register_preserves_welformed.
-    - rewrite <- Map_PHID_Facts.find_mapsto_iff in Heqo.
-      inversion H0; eauto.
-    - inversion H2; subst; clear H2.
-      assert (ph' = ph). {
-        apply Map_PHID_Facts.find_mapsto_iff in Heqo.
-        eauto using async_notina_mapsto, Map_PHID_Facts.MapsTo_fun.
-      }
-      subst.
-      auto.
+    eauto using ph_async_1_preserves_welformed.
   Qed.
+
   (* end hide *)
   
   Lemma pm_reduces_preserves_welformed:

@@ -1,3 +1,5 @@
+Set Implicit Arguments.
+
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Phaser.
@@ -139,6 +141,60 @@ Definition phased := (phid * regmode) % type.
   to mode [r].
   *)
 
+(* ---- *)
+
+Section EqDec.
+
+Variable A:Type.
+
+Variable eq_dec: forall (x y:A), { x = y } + { x <> y }.
+
+Definition eq_dec_to_bool x y := if eq_dec x y then true else false.
+
+Lemma eq_dec_inv_true:
+  forall x y,
+  eq_dec_to_bool x y = true -> x = y.
+Proof.
+  intros.
+  unfold eq_dec_to_bool in *.
+  destruct (eq_dec x y); auto; try inversion H.
+Qed.
+
+Lemma eq_dec_inv_false:
+  forall x y,
+  eq_dec_to_bool x y = false -> x <> y.
+Proof.
+  intros.
+  unfold eq_dec_to_bool in *.
+  destruct (eq_dec x y); auto; try inversion H.
+Qed.
+
+Lemma eq_dec_rw:
+  forall x y,
+  { eq_dec_to_bool x y = true /\ x = y } +
+  { eq_dec_to_bool x y = false /\ x <> y }.
+Proof.
+  intros.
+  unfold eq_dec_to_bool.
+  destruct (eq_dec x y).
+  - left; intuition.
+  - right; intuition.
+Qed.
+
+End EqDec.
+
+(* ---- *)
+
+Definition tid_beq := eq_dec_to_bool TID.eq_dec.
+
+Definition async_1 (l:list phased) t' t p ph : phaser :=
+match findA (tid_beq p) l with
+| Some r => register (mk_registry t' r) t ph
+| _ => ph
+end.
+
+Definition async l t' t pm := Map_PHID.mapi (async_1 l t' t) pm.
+(*
 Definition async_1 p r t pm :=
 match Map_PHID.find p pm with
 | Some ph => Map_PHID.add p (register r t ph) pm
@@ -155,7 +211,7 @@ match l with
 | cons (p, r) l => async_1 p (mk_registry t' r) t (async l t' t pm)
 | nil => pm
 end.
-
+*)
 
 (**
   Predicate [PhasedPre] ensures that task [t] can register task [t']
@@ -304,23 +360,124 @@ Section Facts.
     apply async_pre; auto.
   Qed.
 
-  Lemma pre_async_rw:
-    forall m t t' p ph r,
-    Map_PHID.MapsTo p ph m ->
-    async_1 p {| get_task := t'; get_mode := r |} t m =
-    Map_PHID.add p (register {| get_task := t'; get_mode := r |} t ph) m.
+  (* ----- *)
+
+  Lemma finda_spec_some_1:
+    forall {A : Type} {B:Type} (f : A -> bool) (e:B) l,
+    findA f l = Some e -> exists k, List.In (k,e) l /\ f k = true.
+  Proof.
+    intros.
+    induction l. {
+      inversion H.
+    }
+    destruct a as (k', e').
+    simpl in *.
+    remember (f k').
+    destruct b.
+    - inversion H; subst.
+      exists k'.
+      intuition.
+    - apply IHl in H; clear IHl.
+      destruct H as  (k, (?,?)).
+      eauto.
+  Qed.
+
+  Lemma finda_spec_none_1:
+    forall {A : Type} {B:Type} (f : A -> bool) l,
+    findA f l = None -> forall k (e:B), List.In (k,e) l -> f k = false.
+  Proof.
+    intros.
+    induction l. {
+      inversion H0.
+    }
+    destruct a as (k',e').
+    simpl in *.
+    remember (f k').
+    destruct b.
+    - inversion H.
+    - destruct H0.
+      + inversion H0; subst. auto.
+      + auto.
+  Qed.
+
+  Lemma finda_rw:
+    forall {A:Type} {B:Type} f l,
+    { exists k e, findA f l = Some e /\ List.In (k,e) l /\ f k = true } +
+    { findA f l = None /\ forall (k:A) (e:B), List.In (k,e) l -> f k = false }.
+  Proof.
+    intros.
+    remember (findA f l).
+    symmetry in Heqo.
+    destruct o.
+    - left.
+      apply finda_spec_some_1 in Heqo.
+      destruct Heqo as  (k, (?,?)).
+      eauto.
+    - right.
+      eauto using finda_spec_none_1.
+  Qed.
+
+  (* ----- *)
+
+  Lemma async_simpl_notina:
+    forall  p r l ph t' t,
+    ~ InA eq_phid (p, r) l ->
+    async_1 l t' t p ph = ph.
   Proof.
     intros.
     unfold async_1.
-    remember (Map_PHID.find _ _).
-    symmetry in Heqo.
-    destruct o as [ph'|].
-    - rewrite Map_PHID_Facts.find_mapsto_iff in H.
-      rewrite H in Heqo.
-      inversion Heqo; subst; auto.
-    - rewrite <- Map_PHID_Facts.not_find_in_iff in Heqo.
-      contradiction Heqo.
-      eauto using Map_PHID_Extra.mapsto_to_in.
+    destruct (finda_rw (tid_beq p) l) as [(p',(r',(R,(?,?))))|(R,?)].
+    - rewrite R; clear R.
+      contradiction H.
+      rewrite InA_alt.
+      exists (p', r').
+      intuition.
+      unfold tid_beq in *.
+      apply eq_dec_inv_true in H1.
+      subst.
+      apply eq_phid_fst_eq.
+    - rewrite R; clear R.
+      trivial.
+  Qed.
+
+  Lemma pm_async_1_rw:
+    forall l t' t p ph,
+      { exists r, List.In (p, r) l /\ async_1 l t' t p ph = register (mk_registry t' r) t ph }
+      +
+      { async_1 l t' t p ph = ph /\ forall r, ~ List.In (p, r) l}.
+  Proof.
+    intros.
+    unfold async_1.
+    destruct (finda_rw (tid_beq p) l) as [?|?].
+    - left.
+      destruct e as (p', (r, (R1,(?,R2)))).
+      exists r.
+      rewrite R1.
+      apply eq_dec_inv_true in R2.
+      subst.
+      intuition.
+    - right.
+      destruct a as (R, Hx).
+      rewrite R.
+      intuition.
+      apply Hx in H.
+      apply eq_dec_inv_false in H.
+      contradiction H.
+      trivial.
+  Qed.
+
+  Lemma pm_async_mapsto_rw:
+    forall p ph l t' t m,
+    Map_PHID.MapsTo p ph (async l t' t m) <->
+    exists ph', ph = async_1 l t' t p ph' /\ Map_PHID.MapsTo p ph' m.
+  Proof.
+    intros.
+    unfold async in *.
+    rewrite Map_PHID_Facts.mapi_mapsto_iff; auto.
+    split; eauto.
+    intros.
+    subst.
+    trivial.
   Qed.
 
   Lemma async_notina_mapsto:
@@ -329,28 +486,12 @@ Section Facts.
     Map_PHID.MapsTo p ph m ->
     Map_PHID.MapsTo p ph (async l t' t m).
   Proof.
-    intros ? ? ? ? ? ? ?.
-    intros Hina mt1.
-    induction l.
-    - simpl in *.
-      eauto using Map_PHID_Facts.MapsTo_fun.
-    - destruct a as (p', r').
-      simpl in *.
-      assert (~ SetoidList.InA eq_phid (p, r) l ). {
-        intuition.
-      }
-      apply IHl in H.
-      unfold async_1 in *.
-      remember (Map_PHID.find _ _).
-      symmetry in Heqo.
-      destruct o as [ph'|].
-      + rewrite Map_PHID_Facts.add_mapsto_iff.
-        right.
-        split; auto.
-        intuition.
-        subst.
-        auto using InA_cons_hd, eq_phid_fst_eq.
-      + auto.
+    intros.
+    apply pm_async_mapsto_rw.
+    exists ph.
+    intuition.
+    symmetry.
+    eauto using async_simpl_notina.
   Qed.
 
   Lemma async_notina_mapsto_rtl:
@@ -359,32 +500,13 @@ Section Facts.
     Map_PHID.MapsTo p ph (async l t' t m) ->
     Map_PHID.MapsTo p ph m.
   Proof.
-    induction l; intros. { auto. }
-    destruct a as (p', r').
-    simpl in *.
-    assert (~ SetoidList.InA eq_phid (p, r) l ) by
-    intuition.
-    unfold async_1 in *.
-    destruct (Map_PHID_Extra.find_rw p' (async l t' t m)). {
-      destruct a as (Hf, ?).
-      rewrite Hf in *.
-      eauto.
-    }
-    destruct e as (ph',(R,?)).
-    rewrite R in *; clear  R.
-    assert (p' <> p). {
-      intuition.
-      subst.
-      contradiction H.
-      auto using InA_cons_hd, eq_phid_fst_eq.
-    }
-    rewrite Map_PHID_Facts.add_mapsto_iff in H0.
-    destruct H0 as [(?,?)|(?,?)]. {
-      contradiction.
-    }
-    assert (~ SetoidList.InA eq_phid (p, r) l ) by
-    intuition.
-    eauto.
+    intros.
+    apply pm_async_mapsto_rw in H0.
+    destruct H0 as (ph', (R, mt)).
+    rewrite R in *.
+    apply async_simpl_notina with (ph:=ph') (t':=t') (t:=t) in H.
+    rewrite H.
+    assumption.
   Qed.
 
   Lemma ph_new_impl_mapsto:

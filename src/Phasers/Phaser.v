@@ -341,6 +341,30 @@ Section Facts.
       eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
+  Lemma ph_register_inv_mapsto:
+    forall x y z v r ph,
+    Map_TID.MapsTo x v (register {| get_task := y; get_mode := r |} z ph) ->
+    Map_TID.MapsTo x v ph
+    \/ (x = y /\ exists v', Map_TID.MapsTo z v' ph /\ v = set_mode v' r).
+  Proof.
+    unfold register.
+    intros.
+    destruct (Map_TID_Extra.find_rw z ph) as [(R,?)|(v',(R,mt))]. {
+      rewrite R in *; clear R.
+      intuition.
+    }
+    rewrite R in *; clear R.
+    rewrite Map_TID_Facts.add_mapsto_iff in H.
+    destruct H as [(?,?)|(?,?)].
+    - right.
+      simpl in *.
+      subst.
+      intuition.
+      exists v'.
+      intuition.
+    - intuition.
+  Qed.
+
   Lemma ph_in:
     forall ph t o ph',
     Reduces ph t o ph' ->

@@ -1238,7 +1238,7 @@ Section PhNew.
 End PhNew.
 
 Require Import Coq.Lists.SetoidList.
-
+(*
   Lemma async_in_1:
     forall p l t' t m,
     Map_PHID.In p (async l t' t m) ->
@@ -1262,7 +1262,8 @@ Require Import Coq.Lists.SetoidList.
       + auto.
     - auto.
   Qed.
-
+*)
+(*
   Lemma async_in_2:
     forall p l t' t m,
     Map_PHID.In p m ->
@@ -1282,7 +1283,8 @@ Require Import Coq.Lists.SetoidList.
       intuition.
     - assumption.
   Qed.
-
+*)
+(*
   Lemma async_in_iff:
     forall p l t' t m,
     Map_PHID.In p (async l t' t m) <->
@@ -1291,7 +1293,8 @@ Require Import Coq.Lists.SetoidList.
     intros.
     split; eauto using async_in_1, async_in_2.
   Qed.
-
+*)
+(*
   Lemma async_pre_inv_ina_pre:
     forall l t' t m p r,
     AsyncPre l t' t m ->
@@ -1385,6 +1388,7 @@ Require Import Coq.Lists.SetoidList.
         contradiction.
       + eauto using async_pre_inv.
   Qed.
+  *)
 (*
   Lemma async_inv_mapsto_cons:
     forall p ph a l t' t m,
@@ -1444,46 +1448,30 @@ Section Async.
     apply walk_cons; auto.
   Qed.
 
-    
-
   Let chg_edge_asd:
     forall pi ph ti v,
     Map_PHID.MapsTo pi ph m' ->
     Map_TID.MapsTo ti v ph ->
-    exists v' ph', (Map_PHID.MapsTo pi ph' m /\ Map_TID.MapsTo ti v' ph' /\ wait_phase v = wait_phase v').
+    ti = t' \/
+    exists ph' v', Map_PHID.MapsTo pi ph' m /\
+    Map_TID.MapsTo ti v' ph' /\ wait_phase v = wait_phase v'.
   Proof.
     intros.
     unfold m' in *.
-    induction l. {
-      eauto.
-    }
-    destruct a as (x,y).
-    simpl in H.
-    unfold async_1 in H.
-    destruct (Map_PHID_Extra.find_rw x (async l0 t' t m)). {
-      (* absurd case *)
-      destruct a as (R,?).
-      rewrite R in *.
-      inversion pre.
-      inversion H2; subst; clear H2.
-      inversion H7.
-      simpl in *.
-      contradiction H1.
-      eauto using Map_PHID_Extra.mapsto_to_in, async_in_2.
-    }
-    destruct e as (ph',(R,mt)).
+    apply pm_async_mapsto_rw in H.
+    destruct H as (ph', (R, mt)).
     rewrite R in *; clear R.
-    assert (Map_PHID.MapsTo x ph' m). {
-      inversion pre; inversion H2.
-      eauto using async_notina_mapsto_rtl.
-    }
-    rewrite Map_PHID_Facts.add_mapsto_iff in H.
-    destruct H.
-    - destruct H.
-      subst.
-      apply IHl0.
-      + eauto using async_pre_inv.
-      + auto.
+    destruct (pm_async_1_rw l t' t pi ph').
+    - destruct e as (r, (i, R)).
+      rewrite R in *; clear R.
+      apply ph_register_inv_mapsto in H0.
+      destruct H0 as [mt2|(?, (v', (mt2, R)))].
+      + right; eauto.
+      + left; auto.
+    - destruct a as (R, Hx).
+      right.
+      rewrite R in *; clear R.
+      eauto.
   Qed.
 
   Let chg_edge_impl:
