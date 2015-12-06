@@ -1,16 +1,17 @@
+Require Import Coq.Lists.List.
+Require Import Coq.ZArith.BinInt.
+Require Import Coq.Lists.SetoidList.
+
+Require Import Aniceto.Graphs.Graph.
+Require Import Aniceto.Pair.
+Require Import Aniceto.List.
+
 Require Import HJ.Phasers.Progress.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.TransDiff.
 Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.Typesystem.
 Require Import HJ.Vars.
-
-Require Import Aniceto.Graphs.Graph.
-Require Import Aniceto.Pair.
-Require Import Aniceto.List.
-
-Require Import Coq.Lists.List.
-Require Import Coq.ZArith.BinInt.
 
 Section SR.
 
@@ -858,8 +859,8 @@ Section PhNew.
     subst.
     assert (t2 = t). {
       assert (R: p = (t, t)). {
-        assert (In p (p :: l)) by auto using in_eq.
-        assert (R: ~ In p (filter skip_self (p :: l))). {
+        assert (List.In p (p :: l)) by auto using in_eq.
+        assert (R: ~ List.In p (filter skip_self (p :: l))). {
           rewrite H1.
           intuition.
         }
@@ -895,7 +896,7 @@ Section PhNew.
             rewrite H.
             subst.
             assert (R: t2 = t). {
-              assert (Hy : In (t2, x) ((t2,x) :: w)) by auto using in_eq.
+              assert (Hy : List.In (t2, x) ((t2,x) :: w)) by auto using in_eq.
               apply filter_notin_to_false with (f:=skip_self) in Hy.
               - apply skip_self_inv_false in Hy.
                 destruct Hy; auto.
@@ -1084,7 +1085,7 @@ Section PhNew.
       subst.
       destruct H2.
       assert (t1 = t). {
-        assert (Hx : ~ In (t1, t0) (filter skip_self ((t1, t0) :: w))). {
+        assert (Hx : ~ List.In (t1, t0) (filter skip_self ((t1, t0) :: w))). {
           rewrite H2.
           intuition.
         }
@@ -1108,7 +1109,7 @@ Section PhNew.
 
   Let in_pm_diff:
     forall p m w e z,
-    In e (filter skip_self w) ->
+    List.In e (filter skip_self w) ->
     pm_diff (ph_new p t m) e z ->
     pm_diff m e z.
   Proof.
@@ -1237,53 +1238,28 @@ Section PhNew.
 
 End PhNew.
 
-Require Import Coq.Lists.SetoidList.
-(*
   Lemma async_in_1:
     forall p l t' t m,
-    Map_PHID.In p (async l t' t m) ->
+    Map_PHID.In p (async l t' t m)->
     Map_PHID.In p m.
   Proof.
     intros.
-    induction l. {
-      auto.
-    }
-    destruct a as (p', r).
-    simpl in *.
-    unfold async_1 in *.
-    remember (Map_PHID.find _ _).
-    symmetry in Heqo.
-    destruct o as [ph'|].
-    - apply Map_PHID_Facts.add_in_iff in H.
-      destruct H.
-      + subst.
-        rewrite <- Map_PHID_Facts.find_mapsto_iff in Heqo.
-        eauto using Map_PHID_Extra.mapsto_to_in.
-      + auto.
-    - auto.
+    unfold async in *.
+    rewrite Map_PHID_Facts.mapi_in_iff in H.
+    assumption.
   Qed.
-*)
-(*
+
   Lemma async_in_2:
     forall p l t' t m,
     Map_PHID.In p m ->
     Map_PHID.In p (async l t' t m).
   Proof.
     intros.
-    induction l. {
-      auto.
-    }
-    destruct a as (p', r).
-    simpl in *.
-    unfold async_1 in *.
-    remember (Map_PHID.find _ _).
-    symmetry in Heqo.
-    destruct o as [ph'|].
-    - apply Map_PHID_Facts.add_in_iff.
-      intuition.
-    - assumption.
+    unfold async in *.
+    rewrite Map_PHID_Facts.mapi_in_iff.
+    assumption.
   Qed.
-*)
+
 (*
   Lemma async_in_iff:
     forall p l t' t m,
@@ -1448,13 +1424,12 @@ Section Async.
     apply walk_cons; auto.
   Qed.
 
-  Let chg_edge_asd:
+  Let chg_edge_inv:
     forall pi ph ti v,
     Map_PHID.MapsTo pi ph m' ->
     Map_TID.MapsTo ti v ph ->
-    ti = t' \/
-    exists ph' v', Map_PHID.MapsTo pi ph' m /\
-    Map_TID.MapsTo ti v' ph' /\ wait_phase v = wait_phase v'.
+    (exists ph' v', Map_PHID.MapsTo pi ph' m /\ Map_TID.MapsTo t v' ph' /\ wait_phase v = wait_phase v') \/
+    (exists ph' v', Map_PHID.MapsTo pi ph' m /\ Map_TID.MapsTo ti v' ph' /\ wait_phase v = wait_phase v').
   Proof.
     intros.
     unfold m' in *.
@@ -1467,16 +1442,38 @@ Section Async.
       apply ph_register_inv_mapsto in H0.
       destruct H0 as [mt2|(?, (v', (mt2, R)))].
       + right; eauto.
-      + left; auto.
-    - destruct a as (R, Hx).
-      right.
-      rewrite R in *; clear R.
-      eauto.
+      + left.
+        subst.
+        exists ph'.
+        exists v'.
+        intuition.
+   - destruct a as (R, Hx).
+     right.
+     rewrite R in *; clear R.
+     eauto.
   Qed.
-
+  (*
+  Let chg_edge_aux_1:
+    forall t'',
+    t'' <> t' ->
+    In t'' m' ->
+    In t'' m.
+  Proof.
+    intros.
+    inversion H0.
+    assert (Map_PHID.In p0 m). {
+      apply
+      assert (Map_PHID.In p0 m') by eauto using Map_PHID_Extra.mapsto_to_in.
+      unfold m' in *.
+      apply 
+      apply pm_async_1_mapsto in H
+    apply 
+    apply in_def.
+  Qed.
+*)
   Let chg_edge_impl:
     forall p' r ph e z,
-    In (p', r) l ->
+    List.In (p', r) l ->
     Map_PHID.MapsTo p' ph m' ->
     ph_diff ph e z ->
     pm_diff m (chg_edge e) z.
@@ -1485,16 +1482,35 @@ Section Async.
     destruct e as (x,y).
     simpl in *.
     unfold chg_tid.
+    inversion H1; subst.
+    unfold m' in *.
+    rewrite pm_async_mapsto_rw in H0.
+    destruct H0 as  (ph', (R, mt)).
+    rewrite R in *; clear R.
+    (*
+    apply pm_async_1_mapsto in H6.
+    destruct H6 as [?|(v',(r',(mt1,(i,?))))]. {
+      
+    }
+    *)
     destruct (TID.eq_dec x t'). {
       subst.
       destruct (TID.eq_dec y t'). {
         subst.
-        unfold m' in *.
-        inversion H1.
-        subst.
-        apply pm_diff_def with (.
         inversion pre.
-        eauto.
+        rewrite Forall_forall in H0.
+        apply H0 in H.
+        inversion H.
+        simpl in *.
+        remember (Z.of_nat (wait_phase v1) - Z.of_nat (wait_phase v2))%Z as z.
+        assert (R: z = 0%Z) by eauto using ph_diff_refl_inv.
+        rewrite R in *; clear R.
+        assert (Map_TID.In t ph0) by eauto using Map_TID_Extra.mapsto_to_in.
+        eauto using pm_diff_def, ph_diff_refl.
+      }
+      apply pm_async_1_mapsto in H6.
+      destruct H6 as [?|(v',(r',(mt1,(i,?))))]. {
+        
       }
     }
   Qed.

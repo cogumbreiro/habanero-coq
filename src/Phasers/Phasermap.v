@@ -466,6 +466,28 @@ Section Facts.
       trivial.
   Qed.
 
+  Lemma pm_async_1_mapsto:
+    forall p ph l t' t t'' v,
+    Map_TID.MapsTo t'' v (async_1 l t' t p ph) ->
+    Map_TID.MapsTo t'' v ph \/
+    (exists v' r, Map_TID.MapsTo t v' ph /\ List.In (p, r) l /\
+    v = Taskview.set_mode v' r).
+  Proof.
+    intros.
+    destruct (pm_async_1_rw l t' t p ph) as [(r,(i,R))|(R1,R2)]. {
+      rewrite R in *; clear R.
+      apply ph_register_inv_mapsto in H.
+      destruct H; auto.
+      destruct H as (?, (v', (mt2, ?))).
+      subst.
+      right.
+      eauto.
+    }
+    left.
+    rewrite R1 in *; clear R1.
+    auto.
+  Qed.
+
   Lemma pm_async_mapsto_rw:
     forall p ph l t' t m,
     Map_PHID.MapsTo p ph (async l t' t m) <->
