@@ -1,11 +1,10 @@
 Require HJ.AsyncFinish.Syntax.
 Module F := HJ.AsyncFinish.Syntax.
-Require HJ.Phasers.Lang.
-Module P := HJ.Phasers.Lang.
+Require Import HJ.Phasers.Phasermap.
 Require Import HJ.Vars.
 Require Import HJ.AsyncFinish.IEF.
 
-Notation fstate := (Map_FID.t P.phasermap).
+Notation fstate := (Map_FID.t phasermap).
 
 
 Inductive state := mk_state {
@@ -16,7 +15,7 @@ Inductive state := mk_state {
 Definition set_fstate (s:state) (m:fstate)  :=
   mk_state s.(get_finish) m.
 
-Definition put_phasermap (s:state) (f:fid) (m:P.phasermap) :  state :=
+Definition put_phasermap (s:state) (f:fid) (m:phasermap) :  state :=
   set_fstate s (Map_FID.add f m s.(get_fstate)).
 
 Definition set_finish (s:state) (f:F.finish) : state :=
@@ -29,7 +28,7 @@ Require HJ.AsyncFinish.Semantics.
 Module FS := HJ.AsyncFinish.Semantics.
 
 Inductive op := 
-  | BEGIN_ASYNC : list phased -> tid -> op
+  | BEGIN_ASYNC : phased -> op
   | END_ASYNC
   | BEGIN_FINISH
   | END_FINISH
@@ -40,26 +39,26 @@ Inductive op :=
   | WAIT_ALL : op.
 
 Inductive packet :=
-  | only_p: P.op -> packet
+  | only_p: Phasermap.op -> packet
   | only_f: FS.op -> packet
-  | both: P.op -> FS.op -> packet.
+  | both: Phasermap.op -> FS.op -> packet.
 
 Definition translate (o:op) : packet :=
   match o with
   (* Copies registry from spawner and registers task in finish scope of spawner*)
-  | BEGIN_ASYNC ps t => both (P.ASYNC ps t) (FS.BEGIN_ASYNC t)
+  | BEGIN_ASYNC ps  => both (ASYNC ps) (FS.BEGIN_ASYNC (get_new_task ps))
   (* Drops all phasers and removes task from finish scope *)
-  | END_ASYNC => both P.DROP_ALL FS.END_ASYNC
+  | END_ASYNC => both DROP_ALL FS.END_ASYNC
   (* Pushes a finish scope  *)
   | BEGIN_FINISH => only_f FS.BEGIN_FINISH
   (* Drops all phasers and pops a finish scope *)
-  | END_FINISH => both P.DROP_ALL FS.END_FINISH
+  | END_FINISH => both DROP_ALL FS.END_FINISH
   (* Phaser-only operations: *)
-  | PH_NEW p => only_p (P.PH_NEW p)
-  | PH_SIGNAL p => only_p (P.PH_SIGNAL p)
-  | PH_DROP p => only_p (P.PH_DROP p)
-  | SIGNAL_ALL => only_p P.SIGNAL_ALL
-  | WAIT_ALL => only_p P.WAIT_ALL
+  | PH_NEW p => only_p (Phasermap.PH_NEW p)
+  | PH_SIGNAL p => only_p (Phasermap.PH_SIGNAL p)
+  | PH_DROP p => only_p (Phasermap.PH_DROP p)
+  | SIGNAL_ALL => only_p Phasermap.SIGNAL_ALL
+  | WAIT_ALL => only_p Phasermap.WAIT_ALL
   end.
 
 Definition as_f_op (o:op) :=
@@ -127,7 +126,7 @@ Structure context := mk_context {
   get_finish: F.finish;
 }.
 *)
-Definition context := (P.phasermap * F.finish) % type.
+Definition context := (phasermap * F.finish) % type.
 Inductive ContextOf (s:state) (t:tid) : context -> Prop :=
   context_of_def:
     forall f m,
@@ -138,7 +137,7 @@ Inductive CtxReduce (ctx:context) (t:tid) (o:op) : context -> Prop :=
   | reduce_p:
     forall m o',
     translate o = only_p o' ->
-    P.Reduce (fst ctx) t o' m ->
+    Phasermap.Reduces (fst ctx) t o' m ->
     CtxReduce ctx t o (m, snd ctx)
   | reduce_f:
     forall f o',
@@ -148,7 +147,7 @@ Inductive CtxReduce (ctx:context) (t:tid) (o:op) : context -> Prop :=
   | reduce_both:
     forall m o_p f o_f,
     translate o = both o_p o_f ->
-    P.Reduce (fst ctx) t o_p m ->
+    Phasermap.Reduces (fst ctx) t o_p m ->
     FS.Reduce (snd ctx) t o_f f ->
     CtxReduce ctx t o (m, f).
 
@@ -335,6 +334,7 @@ Module Progress.
         destruct RF as (f', RF).
         exists (m, f').
         eauto using reduce_both.
+     - 
     Qed.
 
     Let find_only_f (t:tid) (i:op) : bool :=
