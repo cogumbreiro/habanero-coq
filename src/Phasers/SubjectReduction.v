@@ -1508,10 +1508,7 @@ Section Async.
         assert (Map_TID.In t ph0) by eauto using Map_TID_Extra.mapsto_to_in.
         eauto using pm_diff_def, ph_diff_refl.
       }
-      apply pm_async_1_mapsto in H6.
-      destruct H6 as [?|(v',(r',(mt1,(i,?))))]. {
-        
-      }
+      apply pm_async_1_mapsto_neq in H6.
     }
   Qed.
 

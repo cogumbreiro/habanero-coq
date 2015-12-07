@@ -341,6 +341,69 @@ Section Facts.
       eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
+  Lemma ph_register_mapsto_neq:
+    forall t t' t'' v ph r,
+    t'' <> t' ->
+    Map_TID.MapsTo t'' v
+       (register {| get_task := t'; get_mode := r |} t ph) ->
+    Map_TID.MapsTo t'' v ph.
+  Proof.
+    unfold register.
+    intros.
+    destruct (Map_TID_Extra.find_rw t ph) as [(R,?)|(v',(R,mt))]. {
+      rewrite R in *; clear R.
+      assumption.
+    }
+    rewrite R in *; clear R.
+    rewrite Map_TID_Facts.add_mapsto_iff in H0.
+    destruct H0 as [(?,?)|(?,?)].
+    - simpl in *.
+      subst.
+      contradiction H; trivial.
+    - assumption.
+  Qed.
+
+  Lemma ph_register_in_1:
+    forall t' r ph t,
+    Map_TID.In t (register {| get_task := t'; get_mode := r |} t ph) ->
+    Map_TID.In t ph.
+  Proof.
+    intros.
+    unfold register in *.
+    destruct (Map_TID_Extra.find_rw t ph) as [(R,?)|(v',(R,mt))]. {
+      rewrite R in *; clear R.
+      contradiction.
+    }
+    rewrite R in *; clear R.
+    simpl in *.
+    rewrite Map_TID_Facts.add_in_iff in *.
+    destruct H;
+    subst;
+    eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
+  Lemma ph_register_mapsto_eq:
+    forall t' v r ph t,
+    Map_TID.In t ph ->
+    Map_TID.MapsTo t' v (register {| get_task := t'; get_mode := r |} t ph) ->
+    exists v',
+    Map_TID.MapsTo t v' ph /\ v = Taskview.set_mode v' r.
+  Proof.
+    unfold register.
+    intros.
+    destruct (Map_TID_Extra.find_rw t ph) as [(R,?)|(v',(R,mt))]. {
+      contradiction.
+    }
+    rewrite R in *; clear R.
+    simpl in *.
+    assert (v = set_mode v' r). {
+      assert (Map_TID.MapsTo t' (set_mode v' r) (Map_TID.add t' (set_mode v' r) ph))
+      by eauto using Map_TID.add_1.
+      eauto using Map_TID_Facts.MapsTo_fun.
+    }
+    eauto.
+  Qed.
+
   Lemma ph_register_inv_mapsto:
     forall x y z v r ph,
     Map_TID.MapsTo x v (register {| get_task := y; get_mode := r |} z ph) ->

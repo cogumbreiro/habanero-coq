@@ -194,24 +194,6 @@ match findA (tid_beq p) l with
 end.
 
 Definition async l t' t pm := Map_PHID.mapi (async_1 l t' t) pm.
-(*
-Definition async_1 p r t pm :=
-match Map_PHID.find p pm with
-| Some ph => Map_PHID.add p (register r t ph) pm
-| _ => pm
-end.
-
-(**
-  Function [async] implements the phased async, by applying function
-  [async_1] to each pair of the list of [phased] objects.
-*)
-
-Fixpoint async (l:list phased) t' t pm :=
-match l with
-| cons (p, r) l => async_1 p (mk_registry t' r) t (async l t' t pm)
-| nil => pm
-end.
-*)
 
 (**
   Predicate [PhasedPre] ensures that task [t] can register task [t']
@@ -418,7 +400,27 @@ Section Facts.
   Qed.
 
   (* ----- *)
+(*
+  Lemma tid_beq_inv_true:
+    forall p p',
+    tid_beq p p' = true ->
+    p = p'.
+  Proof.
+    intros.
+    unfold tid_beq in *.
+    eauto using eq_dec_inv_true.
+  Qed.
 
+  Lemma tid_beq_inv_false:
+    forall p p',
+    tid_beq p p' = false ->
+    p <> p'.
+  Proof.
+    intros.
+    unfold tid_beq in *.
+    eauto using eq_dec_inv_false.
+  Qed.
+*)
   Lemma async_simpl_notina:
     forall  p r l ph t' t,
     ~ InA eq_phid (p, r) l ->
@@ -432,7 +434,6 @@ Section Facts.
       rewrite InA_alt.
       exists (p', r').
       intuition.
-      unfold tid_beq in *.
       apply eq_dec_inv_true in H1.
       subst.
       apply eq_phid_fst_eq.
@@ -464,6 +465,52 @@ Section Facts.
       apply eq_dec_inv_false in H.
       contradiction H.
       trivial.
+  Qed.
+
+  Lemma pm_async_1_mapsto_neq:
+    forall t'' v l t' t p ph,
+    t'' <> t' ->
+    Map_TID.MapsTo t'' v (async_1 l t' t p ph) ->
+    Map_TID.MapsTo t'' v ph.
+  Proof.
+    intros.
+    unfold async_1 in *.
+    destruct (finda_rw (tid_beq p) l) as [(p'',(r',(?,(?,?))))|(R,?)]. {
+      apply eq_dec_inv_true in H3.
+      subst.
+      rewrite H1 in *; clear H1.
+      eauto using ph_register_mapsto_neq.
+    }
+    rewrite R in *; clear R.
+    assumption.
+  Qed.
+
+  Lemma pm_async_1_mapsto_eq:
+    forall v l t' t p ph r,
+    Map_TID.In t ph ->
+    List.In (p, r) l ->
+    Map_TID.MapsTo t' v (async_1 l t' t p ph) ->
+    exists v' r, Map_TID.MapsTo t v' ph /\ List.In (p, r) l /\
+    v = Taskview.set_mode v' r.
+  Proof.
+    intros.
+    unfold async_1 in *.
+    destruct (finda_rw (tid_beq p) l) as [(p'',(r',(?,(?,?))))|(R,?)]. {
+      apply eq_dec_inv_true in H4.
+      rewrite H2 in *; clear H2.
+      subst.
+      apply ph_register_mapsto_eq in H1; auto.
+      destruct H1 as (v', (mt, R)).
+      exists v'.
+      exists r'.
+      intuition.
+    }
+    (* absurd *)
+    rewrite R in *; clear R.
+    apply H2 in H0.
+    apply eq_dec_inv_false in H0.
+    contradiction H0.
+    trivial.
   Qed.
 
   Lemma pm_async_1_mapsto:
