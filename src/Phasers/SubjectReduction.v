@@ -1167,18 +1167,6 @@ Section PhNew.
     eauto using pm_diff_refl.
   Qed.
 
-  Lemma edge_to_walk2:
-    forall {A:Type} (E:(A*A)->Prop) x y,
-    E (x, y) ->
-    Walk2 E x y ((x, y) :: nil).
-  Proof.
-    intros.
-    apply walk2_def.
-    + auto using starts_with_def.
-    + auto using ends_with_edge.
-    + auto using edge_to_walk.
-  Qed.
-
   Lemma trans_diff_inv_refl:
     forall t pm z,
     TransDiff (pm_diff pm) t t z ->
@@ -1378,26 +1366,6 @@ Section Async.
     }
     destruct mt as (r, mt).
     eauto.
-  Qed.
-
-  Lemma walk_map_impl:
-    forall {A:Type} (E F: (A*A)->Prop) f,
-    (forall a, E a -> F (f a)) ->
-    (forall a w, Linked a w -> Linked (f a) (map f w)) ->
-    forall w,
-    Walk E w ->
-    Walk F (map f w).
-  Proof.
-    intros.
-    induction w. {
-      eauto using walk_nil.
-    }
-    inversion H1.
-    subst.
-    apply IHw in H4.
-    clear IHw.
-    simpl.
-    apply walk_cons; auto.
   Qed.
 
   Let walk_chg_edge:
