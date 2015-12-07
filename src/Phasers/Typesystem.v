@@ -29,16 +29,14 @@ Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
       Taskview.WaitPre v) ->
     Check pm t WAIT_ALL
   | check_async:
-    forall t' ps,
-    AsyncPre ps t' t pm ->
-    Check pm t (ASYNC ps t').
+    forall ps,
+    AsyncPre ps t pm ->
+    Check pm t (ASYNC ps).
 
 Section Valid.
 Require Import Coq.ZArith.BinInt.
 Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.TransDiff.
-
-(*Definition diff (pm:phasermap) (e:tid*tid % type) : Z -> Prop := pm_diff pm (fst e) (snd e).*)
 
 (**
   Our notion of a valid phaser map is such that

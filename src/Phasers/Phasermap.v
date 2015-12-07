@@ -133,7 +133,10 @@ Inductive In (t:tid) (pm:phasermap) : Prop :=
 (** The parameter of a phased async is list of pairs, each of which
   consists of a phaser name and a registration  mode. *)
 
-Definition phased := (phid * regmode) % type.
+Record phased := mk_phased {
+  get_args : Map_PHID.t regmode;
+  get_new_task : tid
+}.
 
 (** 
   Async phased register a new task in a list of [phased].
@@ -185,28 +188,26 @@ End EqDec.
 
 (* ---- *)
 
-Definition tid_beq := eq_dec_to_bool TID.eq_dec.
-
-Definition async_1 (l:list phased) t' t p ph : phaser :=
-match findA (tid_beq p) l with
-| Some r => register (mk_registry t' r) t ph
+Definition async_1 (ps:phased) t p ph : phaser :=
+match Map_PHID.find p (get_args ps) with
+| Some r => register (mk_registry (get_new_task ps) r) t ph
 | _ => ph
 end.
 
-Definition async l t' t pm := Map_PHID.mapi (async_1 l t' t) pm.
+Definition async ps t : phasermap -> phasermap := Map_PHID.mapi (async_1 ps t).
 
 (**
   Predicate [PhasedPre] ensures that task [t] can register task [t']
   using the phased object [ps].
    *)
 
-Inductive PhasedPre (m:phasermap) (t t':tid) (ps:phased) : Prop := 
+Inductive PhasedPre (m:phasermap) (t:tid) (ps:phased) (p:phid) (ph:phaser) : Prop := 
   phased_pre:
-    forall ph v,
-    Map_PHID.MapsTo (fst ps) ph m ->
-    Map_TID.MapsTo t v ph ->
-    RegisterPre (mk_registry t' (snd ps)) t ph ->
-    PhasedPre m t t' ps.
+    forall r,
+    Map_PHID.MapsTo p r (get_args ps) ->
+    Map_TID.In t ph ->
+    RegisterPre (mk_registry (get_new_task ps) r) t ph ->
+    PhasedPre m t ps p ph.
 
 (**
   The pre-condition of executing an async are three:
@@ -215,16 +216,13 @@ Inductive PhasedPre (m:phasermap) (t t':tid) (ps:phased) : Prop :=
   (iii) the spawned task [t'] cannot be known in the phasermap.
   *)
 
-Definition eq_phid (p p':phased) := (fst p) = (fst p').
-
-Inductive AsyncPre ps t' t m : Prop :=
+Inductive AsyncPre (ps:phased) t m : Prop :=
   async_pre:
-    Forall (PhasedPre m t t') ps ->
-    NoDupA eq_phid ps ->
-    ~ In t' m -> 
-    AsyncPre ps t' t m.
+    (forall p ph, Map_PHID.MapsTo p ph m -> PhasedPre m t ps p ph) ->
+    ~ In (get_new_task ps) m -> 
+    AsyncPre ps t m.
 
-Definition async_op l t := mk_op (AsyncPre l t) (async l t).
+Definition async_op (ps:phased) := mk_op (AsyncPre ps) (async ps).
 
 (**
   We are now ready to define the closed set of operations on phasermaps.
@@ -237,7 +235,7 @@ Inductive op : Type :=
 | SIGNAL_ALL
 | WAIT_ALL
 | DROP_ALL
-| ASYNC : list phased -> tid -> op.
+| ASYNC : phased -> op.
   
 (** Function [get_impl] yields the [Op] object. *)
 
@@ -249,9 +247,8 @@ match o with
 | SIGNAL_ALL => signal_all_op
 | WAIT_ALL => wait_all_op
 | DROP_ALL => drop_all_op
-| ASYNC ps t => async_op ps t
+| ASYNC ps => async_op ps
 end.
-
 
 (** In closing, we define the [Reduces] relation. *)
 
@@ -262,23 +259,6 @@ Inductive Reduces m t o : phasermap -> Prop :=
 
 (* begin hide *)
 Section Facts.
-
-  Lemma eq_phid_fst_eq:
-    forall x y z,
-    eq_phid (x, y) (x, z).
-  Proof.
-    compute.
-    trivial.
-  Qed.
-
-  Lemma eq_phid_rw:
-    forall x y z w,
-    eq_phid (x, y) (z, w) ->
-    x = z.
-  Proof.
-    compute.
-    trivial.
-  Qed.
 
   Lemma pm_update_rw:
     forall p f ph m,
@@ -330,198 +310,84 @@ Section Facts.
     split; eauto.
   Qed.
 
-  Lemma async_pre_inv:
-    forall p l t' t m,
-    AsyncPre (p :: l) t' t m ->
-    AsyncPre l t' t m.
-  Proof.
-    intros.
-    destruct H.
-    inversion H0.
-    inversion H.
-    apply async_pre; auto.
-  Qed.
-
-  (* ----- *)
-
-  Lemma finda_spec_some_1:
-    forall {A : Type} {B:Type} (f : A -> bool) (e:B) l,
-    findA f l = Some e -> exists k, List.In (k,e) l /\ f k = true.
-  Proof.
-    intros.
-    induction l. {
-      inversion H.
-    }
-    destruct a as (k', e').
-    simpl in *.
-    remember (f k').
-    destruct b.
-    - inversion H; subst.
-      exists k'.
-      intuition.
-    - apply IHl in H; clear IHl.
-      destruct H as  (k, (?,?)).
-      eauto.
-  Qed.
-
-  Lemma finda_spec_none_1:
-    forall {A : Type} {B:Type} (f : A -> bool) l,
-    findA f l = None -> forall k (e:B), List.In (k,e) l -> f k = false.
-  Proof.
-    intros.
-    induction l. {
-      inversion H0.
-    }
-    destruct a as (k',e').
-    simpl in *.
-    remember (f k').
-    destruct b.
-    - inversion H.
-    - destruct H0.
-      + inversion H0; subst. auto.
-      + auto.
-  Qed.
-
-  Lemma finda_rw:
-    forall {A:Type} {B:Type} f l,
-    { exists k e, findA f l = Some e /\ List.In (k,e) l /\ f k = true } +
-    { findA f l = None /\ forall (k:A) (e:B), List.In (k,e) l -> f k = false }.
-  Proof.
-    intros.
-    remember (findA f l).
-    symmetry in Heqo.
-    destruct o.
-    - left.
-      apply finda_spec_some_1 in Heqo.
-      destruct Heqo as  (k, (?,?)).
-      eauto.
-    - right.
-      eauto using finda_spec_none_1.
-  Qed.
-
-  (* ----- *)
-(*
-  Lemma tid_beq_inv_true:
-    forall p p',
-    tid_beq p p' = true ->
-    p = p'.
-  Proof.
-    intros.
-    unfold tid_beq in *.
-    eauto using eq_dec_inv_true.
-  Qed.
-
-  Lemma tid_beq_inv_false:
-    forall p p',
-    tid_beq p p' = false ->
-    p <> p'.
-  Proof.
-    intros.
-    unfold tid_beq in *.
-    eauto using eq_dec_inv_false.
-  Qed.
-*)
-  Lemma async_simpl_notina:
-    forall  p r l ph t' t,
-    ~ InA eq_phid (p, r) l ->
-    async_1 l t' t p ph = ph.
+  Lemma async_simpl_notin:
+    forall p (ps:phased) ph t,
+    ~ Map_PHID.In p (get_args ps) ->
+    async_1 ps t p ph = ph.
   Proof.
     intros.
     unfold async_1.
-    destruct (finda_rw (tid_beq p) l) as [(p',(r',(R,(?,?))))|(R,?)].
-    - rewrite R; clear R.
-      contradiction H.
-      rewrite InA_alt.
-      exists (p', r').
-      intuition.
-      apply eq_dec_inv_true in H1.
-      subst.
-      apply eq_phid_fst_eq.
+    destruct (Map_PHID_Extra.find_rw p (get_args ps)) as [(R,?)|(r,(R,?))].
     - rewrite R; clear R.
       trivial.
+    - contradiction H.
+      eauto using Map_PHID_Extra.mapsto_to_in.
   Qed.
 
   Lemma pm_async_1_rw:
-    forall l t' t p ph,
-      { exists r, List.In (p, r) l /\ async_1 l t' t p ph = register (mk_registry t' r) t ph }
+    forall ps t p ph,
+      { exists r, Map_PHID.MapsTo p r (get_args ps) /\ async_1 ps t p ph = register (mk_registry (get_new_task ps) r) t ph }
       +
-      { async_1 l t' t p ph = ph /\ forall r, ~ List.In (p, r) l}.
+      { async_1 ps t p ph = ph /\ ~ Map_PHID.In p (get_args ps)}.
   Proof.
     intros.
     unfold async_1.
-    destruct (finda_rw (tid_beq p) l) as [?|?].
-    - left.
-      destruct e as (p', (r, (R1,(?,R2)))).
-      exists r.
-      rewrite R1.
-      apply eq_dec_inv_true in R2.
-      subst.
-      intuition.
+    destruct (Map_PHID_Extra.find_rw p (get_args ps)).
     - right.
-      destruct a as (R, Hx).
+      destruct a as (R,?).
       rewrite R.
       intuition.
-      apply Hx in H.
-      apply eq_dec_inv_false in H.
-      contradiction H.
-      trivial.
+    - left.
+      destruct e as (r,(R,?)).
+      rewrite R.
+      eauto.
   Qed.
 
   Lemma pm_async_1_mapsto_neq:
-    forall t'' v l t' t p ph,
-    t'' <> t' ->
-    Map_TID.MapsTo t'' v (async_1 l t' t p ph) ->
-    Map_TID.MapsTo t'' v ph.
+    forall t' v ps t p ph,
+    t' <> (get_new_task ps) ->
+    Map_TID.MapsTo t' v (async_1 ps t p ph) ->
+    Map_TID.MapsTo t' v ph.
   Proof.
     intros.
     unfold async_1 in *.
-    destruct (finda_rw (tid_beq p) l) as [(p'',(r',(?,(?,?))))|(R,?)]. {
-      apply eq_dec_inv_true in H3.
-      subst.
-      rewrite H1 in *; clear H1.
-      eauto using ph_register_mapsto_neq.
+    destruct (Map_PHID_Extra.find_rw p (get_args ps)) as [(R,?)|(r,(R,?))]. {
+      rewrite R in *; clear R.
+      assumption.
     }
     rewrite R in *; clear R.
-    assumption.
+    eauto using ph_register_mapsto_neq.
   Qed.
 
   Lemma pm_async_1_mapsto_eq:
-    forall v l t' t p ph r,
+    forall v ps t p ph r,
     Map_TID.In t ph ->
-    List.In (p, r) l ->
-    Map_TID.MapsTo t' v (async_1 l t' t p ph) ->
-    exists v' r, Map_TID.MapsTo t v' ph /\ List.In (p, r) l /\
-    v = Taskview.set_mode v' r.
+    Map_PHID.MapsTo p r (get_args ps) ->
+    Map_TID.MapsTo (get_new_task ps) v (async_1 ps t p ph) ->
+    exists v', Map_TID.MapsTo t v' ph /\ v = Taskview.set_mode v' r.
   Proof.
     intros.
     unfold async_1 in *.
-    destruct (finda_rw (tid_beq p) l) as [(p'',(r',(?,(?,?))))|(R,?)]. {
-      apply eq_dec_inv_true in H4.
-      rewrite H2 in *; clear H2.
-      subst.
-      apply ph_register_mapsto_eq in H1; auto.
-      destruct H1 as (v', (mt, R)).
-      exists v'.
-      exists r'.
-      intuition.
+    destruct (Map_PHID_Extra.find_rw p (get_args ps)) as [(R,?)|(r',(R,?))]. {
+      (* absurd *)
+      rewrite R in *; clear R.
+      contradiction H2.
+      eauto using Map_PHID_Extra.mapsto_to_in.
     }
-    (* absurd *)
     rewrite R in *; clear R.
-    apply H2 in H0.
-    apply eq_dec_inv_false in H0.
-    contradiction H0.
-    trivial.
+    assert (r' = r) by eauto using Map_PHID_Facts.MapsTo_fun; subst; clear H2.
+    eauto using ph_register_mapsto_eq.
   Qed.
 
   Lemma pm_async_1_mapsto:
-    forall p ph l t' t t'' v,
-    Map_TID.MapsTo t'' v (async_1 l t' t p ph) ->
-    Map_TID.MapsTo t'' v ph \/
-    (exists v' r, Map_TID.MapsTo t v' ph /\ List.In (p, r) l /\
+    forall p ph ps t' t v,
+    Map_TID.MapsTo t' v (async_1 ps t p ph) ->
+    Map_TID.MapsTo t' v ph \/
+    (exists v' r, Map_TID.MapsTo t v' ph /\ Map_PHID.MapsTo p r (get_args ps) /\
     v = Taskview.set_mode v' r).
   Proof.
     intros.
-    destruct (pm_async_1_rw l t' t p ph) as [(r,(i,R))|(R1,R2)]. {
+    destruct (pm_async_1_rw ps t p ph) as [(r,(i,R))|(R1,R2)]. {
       rewrite R in *; clear R.
       apply ph_register_inv_mapsto in H.
       destruct H; auto.
@@ -536,9 +402,9 @@ Section Facts.
   Qed.
 
   Lemma pm_async_mapsto_rw:
-    forall p ph l t' t m,
-    Map_PHID.MapsTo p ph (async l t' t m) <->
-    exists ph', ph = async_1 l t' t p ph' /\ Map_PHID.MapsTo p ph' m.
+    forall p ph ps t m,
+    Map_PHID.MapsTo p ph (async ps t m) <->
+    exists ph', ph = async_1 ps t p ph' /\ Map_PHID.MapsTo p ph' m.
   Proof.
     intros.
     unfold async in *.
@@ -550,30 +416,30 @@ Section Facts.
   Qed.
 
   Lemma async_notina_mapsto:
-    forall p r l t' m t ph,
-    ~ SetoidList.InA eq_phid (p, r) l ->
+    forall p ps m t ph,
+    ~ Map_PHID.In p (get_args ps) ->
     Map_PHID.MapsTo p ph m ->
-    Map_PHID.MapsTo p ph (async l t' t m).
+    Map_PHID.MapsTo p ph (async ps t m).
   Proof.
     intros.
     apply pm_async_mapsto_rw.
     exists ph.
     intuition.
     symmetry.
-    eauto using async_simpl_notina.
+    eauto using async_simpl_notin.
   Qed.
 
   Lemma async_notina_mapsto_rtl:
-    forall l p r t' m t ph,
-    ~ SetoidList.InA eq_phid (p, r) l ->
-    Map_PHID.MapsTo p ph (async l t' t m) ->
+    forall p ps m t ph,
+    ~ Map_PHID.In p (get_args ps) ->
+    Map_PHID.MapsTo p ph (async ps t m) ->
     Map_PHID.MapsTo p ph m.
   Proof.
     intros.
     apply pm_async_mapsto_rw in H0.
     destruct H0 as (ph', (R, mt)).
     rewrite R in *.
-    apply async_simpl_notina with (ph:=ph') (t':=t') (t:=t) in H.
+    apply async_simpl_notin with (ph:=ph') (t:=t) in H.
     rewrite H.
     assumption.
   Qed.

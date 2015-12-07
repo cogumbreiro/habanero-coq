@@ -581,23 +581,20 @@ Module Phasermap.
   Qed.
 
   Lemma ph_async_1_preserves_welformed:
-    forall l t' t m p ph,
-    AsyncPre l t' t m ->
+    forall ps t m p ph,
+    AsyncPre ps t m ->
     Map_PHID.MapsTo p ph m ->
     Phaser.Welformed ph ->
-    Phaser.Welformed (async_1 l t' t p ph).
+    Phaser.Welformed (async_1 ps t p ph).
   Proof.
     intros.
-    destruct (pm_async_1_rw l t' t p ph) as [(r,(i,R))|?]. {
+    destruct (pm_async_1_rw ps t p ph) as [(r,(i,R))|?]. {
       rewrite R; clear R.
-      assert (Hx: RegisterPre {| get_task := t'; get_mode := r |} t ph). {
+      assert (Hx: RegisterPre {| Phaser.get_task := (get_new_task ps); get_mode := r |} t ph). {
         inversion H.
-        rewrite Forall_forall in H2.
-        apply H2 in i.
-        inversion i.
-        simpl in *.
-        assert (ph0 = ph) by eauto using Map_PHID_Facts.MapsTo_fun.
-        subst.
+        apply H2 in H0.
+        inversion H0.
+        assert (r0 = r) by eauto using Map_PHID_Facts.MapsTo_fun; subst.
         assumption.
       }
       auto using ph_register_preserves_welformed.
@@ -608,10 +605,10 @@ Module Phasermap.
   Qed.
 
   Lemma pm_async_preserves_welformed:
-    forall l t' t m,
+    forall ps t m,
     Welformed m ->
-    AsyncPre l t' t m ->
-    Welformed (async l t' t m).
+    AsyncPre ps t m ->
+    Welformed (async ps t m).
   Proof.
     intros.
     apply pm_welformed_def.
