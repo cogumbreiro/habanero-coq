@@ -26,6 +26,6 @@ src/AsyncFinish/Find.v
 src/AsyncFinish/LangExtra.v
 src/AsyncFinish/Examples.v
 src/AsyncFinish/Typesystem.v
-#src/AsyncFinish/Progress.v
+src/AsyncFinish/Progress.v
 #src/All.v
 
