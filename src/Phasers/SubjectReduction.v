@@ -319,7 +319,7 @@ Proof.
   eauto using trans_diff_def.
 Qed.
 
-Lemma wait_all_sr:
+Lemma sr_wait_all:
   forall pm t,
   Valid pm ->
   Valid (wait_all t pm).
@@ -465,7 +465,7 @@ Section Drop.
     eauto using pm_diff_def, ph_diff_def.
   Qed.
 
-  Lemma drop_all_sr:
+  Lemma sr_drop_all:
     forall pm t,
     Valid pm ->
     Valid (drop_all t pm).
@@ -496,7 +496,7 @@ Section Drop.
     - eauto using pm_diff_def, ph_diff_def.
   Qed.
 
-  Lemma ph_drop_sr:
+  Lemma sr_ph_drop:
     forall pm p t,
     Valid pm ->
     Valid (ph_drop p t pm).
@@ -557,7 +557,7 @@ Section Signal.
     eauto using pm_diff_def, ph_diff_def, ph_diff_signal.
   Qed.
 
-  Lemma signal_all_sr:
+  Lemma sr_signal_all:
     forall pm t,
     Valid pm ->
     Valid (signal_all t pm).
@@ -587,7 +587,7 @@ Section Signal.
     - eauto using pm_diff_def, ph_diff_def.
   Qed.
 
-  Lemma ph_signal_sr:
+  Lemma sr_ph_signal:
     forall pm p t,
     Valid pm ->
     Valid (ph_signal p t pm).
@@ -1202,7 +1202,7 @@ Section PhNew.
       eauto.
   Qed.
 
-  Lemma pm_ph_new_sr:
+  Lemma sr_ph_new:
     forall p pm,
     Valid pm ->
     Valid (ph_new p t pm).
@@ -1225,28 +1225,6 @@ Section PhNew.
 
 
 End PhNew.
-
-  Lemma async_in_1:
-    forall p ps t m,
-    Map_PHID.In p (async ps t m)->
-    Map_PHID.In p m.
-  Proof.
-    intros.
-    unfold async in *.
-    rewrite Map_PHID_Facts.mapi_in_iff in H.
-    assumption.
-  Qed.
-
-  Lemma async_in_2:
-    forall p ps t m,
-    Map_PHID.In p m ->
-    Map_PHID.In p (async ps t m).
-  Proof.
-    intros.
-    unfold async in *.
-    rewrite Map_PHID_Facts.mapi_in_iff.
-    assumption.
-  Qed.
 
 Section Async.
   Variable t:tid.
@@ -1390,124 +1368,116 @@ Section Async.
         apply linked_eq.
   Qed.
 
-(*
-  Let ph_diff_register:
-    forall t' r t e z ph,
-    ph_diff (register {| get_task := t'; get_mode := r |} t ph) e z ->
-    ph_diff ph e z.
+  Let starts_with_chg_edge:
+    forall w x,
+    StartsWith w x ->
+    StartsWith (map chg_edge w) (chg_tid x).
+  Proof.
+    destruct w; intros. {
+      apply starts_with_inv_nil in H.
+      inversion H.
+    }
+    destruct p0 as (a,b).
+    simpl.
+    apply starts_with_eq in H.
+    subst.
+    auto using starts_with_def.
+  Qed.
+
+  Let ends_with_chg_edge:
+    forall w x,
+    EndsWith w x ->
+    EndsWith (map chg_edge w) (chg_tid x).
+  Proof.
+    induction w; intros. {
+      apply ends_with_nil_inv in H.
+      inversion H.
+    }
+    destruct a as (a,b).
+    destruct w. {
+      simpl.
+      apply ends_with_eq in H; subst.
+      eauto using ends_with_edge.
+    }
+    simpl in *.
+    apply ends_with_inv in H.
+    eauto using ends_with_cons.
+  Qed.
+
+  Let walk2_chg_edge:
+    forall t1 t2 w,
+    Walk2 (HasDiff (pm_diff m')) t1 t2 w ->
+    Walk2 (HasDiff (pm_diff m)) (chg_tid t1) (chg_tid t2) (map chg_edge w).
   Proof.
     intros.
-    unfold register in *.
-    remember (Map_TID.find _ _).
-    symmetry in Heqo.
-    destruct o as [v'|].
-    - apply Map_TID_Facts.find_mapsto_iff in Heqo.
+    inversion H.
+    subst.
+    eauto using walk2_def.
+  Qed.
+
+  Let diff_sum_chg_edge:
+    forall w z,
+    DiffSum (pm_diff m') w z ->
+    DiffSum (pm_diff m) (map chg_edge w) z.
+  Proof.
+    induction w; intros.
+    - simpl.
       inversion H.
       subst.
-      simpl in *.
-      apply Map_TID_Facts.add_mapsto_iff in H0.
-      apply Map_TID_Facts.add_mapsto_iff in H1.
-      destruct H0, H1.
-      + destruct H0, H1.
-        repeat subst.
-        rewrite set_mode_preserves_wait_phase in *.
-        apply ph_diff_def.
-  Qed.
-*)
-(*
-  Let ph_diff_preserves_new:
-    forall l p ph t t' pm t1 t2 z,
-    ph_diff ph t1 t2 z ->
-    Map_PHID.MapsTo p ph (async l t' t pm) ->
-    exists ph' : phaser, Map_PHID.MapsTo p ph' pm /\ ph_diff ph' t1 t2 z.
-  Proof.
-    intros l.
-    induction l; intros; eauto.
-    destruct a as (p', r).
-    simpl in *.
-    unfold async_1 in *.
-    remember (Map_PHID.find _ _).
-    symmetry in Heqo.
-    destruct o as [ph'|].
-    - rewrite Map_PHID_Facts.add_mapsto_iff in H0.
-      destruct H0.
-      + destruct H0.
+      auto using diff_sum_nil.
+    - inversion H; subst.
+      + inversion H.
         subst.
-        apply Map_PHID_Facts.find_mapsto_iff in Heqo.
-        exists ph'.
-        apply Map_PHID_Facts.find_mapsto_iff in Heqo.
-        assert (Hx := Heqo).
-        apply Map_PHID_Facts.MapsTo_fun with (e:=(register {| get_task := t'; get_mode := r |} t ph')) in Heqo.
-        rewrite Heqo.
-        assumption.
-        apply ph_register_rw in Heqo.
-        apply pre_async_rw with (t:=t) (t':=t') (r:=r)in Heqo.
-    rewrite pre_async_rw with (ph:=ph) in H0. 
-    unfold as in *.
-    apply Map_PHID_Facts.add_mapsto_iff in H0.
-    destruct H0.
-    + destruct H0.
-      subst.
-      exists (Phaser.make t).
-        intuition.
-        eauto.
-      + destruct H0.
-        eauto.
+        simpl.
+        apply edge_impl in H4.
+        simpl in *.
+        auto using diff_sum_pair.
+      + apply edge_impl in H4.
+        simpl in *.
+        auto using diff_sum_cons.
   Qed.
-*)
-(*
-  Let async_transdiff:
-    forall pm t1 t2 z,
-    In t1 pm ->
-    In t2  pm ->
-    TransDiff tid (diff (f pm)) t1 t2 z ->
-    TransDiff tid (diff pm) t1 t2 z.
+
+  Let trans_diff_chg:
+    forall t1 t2 z,
+    TransDiff (pm_diff m') t1 t2 z ->
+    TransDiff (pm_diff m) (chg_tid t1) (chg_tid t2) z.
   Proof.
     intros.
-    inversion H; subst; clear H.
-    apply preserves_walk2 in H1.
-    inversion H1; subst.
-    apply preserves_diff_sum with (t1:=t1) (tn:=t2) in H0; repeat auto.
-    eauto using trans_diff_def.
-  Qed.
-*)
-(*
-  Let ph_new_transdiff:
-    forall p t pm t1 t2 z,
-    TransDiff tid (diff (ph_new p t pm)) t1 t2 z ->
-    TransDiff tid (diff pm) t1 t2 z.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply preserves_walk2 in H1.
-    - inversion H1; subst.
-      apply preserves_diff_sum with (t1:=t1) (tn:=t2) in H0; repeat auto.
+    inversion H.
+    subst.
     eauto using trans_diff_def.
   Qed.
 
-  Lemma ph_new_sr:
-    forall p t pm,
-    Valid pm ->
-    Valid (ph_new p t pm).
+  Lemma sr_async:
+    Valid m ->
+    Valid m'.
   Proof.
+    intros.
     unfold Valid in *.
     unfold TransDiffFun in *.
     intros.
-    inversion H0; subst; clear H0.
-    inversion H1; subst; clear H1.
-    eauto using preserves_transdiff.
+    eauto.
   Qed.
 
-  Lemma ph_new_sr:
-    forall pm p t,
-    Valid pm ->
-    Valid (ph_new p t pm).
-  Proof.
-    intros.
-    eauto using preserves_diff_sr.
-  Qed.*)
 End Async.
 
+  Lemma subject_reduction:
+    forall m t o m',
+    Valid m ->
+    Reduces m t o m' ->
+    Valid m'.
+  Proof.
+    intros.
+    destruct H0.
+    destruct o; simpl in *.
+    - auto using sr_ph_new.
+    - auto using sr_ph_signal.
+    - auto using sr_ph_drop.
+    - auto using sr_signal_all.
+    - auto using sr_wait_all.
+    - auto using sr_drop_all.
+    - auto using sr_async.
+  Qed.
 End SR.
 
 
