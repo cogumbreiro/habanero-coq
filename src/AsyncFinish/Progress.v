@@ -299,7 +299,7 @@ Proof.
     subst.
     assumption.
 Qed.
-
+(*
 Lemma check_translate:
   forall f t o f',
   Check f t o ->
@@ -313,3 +313,4 @@ Proof.
   inversion H2; subst.
   - apply check_begin_async.
 Qed.
+*)
