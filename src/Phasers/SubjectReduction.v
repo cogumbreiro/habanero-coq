@@ -631,6 +631,16 @@ End Signal.
   Qed.
 
 Section PhNew.
+  (**
+    The gist of the proof is on taking a diff sum on [ph_new p t pm]
+    and creating a new diff sum with the same result on [pm].
+    The difficulty in doing this translation is that the path in the
+    diff sum mentions phaser [p], then [p] is not in [pm]. But
+    we also know that if [p] is mentioned in the original diff sum,
+    then it can only be a self loop where we are comparing [t] with
+    itself via [p] and the diff is zero, in which case we can discard
+    any edge (t, t) and obtain a diff sum on [pm] with the same result. *)
+
 
   Let pm_diff_ph_new:
     forall p t t1 t2 z pm,
@@ -1227,6 +1237,15 @@ Section PhNew.
 End PhNew.
 
 Section Async.
+
+  (**
+    The idea behind the proof of subject reduction for async is that given a
+    phasermap [async ps t m], for any diff-sum ranging from [t1] to task [t2]
+    with path [w] and a sum of [s], you define [sigma] as replacing [t'] by [t]
+    and then create a diff-sum from [sigma t1] to [sigma t2] with a path of
+    [map sigma w] that also has a sum of [s].
+  *)
+
   Variable t:tid.
 
   Variable p : phid.
