@@ -1260,132 +1260,6 @@ End PhNew.
     assumption.
   Qed.
 
-(*
-  Lemma async_in_iff:
-    forall p l t' t m,
-    Map_PHID.In p (async l t' t m) <->
-    Map_PHID.In p m.
-  Proof.
-    intros.
-    split; eauto using async_in_1, async_in_2.
-  Qed.
-*)
-(*
-  Lemma async_pre_inv_ina_pre:
-    forall l t' t m p r,
-    AsyncPre l t' t m ->
-    InA eq_phid (p,r) l ->
-    Map_PHID.In p m.
-  Proof.
-    intros.
-    inversion H.
-    rewrite Forall_forall in H1.
-    rewrite InA_alt in H0.
-    destruct H0 as (a', (?, i)).
-    apply H1 in i.
-    destruct a' as (p', y).
-    compute in H0.
-    subst.
-    inversion i.
-    simpl in *.
-    eauto using Map_PHID_Extra.mapsto_to_in.
-  Qed.
-
-  Lemma async_pre_inv_in_pre:
-    forall l t' t m p r,
-    AsyncPre l t' t m ->
-    In (p,r) l ->
-    Map_PHID.In p m.
-  Proof.
-    intros.
-    assert (InA eq_phid (p,r) l). {
-      rewrite InA_alt.
-      exists (p, r).
-      intuition.
-    }
-    eauto using async_pre_inv_ina_pre.
-  Qed.
-
-  Lemma async_pre_inv_in_post:
-    forall l t' t m p ph r,
-    AsyncPre l t' t m ->
-    In (p,r) l ->
-    Map_PHID.MapsTo p ph m->
-    Map_PHID.MapsTo p (register {| get_task := t'; get_mode := r |} t ph) (async l t' t m).
-  Proof.
-    intros.
-    induction l. {
-      inversion H0.
-    }
-    destruct a as (p',r').
-    simpl.
-    unfold async_1.
-    remember (Map_PHID.find _ _).
-    symmetry in Heqo.
-    destruct o as [ph'|].
-    - apply Map_PHID_Facts.find_mapsto_iff in Heqo.
-      inversion H0.
-      + inversion H2; subst; clear H2.
-        assert (ph' = ph). {
-          assert (Map_PHID.MapsTo p ph (async l  t' t m)). {
-            assert (~ InA eq_phid (p, r) l). {
-              inversion H.
-              intuition.
-              inversion H3.
-              subst.
-              contradiction.
-            }
-            eauto using async_notina_mapsto.
-          }
-          eauto using Map_PHID_Facts.MapsTo_fun.
-        }
-        subst.
-        auto using Map_PHID.add_1.
-      + rewrite Map_PHID_Facts.add_mapsto_iff.
-        right; intuition.
-        * subst.
-          inversion H.
-          inversion H4.
-          subst.
-          contradiction H8.
-          rewrite InA_alt.
-          exists (p, r).
-          intuition.
-          auto using Phasermap.eq_phid_fst_eq.
-        * eauto using async_pre_inv.
-    - inversion H0.
-      + inversion H2; subst; clear H2.
-        apply Map_PHID_Extra.mapsto_to_in in H1.
-        apply async_in_2 with (l:=l) (t':=t') (t:=t) in H1.
-        assert (~ Map_PHID.In p (async l t' t m)). {
-          apply Map_PHID_Facts.not_find_in_iff.
-          assumption.
-        }
-        contradiction.
-      + eauto using async_pre_inv.
-  Qed.
-  *)
-(*
-  Lemma async_inv_mapsto_cons:
-    forall p ph a l t' t m,
-    AsyncPre (a :: l) t' t m ->
-    Map_PHID.MapsTo p ph (async (a :: l) t' t m) ->
-    Map_PHID.MapsTo p ph (async l t' t m) \/ False.
-  Proof.
-    intros.
-    destruct a as (p', r).
-    simpl in *.
-    assert (i: Map_PHID.In p' m). {
-      eauto using async_pre_inv_in, InA_cons_hd, eq_phid_fst_eq.
-    }
-    apply Map_PHID_Extra.in_to_mapsto in i.
-    destruct i as (ph', mt).
-    assert (R := mt).
-    apply pre_async_rw with (t:=t) (t':=t') (r:=r) in R.
-    rewrite R in H0.
-  Qed.
-*)
-
 Section Async.
   Variable t:tid.
 
@@ -1402,27 +1276,7 @@ Section Async.
   Variable pre: AsyncPre ps t m.
 
   Let m' := async ps t m.
-(*
-  Lemma walk_map_impl:
-    forall {A:Type} (E F: (A*A)->Prop) f,
-    (forall a, E a -> F (f a)) ->
-    (forall a w, Linked a w -> Linked (f a) (map f w)) ->
-    forall w,
-    Walk E w ->
-    Walk F (map f w).
-  Proof.
-    intros.
-    induction w. {
-      eauto using walk_nil.
-    }
-    inversion H1.
-    subst.
-    apply IHw in H4.
-    clear IHw.
-    simpl.
-    apply walk_cons; auto.
-  Qed.
-*)
+
   Let chg_edge_inv:
     forall pi ph ti v,
     Map_PHID.MapsTo pi ph m' ->
@@ -1526,25 +1380,46 @@ Section Async.
     eauto.
   Qed.
 
-  Let walk_chg_edge:
+  Lemma walk_map_impl:
+    forall {A:Type} (E F: (A*A)->Prop) f,
+    (forall a, E a -> F (f a)) ->
+    (forall a w, Linked a w -> Linked (f a) (map f w)) ->
     forall w,
-    Walk (HasDiff (pm_diff m')) w ->
-    Walk (HasDiff (pm_diff m)) (map chd_edge w).
+    Walk E w ->
+    Walk F (map f w).
   Proof.
     intros.
-    apply walk_map_impl with (E:=(HasDiff (pm_diff m'))); intros.
-    - destruct H0.
-      unfold HasDiff.
-      exists x.
     induction w. {
       eauto using walk_nil.
     }
-    inversion H.
+    inversion H1.
     subst.
+    apply IHw in H4.
+    clear IHw.
     simpl.
     apply walk_cons; auto.
-    -  
-    - 
+  Qed.
+
+  Let walk_chg_edge:
+    forall w,
+    Walk (HasDiff (pm_diff m')) w ->
+    Walk (HasDiff (pm_diff m)) (map chg_edge w).
+  Proof.
+    intros.
+    apply walk_map_impl with (E:=(HasDiff (pm_diff m'))); intros; auto.
+    - destruct H0.
+      unfold HasDiff.
+      exists x.
+      eauto.
+    - destruct w0.
+      + apply linked_nil.
+      + destruct p0 as (x, y).
+        simpl.
+        destruct a as (a,b).
+        apply linked_inv in H0.
+        simpl in *.
+        subst.
+        apply linked_eq.
   Qed.
 
 (*
