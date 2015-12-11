@@ -444,8 +444,8 @@ Section Drop.
   Proof.
     intros.
     inversion H; subst.
-    apply drop_mapsto in H0.
-    apply drop_mapsto in H1.
+    apply drop_mapsto_inv in H0.
+    apply drop_mapsto_inv in H1.
     destruct H0; destruct H1.
     auto using ph_diff_def.
   Qed.

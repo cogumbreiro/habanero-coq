@@ -439,7 +439,7 @@ Section Facts.
     simpl in *; inversion H0; eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
-  Lemma drop_mapsto:
+  Lemma drop_mapsto_inv:
     forall t v ph t',
     Map_TID.MapsTo t v (drop t' ph) ->
     t' <> t /\ Map_TID.MapsTo t v ph.
@@ -521,6 +521,43 @@ Section Facts.
     right.
     intuition.
     eauto using signal_mapsto_neq.
+  Qed.
+
+  Lemma wait_mapsto_eq:
+    forall t v ph,
+    Map_TID.MapsTo t v (wait t ph) ->
+    exists v', v = Taskview.wait v' /\ Map_TID.MapsTo t v' ph.
+  Proof.
+    intros.
+    unfold signal in *.
+    eauto using update_mapsto_eq.
+  Qed.
+
+  Lemma wait_mapsto_neq:
+    forall t v t' ph,
+    Map_TID.MapsTo t v (wait t' ph) ->
+    t' <> t ->
+    Map_TID.MapsTo t v ph.
+  Proof.
+    intros.
+    unfold signal in *.
+    eauto using update_mapsto_neq.
+  Qed.
+
+  Lemma wait_mapsto_inv:
+    forall  t v t' ph,
+    Map_TID.MapsTo t v (wait t' ph) ->
+    { t' = t /\ exists v', (v = Taskview.wait v' /\ Map_TID.MapsTo t v' ph) } +
+    { t' <> t /\ Map_TID.MapsTo t v ph }.
+  Proof.
+    intros.
+    destruct (TID.eq_dec t' t). {
+      subst; left. intuition.
+      auto using wait_mapsto_eq.
+    }
+    right.
+    intuition.
+    eauto using wait_mapsto_neq.
   Qed.
 
   Lemma make_mapsto:

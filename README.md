@@ -7,19 +7,19 @@ Formalization of [HJ](https://wiki.rice.edu/confluence/display/HABANERO/Habanero
 ```
 ├── Phasers
 │   ├── PhaseOrdering.v: Defines ordering in a phasermap and over reduction
-|   |
+│   │
 │   ├── Progress.v: Proves that DF has progress
-|   |
+│   │
 │   ├── SubjectReduction.v: Proves that the DF-invariant is preserved by
-|   |   redution
-|   |
+│   │   redution
+│   │
 │   └── Welformedness.v: Defines welformedness; preserved by reduction
 |
 ├── AsyncFinish
 │   ├── Examples.v: Examples, including the definition of FX10
-|   |
+│   │
 │   ├── Find.v: Shows that any task in a leaf finish cannot be blocked
-|
+│
 ├── All.v: Integrates the operations in AsyncFinish with Phasers for
     deadlock-freedom
 ```

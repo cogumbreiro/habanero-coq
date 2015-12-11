@@ -197,6 +197,17 @@ Section Facts.
     destruct (signal_cap_dec r);
     auto using not_signal_cap_to_wo.
   Qed.
+
+  Lemma signal_cap_and_wait_cap_to_sw:
+    forall r,
+    SignalCap r ->
+    WaitCap r ->
+    r = SIGNAL_WAIT.
+  Proof.
+    intros.
+    destruct H; trivial.
+    inversion H0.
+  Qed.
 End Facts.
 
 (* end hide *)

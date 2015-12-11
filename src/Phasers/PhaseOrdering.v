@@ -40,6 +40,8 @@ Module Taskview.
       WaitCap (mode v2) ->
       Lt v1 v2.
 
+  (** v2 is beghind of v1, or v1 and v2 intersect. *)
+
   Inductive Ge v1 v2 : Prop := 
     | tv_ge_ge:
        signal_phase v1 >= wait_phase v2 ->
@@ -65,7 +67,7 @@ Module Taskview.
   Open Scope phaser_scope.
   Import Notations.
 
-  Section Facts.
+  Section Facts.    
 
   Lemma le_spec:
     forall v1 v2,
@@ -407,6 +409,84 @@ Module Taskview.
       assumption.
   Qed.
 
+  Lemma lt_irreflexive:
+    forall v,
+    Welformed v ->
+    ~ (Lt v v).
+  Proof.
+    intros.
+    rewrite tv_not_lt_rw_tv_ge.
+    auto using tv_welformed_to_ge_refl.
+  Qed.
+
+  Lemma lt_trans:
+    forall x y z,
+    Welformed y ->
+    x < y ->
+    y < z ->
+    x < z.
+  Proof.
+    intros.
+    inversion H0.
+    inversion H1.
+    apply tv_lt_def; auto.
+    assert (wait_phase y <= signal_phase y)%nat
+    by auto using welformed_wait_phase_le_signal_phase.
+    intuition.
+  Qed.
+
+  Section Antisym.
+
+  Variable x y:taskview.
+  
+  Variable wfx: Welformed x.
+  Variable wfy: Welformed y.
+
+  Lemma lt_antisym:
+    x < y ->
+    ~ (y < x).
+  Proof.
+    intros.
+    rewrite tv_not_lt_rw_tv_ge.
+    inversion H; clear H.
+    destruct x as (sx, wx, rx).
+    destruct y as (sy, wy, ry).
+    simpl in *.
+    inversion H1; clear H1. {
+      subst.
+      inversion H2; clear H2. {
+        subst; simpl in *.
+        apply tv_ge_ge.
+        simpl in *.
+        inversion wfx; simpl in *; subst;
+        inversion wfy; simpl in *; subst; intuition.
+      }
+      subst.
+      auto using tv_ge_wo.
+    }
+    subst.
+    auto using tv_ge_so.
+  Qed.
+  End Antisym.
+
+  Lemma lt_trans_ex:
+    forall x y y' z,
+    x < y ->
+    y <= y' ->
+    y' < z ->
+    x < z.
+  Proof.
+    intros.
+    inversion H; clear H.
+    inversion H1; clear H1.
+    apply tv_lt_def; auto.
+    inversion H0.
+    - intuition.
+    - rewrite H1 in *.
+      inversion H4.
+    - rewrite H1 in *.
+      inversion H5.
+  Qed.
   End Facts.
 End Taskview.
 
@@ -427,6 +507,14 @@ Module Phaser.
         R v1 v2) ->
       Rel R ph1 ph2.
 
+  Inductive HappensBefore (ph1 ph2:phaser) : Prop :=
+    ph_happens_before_def:
+      forall t1 t2 v1 v2,
+      Map_TID.MapsTo t1 v1 ph1 ->
+      Map_TID.MapsTo t2 v2 ph2 ->
+      Lt v1 v2 ->
+      HappensBefore ph1 ph2.
+
   Lemma ph_rel_inv:
     forall R ph1 ph2 t1 t2 v1 v2,
     Map_TID.MapsTo t1 v1 ph1 ->
@@ -438,10 +526,93 @@ Module Phaser.
     inversion H1.
     eauto.
   Qed.
+   
 
   Definition Le := Rel Taskview.Le.
 
   Definition Ge := Rel Taskview.Ge.
+
+  Lemma ph_hb_to_not_chb:
+    forall ph1 ph2,
+    HappensBefore ph1 ph2 ->
+    ~ Ge ph1 ph2.
+  Proof.
+    intros.
+    intuition.
+    inversion H.
+    inversion H0.
+    assert (Taskview.Ge v1 v2) by eauto.
+    assert (~ Taskview.Ge v1 v2) by auto using tv_lt_to_not_ge.
+    contradiction H6.
+  Qed.
+
+  Lemma ph_chb_to_not_hb:
+    forall ph1 ph2,
+    Ge ph1 ph2 ->
+    ~ HappensBefore ph1 ph2.
+  Proof.
+    intros.
+    intuition.
+    inversion H.
+    inversion H0.
+    assert (Taskview.Ge v1 v2) by eauto.
+    assert (~ Taskview.Ge v1 v2) by auto using tv_lt_to_not_ge.
+    contradiction H6.
+  Qed.
+
+  Lemma ph_hb_trans:
+    forall ph1 ph2 ph3,
+    HappensBefore ph1 ph2 ->
+    HappensBefore ph2 ph3 ->
+    Ge ph2 ph2 ->
+    HappensBefore ph1 ph3.
+  Proof.
+    intros.
+    inversion H.
+    inversion H0.
+    clear H H0.
+    assert (Taskview.Ge v0 v2) by (inversion H1; eauto).
+    eauto using lt_trans_ex, ph_happens_before_def.
+  Qed.
+
+  Lemma hb_irreflexive:
+    forall ph,
+    Ge ph ph ->
+    ~ (HappensBefore ph ph).
+  Proof.
+    intros.
+    auto using ph_chb_to_not_hb.
+  Qed.
+
+  Section Antisym.
+
+  Variable x y:phaser.
+
+  Variable wx: Welformed x.
+  Variable wy: Welformed y.
+  Variable gx: Ge x x.
+  Variable gy: Ge y y.
+
+  Lemma ph_hb_antisym:
+    HappensBefore x y ->
+    ~ (HappensBefore y x).
+  Proof.
+    intros.
+    apply ph_chb_to_not_hb.
+    apply ph_rel_def.
+    intros.
+    destruct (tv_lt_ge_dec v1 v2); auto.
+    inversion H.
+    assert (Lt v1 v3). {
+      inversion gx.
+      assert (Taskview.Ge v0 v2) by eauto.
+      eauto using lt_trans_ex.
+    }
+    assert (~ Taskview.Ge v1 v3) by eauto using tv_lt_to_not_ge.
+    assert (Taskview.Ge v1 v3) by (inversion gy; eauto).
+    contradiction.
+  Qed.
+  End Antisym.
 
   Let ph_ge_refl_preserves_reduces_some:
     forall ph ph' t o o',
@@ -903,7 +1074,7 @@ Module Phaser.
     intros.
     apply ph_rel_def; intros tz tx vz vx; intros.
     destruct H0; simpl in *.
-    apply drop_mapsto in H1.
+    apply drop_mapsto_inv in H1.
     destruct H1.
     inversion H; eauto.
   Qed.
@@ -966,4 +1137,153 @@ Module Phaser.
     assert (Welformed y) by (rewrite <- clos_rt_rtn1_iff in H2; eauto using ph_s_reduces_trans_refl_welformed).
     apply ph_s_reduces_preserves_ge_left with (y); auto.
   Qed.
+
+  Section ReducesPreservesAwait.
+  Variable ph: phaser.
+  Variable n: nat.
+  Variable wf: Welformed ph.
+  Variable W: Await ph n.
+
+  Lemma ph_signal_preserves_await:
+    forall t,
+    SignalPre t ph ->
+    Await (signal t ph) n.
+  Proof.
+    intros.
+    apply await_def.
+    intros ? ? mt1 Hs.
+    apply signal_mapsto_inv in mt1.
+    destruct mt1.
+    - destruct a as (E, (v', (R, mt2))).
+      symmetry in E.
+      subst.
+      rewrite signal_preserves_mode in Hs.
+      assert (signal_phase v' >= n) by (inversion W; eauto).
+      assert (signal_phase v' <= signal_phase (Taskview.signal v')). {
+        assert (Taskview.Welformed v') by (inversion wf; eauto).
+        eauto using signal_phase_le_signal.
+      }
+      intuition.
+    - destruct a.
+      inversion W; eauto.
+  Qed.
+
+  Lemma ph_wait_preserves_await:
+    forall t,
+    WaitPre t ph ->
+    Await (wait t ph) n.
+  Proof.
+    intros.
+    apply await_def.
+    intros ? ? mt1 Hs.
+    apply wait_mapsto_inv in mt1.
+    destruct mt1.
+    - destruct a as (E, (v', (R, mt2))).
+      symmetry in E.
+      subst.
+      rewrite wait_preserves_mode in Hs.
+      assert (signal_phase v' >= n) by (inversion W; eauto).
+      rewrite wait_preserves_signal_phase.
+      assumption.
+    - destruct a.
+      inversion W; eauto.
+  Qed.
+
+  Lemma ph_drop_preserves_await:
+    forall t,
+    DropPre t ph ->
+    Await (drop t ph) n.
+  Proof.
+    intros.
+    apply await_def.
+    intros ? ? mt1 Hs.
+    apply drop_mapsto_inv in mt1.
+    destruct mt1.
+    inversion W; eauto.
+  Qed.
+
+  Lemma ph_register_preserves_await:
+    forall r t,
+    RegisterPre r t ph ->
+    Await (register r t ph) n.
+  Proof.
+    intros.
+    apply await_def.
+    intros ? ? mt1 Hs.
+    apply ph_register_inv_mapsto in mt1.
+    destruct mt1.
+    - inversion W; eauto.
+    - destruct H0 as (R1, (v', (mt2, R2))).
+      subst.
+      rewrite set_mode_preserves_signal_phase.
+      inversion W.
+      apply H0 with (t:=t); auto.
+      rewrite mode_set_mode_rw in *.
+      inversion H.
+      assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      inversion H3.
+      * rewrite H5 in *.
+        rewrite H6 in *.
+        assumption.
+      * rewrite H5 in *.
+        rewrite H6 in *.
+        assumption.
+      * subst.
+        auto using signal_cap_sw.
+  Qed.
+    
+
+  Lemma ph_reduces_preserves_await:
+    forall ph' t o,
+    Reduces ph t o ph' ->
+    Await ph' n.
+  Proof.
+    intros.
+    destruct o; inversion H; simpl in *; subst.
+    - auto using ph_signal_preserves_await.
+    - auto using ph_wait_preserves_await.
+    - auto using ph_drop_preserves_await.
+    - auto using ph_register_preserves_await.
+  Qed.
+  End ReducesPreservesAwait.
+
+  Section PhReducesAwaitEnabled.
+    Variable ph1 ph2 ph1': phaser.
+    Variable wf1: Welformed ph1.
+    Variable t t': tid.
+    Variable o: op.
+    Variable Hneq: t' <> t.
+    Variable R1: Reduces ph1 t WAIT ph1'.
+    Variable R2: Reduces ph1 t' o ph2.
+
+  Axiom ph_reduces_disjoint:
+    forall ph t o ph' v,
+    t' <> t ->
+    Map_TID.MapsTo t v ph ->
+    Reduces ph t' o ph' ->
+    Map_TID.MapsTo t v ph'.
+
+  Lemma ph_reduces_preserves_wait:
+    Reduces ph2 t WAIT (wait t ph2).
+  Proof.
+    intros.
+    inversion R1;
+    simpl in *; clear R1; subst.
+    inversion H; clear H; subst.
+    assert (Map_TID.MapsTo t v ph2)
+    by eauto using ph_reduces_disjoint.
+    apply ph_reduces.
+    simpl in *.
+    apply wait_pre with (v:=v); auto.
+    inversion H2; subst.
+    - assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      eauto using sync_so.
+    - assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      eauto using sync_wait, ph_reduces_preserves_await.
+  Qed.
+  End PhReducesAwaitEnabled.
+
 End Phaser.
+
+
+  

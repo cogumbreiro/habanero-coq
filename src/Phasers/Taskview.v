@@ -74,6 +74,13 @@ Section Facts.
     intros; destruct v; trivial.
   Qed.
 
+  Lemma mode_set_mode_rw:
+    forall v r,
+    mode (set_mode v r) = r.
+  Proof.
+    intros.
+    destruct r; simpl; eauto.
+  Qed.
   (** A property of correctness: [set_mode] preserves the signal phase. *)
   
 
