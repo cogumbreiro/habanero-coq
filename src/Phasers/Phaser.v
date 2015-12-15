@@ -486,6 +486,21 @@ Section Facts.
     eauto using Map_TID.add_3.
   Qed.
 
+  Lemma update_mapsto_spec:
+    forall t v ph f,
+    Map_TID.MapsTo t v ph ->
+    Map_TID.MapsTo t (f v) (update t f ph).
+  Proof.
+    intros.
+    unfold update.
+    destruct (Map_TID_Extra.find_rw t ph) as [(?,?)|(v',(R,mt))].
+    - contradiction H1.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    - rewrite R.
+      assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      auto using Map_TID.add_1.
+  Qed.
+
   Lemma signal_mapsto_eq:
     forall t v ph,
     Map_TID.MapsTo t v (signal t ph) ->
@@ -523,6 +538,15 @@ Section Facts.
     eauto using signal_mapsto_neq.
   Qed.
 
+  Lemma signal_mapsto_spec:
+    forall t v ph,
+    Map_TID.MapsTo t v ph ->
+    Map_TID.MapsTo t (Taskview.signal v) (signal t ph).
+  Proof.
+    intros.
+    apply update_mapsto_spec; auto.
+  Qed.
+
   Lemma wait_mapsto_eq:
     forall t v ph,
     Map_TID.MapsTo t v (wait t ph) ->
@@ -531,6 +555,15 @@ Section Facts.
     intros.
     unfold signal in *.
     eauto using update_mapsto_eq.
+  Qed.
+
+  Lemma wait_mapsto_spec:
+    forall t v ph,
+    Map_TID.MapsTo t v ph ->
+    Map_TID.MapsTo t (Taskview.wait v) (wait t ph).
+  Proof.
+    intros.
+    apply update_mapsto_spec; auto.
   Qed.
 
   Lemma wait_mapsto_neq:
