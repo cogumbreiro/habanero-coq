@@ -1201,6 +1201,8 @@ Module Phaser.
     assert (v0 = (Taskview.signal v)) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H0.
     apply tv_ex_2; auto.
   Qed.
+  End EX2.
+    
 End Phaser.
 
 
