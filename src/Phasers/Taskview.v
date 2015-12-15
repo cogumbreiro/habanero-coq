@@ -264,6 +264,15 @@ Section Semantics.
       wait_phase v < signal_phase v ->
       WaitPre v.
 
+  Inductive SignalPre v :=
+    | signal_pre_w:
+      WaitCap (mode v) ->
+      wait_phase v = signal_phase v ->
+      SignalPre v
+    | signal_pre_s:
+      mode v = SIGNAL_ONLY ->
+      SignalPre v.
+
   Inductive Reduces v : op -> taskview -> Prop :=
     | tv_reduces_signal:
       Reduces v SIGNAL (signal v)

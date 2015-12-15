@@ -54,7 +54,9 @@ Definition update (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
 
 Inductive SignalPre (t:tid) (ph:phaser) : Prop :=
   signal_pre:
-    Map_TID.In t ph ->
+    forall v,
+    Map_TID.MapsTo t v ph ->
+    Taskview.SignalPre v ->
     SignalPre t ph.
 
 (**
