@@ -33,35 +33,35 @@ Module Taskview.
   Require Import HJ.Phasers.Taskview.
   Import Welformedness.Taskview.
 
-  Inductive Lt v1 v2 : Prop :=
-    tv_lt_def:
+  Inductive HB v1 v2 : Prop :=
+    tv_hb_def:
       signal_phase v1 < wait_phase v2 ->
       SignalCap (mode v1) ->
       WaitCap (mode v2) ->
-      Lt v1 v2.
+      HB v1 v2.
 
   (** v2 is beghind of v1, or v1 and v2 intersect. *)
 
-  Inductive Ge v1 v2 : Prop := 
-    | tv_ge_ge:
+  Inductive NHB v1 v2 : Prop := 
+    | tv_nhb_ge:
        signal_phase v1 >= wait_phase v2 ->
-       Ge v1 v2
-    | tv_ge_so:
+       NHB v1 v2
+    | tv_nhb_so:
       mode v2 = SIGNAL_ONLY ->
-      Ge v1 v2
-    | tv_ge_wo:
+      NHB v1 v2
+    | tv_nhb_wo:
       mode v1 = WAIT_ONLY ->
-      Ge v1 v2.
+      NHB v1 v2.
 
-  Definition Le v1 v2 := Ge v2 v1.
+  Definition MHP v1 v2 := NHB v2 v1.
 
-  Definition Gt v1 v2 := Lt v2 v1.
+  Definition Blocked v1 v2 := HB v2 v1.
 
   Module Notations.
-    Infix "<" := Lt : phaser_scope.
-    Infix ">" := Gt : phaser_scope.
-    Infix "<=" := Le : phaser_scope.
-    Infix ">=" := Ge : phaser_scope.
+    Infix "<" := HB : phaser_scope.
+    Infix ">" := Blocked : phaser_scope.
+    Infix "<=" := MHP : phaser_scope.
+    Infix ">=" := NHB : phaser_scope.
   End Notations.
 
   Open Scope phaser_scope.
@@ -83,22 +83,22 @@ Module Taskview.
     split; auto.
   Qed.
 
-  Lemma tv_ge_dec:
+  Lemma tv_nhb_dec:
     forall v1 v2,
     { v1 >= v2 } + { ~ v1 >= v2 }.
   Proof.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
-    { left; auto using tv_ge_ge. }
+    { left; auto using tv_nhb_ge. }
     destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY).
-    { left; auto using tv_ge_so. }
+    { left; auto using tv_nhb_so. }
     destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
-    { left; auto using tv_ge_wo. }
+    { left; auto using tv_nhb_wo. }
     right.
     intuition.
   Qed.
 
-  Lemma tv_lt_dec:
+  Lemma tv_hb_dec:
     forall v1 v2,
     { v1 < v2 } + { ~ v1 < v2 }.
   Proof.
@@ -106,7 +106,7 @@ Module Taskview.
     destruct (wait_cap_dec (mode v2)). {
       destruct (signal_cap_dec (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
-          left; auto using tv_lt_def.
+          left; auto using tv_hb_def.
         }
         right; intuition.
       }
@@ -115,9 +115,9 @@ Module Taskview.
     right; intuition.
   Qed.
 
-  Lemma tv_ge_to_not_lt:
+  Lemma tv_nhb_to_not_lt:
     forall v1 v2,
-    Ge v1 v2 -> ~ Lt v1 v2.
+    v1 >= v2 -> ~ v1 < v2.
   Proof.
     intros.
     intuition.
@@ -125,9 +125,9 @@ Module Taskview.
     - destruct H2; inversion H3.
   Qed.
 
-  Lemma tv_lt_to_not_ge:
+  Lemma tv_hb_to_not_ge:
     forall v1 v2,
-    Lt v1 v2 -> ~ Ge v1 v2.
+    v1 < v2 -> ~ v1 >= v2.
   Proof.
     intros.
     intuition.
@@ -137,78 +137,78 @@ Module Taskview.
 
   Lemma tv_not_lt_to_ge:
     forall v1 v2,
-    ~ Lt v1 v2 -> Ge v1 v2.
+    ~ v1 < v2 -> v1 >= v2.
   Proof.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
-    { auto using tv_ge_ge. }
+    { auto using tv_nhb_ge. }
     destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY).
-    { auto using tv_ge_so. }
+    { auto using tv_nhb_so. }
     destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
-    { auto using tv_ge_wo. }
-    assert (Lt v1 v2). {
+    { auto using tv_nhb_wo. }
+    assert (HB v1 v2). {
       assert (signal_phase v1 < wait_phase v2) % nat by intuition.
-      auto using tv_lt_def, neq_wo_to_signal_cap, neq_so_to_wait_cap.
+      auto using tv_hb_def, neq_wo_to_signal_cap, neq_so_to_wait_cap.
     }
     contradiction.
   Qed.
 
   Lemma tv_not_lt_rw_tv_ge:
     forall v1 v2,
-    ~ Lt v1 v2 <-> Ge v1 v2.
+    ~ v1 < v2 <-> v1 >= v2.
   Proof.
-    split; auto using tv_not_lt_to_ge, tv_ge_to_not_lt.
+    split; auto using tv_not_lt_to_ge, tv_nhb_to_not_lt.
   Qed.
 
   Lemma tv_not_ge_to_lt:
     forall v1 v2,
-    ~ Ge v1 v2 -> Lt v1 v2.
+    ~ v1 >= v2 -> v1 < v2.
   Proof.
     intros.
     destruct (wait_cap_dec (mode v2)). {
       destruct (signal_cap_dec (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
-          auto using tv_lt_def.
+          auto using tv_hb_def.
         }
-        assert (Ge v1 v2). {
+        assert (NHB v1 v2). {
           assert (signal_phase v1 >= wait_phase v2) % nat by intuition.
-          auto using tv_ge_ge.
+          auto using tv_nhb_ge.
         }
         contradiction.
       }
-      assert (Ge v1 v2) by
-        auto using tv_ge_wo, not_signal_cap_to_wo.
+      assert (NHB v1 v2) by
+        auto using tv_nhb_wo, not_signal_cap_to_wo.
       contradiction.
     }
-    assert (Ge v1 v2) by
-      auto using tv_ge_so, not_wait_cap_to_so.
+    assert (NHB v1 v2) by
+      auto using tv_nhb_so, not_wait_cap_to_so.
     contradiction.
   Qed.
 
   Lemma tv_not_ge_rw_lt:
     forall v1 v2,
-    ~ Ge v1 v2 <-> Lt v1 v2.
+    ~ v1 >= v2 <-> v1 < v2.
   Proof.
-    split; auto using tv_not_ge_to_lt, tv_lt_to_not_ge.
+    split; auto using tv_not_ge_to_lt, tv_hb_to_not_ge.
   Qed.
 
-  Lemma tv_lt_ge_dec:
+  Lemma tv_hb_ge_dec:
     forall v1 v2,
-    { Lt v1 v2 } + { Ge v1 v2 }.
+    { v1 < v2 } + { v1 >= v2 }.
   Proof.
     intros.
-    destruct (tv_lt_dec v1 v2);
+    destruct (tv_hb_dec v1 v2);
     auto using tv_not_lt_to_ge.
   Qed.
 
   Lemma tv_welformed_to_ge_refl:
     forall v,
     Welformed v ->
-    Ge v v.
+    v >= v.
   Proof.
     intros.
     inversion H;
-      apply tv_ge_ge;
+      apply tv_nhb_ge;
       intuition.
   Qed.
 
@@ -216,23 +216,64 @@ Module Taskview.
     forall v,
     Welformed v ->
     forall v',
-    Ge v v' ->
-    Ge (Taskview.signal v) v'.
+    v >= v' ->
+    (Taskview.signal v) >= v'.
   Proof.
     intros.
     inversion H0; subst.
-    - apply tv_ge_ge.
+    - apply tv_nhb_ge.
       destruct (signal_phase_signal_inv _ H); intuition.
-    - auto using tv_ge_so.
+    - auto using tv_nhb_so.
     - rewrite <- signal_preserves_mode in *.
-      auto using tv_ge_wo.
+      auto using tv_nhb_wo.
   Qed.
+
+  Lemma signal_preserves_rhs:
+    forall v1 v2,
+    v1 >= v2 ->
+    v1 >= (Taskview.signal v2).
+  Proof.
+    intros.
+    inversion H; subst.
+    - apply tv_nhb_ge.
+      rewrite signal_preserves_wait_phase.
+      assumption.
+    - apply tv_nhb_so.
+      rewrite signal_preserves_mode.
+      assumption.
+    - auto using tv_nhb_wo.
+  Qed.
+
+  Section wait_preserves_rhs.
+  Variable v1 v2: taskview.
+  Variable G1: v1 >= v2.
+  Variable L1: SignalCap (mode v1) -> (signal_phase v1 >= signal_phase v2)%nat.
+  Variable L2: WaitPre v2.
+  Lemma wait_preserves_rhs:
+    v1 >= (wait v2).
+  Proof.
+    intros.
+    inversion G1; subst; clear G1.
+    - destruct (signal_cap_wo_dec (mode v1)). {
+        apply tv_nhb_ge.
+        apply L1 in s.
+        rewrite wait_wait_phase.
+        inversion L2.
+        intuition.
+      }
+      auto using tv_nhb_wo.
+    - apply tv_nhb_so.
+      rewrite wait_preserves_mode.
+      assumption.
+    - auto using tv_nhb_wo.
+  Qed.
+  End wait_preserves_rhs.
 
   Let tv_signal_ge_lhs:
     forall v v',
     Welformed v ->
     Reduces v SIGNAL v' ->
-    Ge v' v.
+    NHB v' v.
   Proof.
     intros.
     inversion H0.
@@ -243,19 +284,19 @@ Module Taskview.
   Let tv_wait_ge_lhs:
     forall v,
     WaitPre v ->
-    Ge (wait v) v.
+    NHB (wait v) v.
   Proof.
     intros.
     destruct H.
-    apply tv_ge_ge.
+    apply tv_nhb_ge.
     intuition.
  Qed.
 
-  Lemma tv_ge_reduces:
+  Lemma tv_nhb_reduces:
     forall v o v',
     Welformed v ->
     Reduces v o v' ->
-    Ge v' v.
+    NHB v' v.
   Proof.
     intros.
     inversion H0; subst.
@@ -263,7 +304,7 @@ Module Taskview.
     - auto using tv_wait_ge_lhs.
   Qed.
 
-  Let tv_ge_reduces_trans_sw:
+  Let tv_nhb_reduces_trans_sw:
     forall x o y o' z,
     Welformed x ->
     Welformed y ->
@@ -274,8 +315,8 @@ Module Taskview.
     (signal_phase z >= wait_phase x)%nat.
   Proof.
     intros.
-    assert (Ge z y) by eauto using tv_ge_reduces.
-    assert (Ge y x) by eauto using tv_ge_reduces.
+    assert (NHB z y) by eauto using tv_nhb_reduces.
+    assert (NHB y x) by eauto using tv_nhb_reduces.
     destruct o.
     - apply reduces_rw_signal in H2.
       destruct o'.
@@ -321,7 +362,7 @@ Module Taskview.
       intuition.
   Qed.
 
-  Lemma tv_ge_trans_helper
+  Lemma tv_nhb_trans_helper
     (x y z: taskview)
     (Hcont:mode x <> WAIT_ONLY -> mode z <> SIGNAL_ONLY -> (signal_phase x >= wait_phase z)%nat):
     x >= y ->
@@ -331,12 +372,12 @@ Module Taskview.
     intros.
     destruct (regmode_eq_dec (mode x) WAIT_ONLY).
     {
-      auto using tv_ge_wo.
+      auto using tv_nhb_wo.
     }
     destruct (regmode_eq_dec (mode z) SIGNAL_ONLY). {
-      auto using tv_ge_so.
+      auto using tv_nhb_so.
     }
-    auto using tv_ge_ge.
+    auto using tv_nhb_ge.
   Qed.
 
   Lemma tv_eval_preserves_le:
@@ -355,56 +396,56 @@ Module Taskview.
   Lemma tv_lhs_eval_ge:
     forall v1 v2 v1' o,
     Welformed v1 ->
-    Ge v1 v2 ->
+    NHB v1 v2 ->
     Reduces v1 o v1' ->
-    Ge v1' v2.
+    NHB v1' v2.
   Proof.
     intros.
     inversion H0.
-    - apply tv_ge_ge.
+    - apply tv_nhb_ge.
       apply reduces_spec in H1.
       subst.
       auto using tv_eval_preserves_le.
-    - auto using tv_ge_so.
+    - auto using tv_nhb_so.
     - apply reduces_preserves_mode in H1.
       rewrite H2 in H1.
-      auto using tv_ge_wo.
+      auto using tv_nhb_wo.
   Qed.
 
-  Lemma tv_ge_eval_rhs:
+  Lemma tv_nhb_eval_rhs:
     forall v1 v2 o,
-    Ge v1 (eval o v2) ->
+    NHB v1 (eval o v2) ->
     Reduces v2 o (eval o v2) ->
-    Ge v1 v2.
+    NHB v1 v2.
   Proof.
     intros.
     inversion H.
-    - apply tv_ge_ge.
+    - apply tv_nhb_ge.
       destruct o; simpl in *.
       + rewrite signal_preserves_wait_phase in *.
         assumption.
       + inversion H0.
         intuition.
     - rewrite eval_preserves_mode in H1.
-      auto using tv_ge_so.
-    - auto using tv_ge_wo.
+      auto using tv_nhb_so.
+    - auto using tv_nhb_wo.
   Qed.
 
-  Lemma tv_ge_eval_lhs:
+  Lemma tv_nhb_eval_lhs:
     forall v1 v2 o,
     Welformed v1 ->
-    Ge v1 v2 ->
+    NHB v1 v2 ->
     Reduces v1 o (eval o v1) ->
-    Ge (eval o v1) v2.
+    NHB (eval o v1) v2.
   Proof.
     intros.
     inversion H0.
-    - apply tv_ge_ge.
+    - apply tv_nhb_ge.
       destruct o; simpl in *.
       + apply signal_phase_signal_inv in H; intuition.
       + assumption.
-    - auto using tv_ge_so.
-    - apply tv_ge_wo.
+    - auto using tv_nhb_so.
+    - apply tv_nhb_wo.
       rewrite eval_preserves_mode.
       assumption.
   Qed.
@@ -412,7 +453,7 @@ Module Taskview.
   Lemma lt_irreflexive:
     forall v,
     Welformed v ->
-    ~ (Lt v v).
+    ~ (HB v v).
   Proof.
     intros.
     rewrite tv_not_lt_rw_tv_ge.
@@ -429,7 +470,7 @@ Module Taskview.
     intros.
     inversion H0.
     inversion H1.
-    apply tv_lt_def; auto.
+    apply tv_hb_def; auto.
     assert (wait_phase y <= signal_phase y)%nat
     by auto using welformed_wait_phase_le_signal_phase.
     intuition.
@@ -456,16 +497,16 @@ Module Taskview.
       subst.
       inversion H2; clear H2. {
         subst; simpl in *.
-        apply tv_ge_ge.
+        apply tv_nhb_ge.
         simpl in *.
         inversion wfx; simpl in *; subst;
         inversion wfy; simpl in *; subst; intuition.
       }
       subst.
-      auto using tv_ge_wo.
+      auto using tv_nhb_wo.
     }
     subst.
-    auto using tv_ge_so.
+    auto using tv_nhb_so.
   Qed.
   End Antisym.
 
@@ -479,7 +520,7 @@ Module Taskview.
     intros.
     inversion H; clear H.
     inversion H1; clear H1.
-    apply tv_lt_def; auto.
+    apply tv_hb_def; auto.
     inversion H0.
     - intuition.
     - rewrite H1 in *.
@@ -492,7 +533,7 @@ Module Taskview.
     {| signal_phase := 0; wait_phase := 0; mode := SIGNAL_WAIT |} <
     {| signal_phase := 1; wait_phase := 1; mode := SIGNAL_WAIT |}.
   Proof.
-    eauto using tv_lt_def.
+    eauto using tv_hb_def.
   Qed.
 
   Lemma tv_ex_2:
@@ -504,12 +545,11 @@ Module Taskview.
   Proof.
     intros.
     inversion H0; clear H0.
-    apply tv_lt_def.
+    apply tv_hb_def.
     - rewrite wait_wait_phase.
       rewrite signal_preserves_wait_phase.
       inversion H.
-      + rewrite H3 in *.
-        intuition.
+      + intuition.
       + rewrite H0 in *.
         inversion H1.
     - rewrite H1.
@@ -544,7 +584,7 @@ Module Phaser.
       forall t1 t2 v1 v2,
       Map_TID.MapsTo t1 v1 ph1 ->
       Map_TID.MapsTo t2 v2 ph2 ->
-      Lt v1 v2 ->
+      HB v1 v2 ->
       HappensBefore ph1 ph2.
 
   Lemma ph_rel_inv:
@@ -558,37 +598,45 @@ Module Phaser.
     inversion H1.
     eauto.
   Qed.
-   
 
-  Definition Le := Rel Taskview.Le.
+  Definition Ge := Rel Taskview.NHB.
+  Definition Le := Rel Taskview.MHP.
 
-  Definition Ge := Rel Taskview.Ge.
+  Definition NHB := Rel Taskview.NHB.
+  Definition WaitsFor x y := HappensBefore x y.
+
+  Module Notations.
+    Infix "<" := HappensBefore : phaser_scope.
+    Infix ">" := WaitsFor : phaser_scope.
+    Infix ">=" := Ge : phaser_scope.
+    Infix "<=" := Le : phaser_scope.
+  End Notations.
 
   Lemma ph_hb_to_not_chb:
     forall ph1 ph2,
     HappensBefore ph1 ph2 ->
-    ~ Ge ph1 ph2.
+    ~ NHB ph1 ph2.
   Proof.
     intros.
     intuition.
     inversion H.
     inversion H0.
-    assert (Taskview.Ge v1 v2) by eauto.
-    assert (~ Taskview.Ge v1 v2) by auto using tv_lt_to_not_ge.
+    assert (Taskview.NHB v1 v2) by eauto.
+    assert (~ Taskview.NHB v1 v2) by auto using tv_hb_to_not_ge.
     contradiction H6.
   Qed.
 
   Lemma ph_chb_to_not_hb:
     forall ph1 ph2,
-    Ge ph1 ph2 ->
+    NHB ph1 ph2 ->
     ~ HappensBefore ph1 ph2.
   Proof.
     intros.
     intuition.
     inversion H.
     inversion H0.
-    assert (Taskview.Ge v1 v2) by eauto.
-    assert (~ Taskview.Ge v1 v2) by auto using tv_lt_to_not_ge.
+    assert (Taskview.NHB v1 v2) by eauto.
+    assert (~ Taskview.NHB v1 v2) by auto using tv_hb_to_not_ge.
     contradiction H6.
   Qed.
 
@@ -596,20 +644,20 @@ Module Phaser.
     forall ph1 ph2 ph3,
     HappensBefore ph1 ph2 ->
     HappensBefore ph2 ph3 ->
-    Ge ph2 ph2 ->
+    NHB ph2 ph2 ->
     HappensBefore ph1 ph3.
   Proof.
     intros.
     inversion H.
     inversion H0.
     clear H H0.
-    assert (Taskview.Ge v0 v2) by (inversion H1; eauto).
+    assert (Taskview.NHB v0 v2) by (inversion H1; eauto).
     eauto using lt_trans_ex, ph_happens_before_def.
   Qed.
 
   Lemma hb_irreflexive:
     forall ph,
-    Ge ph ph ->
+    NHB ph ph ->
     ~ (HappensBefore ph ph).
   Proof.
     intros.
@@ -622,8 +670,8 @@ Module Phaser.
 
   Variable wx: Welformed x.
   Variable wy: Welformed y.
-  Variable gx: Ge x x.
-  Variable gy: Ge y y.
+  Variable gx: NHB x x.
+  Variable gy: NHB y y.
 
   Lemma ph_hb_antisym:
     HappensBefore x y ->
@@ -633,15 +681,15 @@ Module Phaser.
     apply ph_chb_to_not_hb.
     apply ph_rel_def.
     intros.
-    destruct (tv_lt_ge_dec v1 v2); auto.
+    destruct (tv_hb_ge_dec v1 v2); auto.
     inversion H.
-    assert (Lt v1 v3). {
+    assert (HB v1 v3). {
       inversion gx.
-      assert (Taskview.Ge v0 v2) by eauto.
+      assert (Taskview.NHB v0 v2) by eauto.
       eauto using lt_trans_ex.
     }
-    assert (~ Taskview.Ge v1 v3) by eauto using tv_lt_to_not_ge.
-    assert (Taskview.Ge v1 v3) by (inversion gy; eauto).
+    assert (~ Taskview.NHB v1 v3) by eauto using tv_hb_to_not_ge.
+    assert (Taskview.NHB v1 v3) by (inversion gy; eauto).
     contradiction.
   Qed.
   End Antisym.
@@ -649,10 +697,10 @@ Module Phaser.
   Let ph_ge_refl_preserves_reduces_some:
     forall ph ph' t o o',
     Welformed ph ->
-    Ge ph ph ->
+    NHB ph ph ->
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
-    Ge ph' ph'.
+    NHB ph' ph'.
   Proof.
     intros.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
@@ -681,12 +729,12 @@ Module Phaser.
       + apply Map_TID_Facts.add_mapsto_iff in H5.
         destruct H5 as [(?,?)|(?,?)].
         * subst.
-          assert (R : Taskview.Ge v1 v) by (inversion H0; eauto).
+          assert (R : Taskview.NHB v1 v) by (inversion H0; eauto).
           inversion R; clear R.
           - destruct o'; simpl in *.
             {
               rewrite <- signal_preserves_wait_phase in *.
-              auto using tv_ge_ge.
+              auto using tv_nhb_ge.
             }
             apply as_tv_op_inv_wait in H2.
             subst.
@@ -697,31 +745,31 @@ Module Phaser.
             {
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun.
               subst.
-              auto using tv_ge_so.
+              auto using tv_nhb_so.
             }
             {
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
               destruct (signal_cap_wo_dec (mode v1)). {
                 destruct H8.
-                apply tv_ge_ge.
+                apply tv_nhb_ge.
                 assert (signal_phase v1 >= (signal_phase v)) by (inversion H12; eauto).
                 rewrite wait_wait_phase.
                 intuition.
               }
-              auto using tv_ge_wo.
+              auto using tv_nhb_wo.
             }
-          - apply tv_ge_so.
+          - apply tv_nhb_so.
             rewrite eval_preserves_mode.
             assumption.
-          - auto using tv_ge_wo.
+          - auto using tv_nhb_wo.
         * inversion H0; eauto.
   Qed.
 
   Let ph_ge_refl_preserves_reduces_drop:
     forall ph ph' t,
-    Ge ph ph ->
+    NHB ph ph ->
     Reduces ph t DROP ph' ->
-    Ge ph' ph'.
+    NHB ph' ph'.
   Proof.
     intros.
     inversion H0.
@@ -734,18 +782,18 @@ Module Phaser.
     inversion H; eauto.
   Qed.
 
-  Let tv_ge_register_left:
+  Let tv_nhb_register_left:
     forall r v1 v2,
     r_le (get_mode r) (mode v1) ->
-    Taskview.Ge v1 v2 ->
-    Taskview.Ge (set_mode v1 (get_mode r)) v2.
+    Taskview.NHB v1 v2 ->
+    Taskview.NHB (set_mode v1 (get_mode r)) v2.
   Proof.
     intros ? ? ? Hle Hge.
     inversion Hge.
-    * apply tv_ge_ge.
+    * apply tv_nhb_ge.
       rewrite set_mode_preserves_signal_phase.
       assumption.
-    * auto using tv_ge_so.
+    * auto using tv_nhb_so.
     * rewrite H in Hle.
       inversion Hle.
       rewrite <- H.
@@ -753,14 +801,14 @@ Module Phaser.
       assumption.
   Qed.
 
-  Let tv_ge_register_both:
+  Let tv_nhb_register_both:
     forall r v,
     r_le (get_mode r) (mode v) ->
-    Taskview.Ge v v ->
-    Taskview.Ge (set_mode v (get_mode r)) (set_mode v (get_mode r)).
+    Taskview.NHB v v ->
+    Taskview.NHB (set_mode v (get_mode r)) (set_mode v (get_mode r)).
   Proof.
     intros.
-    destruct (get_mode r); auto using tv_ge_so, tv_ge_wo.
+    destruct (get_mode r); auto using tv_nhb_so, tv_nhb_wo.
     inversion H.
     subst.
     rewrite H3.
@@ -768,15 +816,15 @@ Module Phaser.
     assumption.  
   Qed.
 
-  Let tv_ge_register_right:
+  Let tv_nhb_register_right:
     forall v1 v2 r,
     r_le (get_mode r) (mode v2) ->
-    Taskview.Ge v1 v2 ->
-    Taskview.Ge v1 (set_mode v2 (get_mode r)).
+    Taskview.NHB v1 v2 ->
+    Taskview.NHB v1 (set_mode v2 (get_mode r)).
   Proof.
     intros ? ? r Hle Hge.
     inversion Hge.
-    * apply tv_ge_ge.
+    * apply tv_nhb_ge.
       rewrite set_mode_preserves_wait_phase.
       assumption.
     * rewrite H in Hle.
@@ -785,14 +833,14 @@ Module Phaser.
       rewrite <- H.
       rewrite set_mode_ident.
       assumption.
-    * auto using tv_ge_wo.
+    * auto using tv_nhb_wo.
   Qed.
 
   Let ph_ge_refl_preserves_reduces_register:
     forall t r ph ph',
-    Ge ph ph ->
+    NHB ph ph ->
     Reduces ph t (REGISTER r) ph' ->
-    Ge ph' ph'.
+    NHB ph' ph'.
   Proof.
     intros ? ? ? ? Hge R.
     inversion R; subst; simpl in *.
@@ -810,24 +858,24 @@ Module Phaser.
       apply Map_TID_Facts.add_mapsto_iff in Hmt2;
       destruct Hmt2 as [(?,?)|(?,?)].
       + subst.
-        assert (Taskview.Ge v v) by (inversion Hge; eauto).
-        auto using tv_ge_register_both.
-      + assert (Taskview.Ge v v2) by (inversion Hge; eauto).
-        auto using tv_ge_register_left.
+        assert (Taskview.NHB v v) by (inversion Hge; eauto).
+        auto using tv_nhb_register_both.
+      + assert (Taskview.NHB v v2) by (inversion Hge; eauto).
+        auto using tv_nhb_register_left.
     - apply Map_TID_Facts.add_mapsto_iff in Hmt2;
       destruct Hmt2 as [(?,?)|(?,?)].
       + subst.
-        assert (Taskview.Ge v1 v) by (inversion Hge; eauto).
-        auto using tv_ge_register_right.
+        assert (Taskview.NHB v1 v) by (inversion Hge; eauto).
+        auto using tv_nhb_register_right.
       + inversion Hge; eauto.
   Qed.
 
   Theorem ph_ge_refl_preserves_reduce:
     forall ph t o ph',
     Welformed ph ->
-    Ge ph ph ->
+    NHB ph ph ->
     Phaser.Reduces ph t o ph' ->
-    Ge ph' ph'.
+    NHB ph' ph'.
   Proof.
     intros.
     remember (as_tv_op o) as o'.
@@ -842,10 +890,10 @@ Module Phaser.
   Let ph_ge_reduces_some:
     forall ph t o o' ph',
     Welformed ph ->
-    Ge ph ph ->
+    NHB ph ph ->
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
-    Ge ph' ph.
+    NHB ph' ph.
   Proof.
     intros.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
@@ -862,7 +910,7 @@ Module Phaser.
     destruct H4 as [(?,?)|(?,?)].
     - subst.
       assert (Taskview.Welformed v) by (inversion H; eauto).
-      assert (Taskview.Ge v v2) by (inversion H0; eauto).
+      assert (Taskview.NHB v v2) by (inversion H0; eauto).
       eauto using tv_lhs_eval_ge.
     - inversion H0; eauto.
   Qed.
@@ -870,9 +918,9 @@ Module Phaser.
   Lemma ph_ge_reduce:
     forall ph t o ph',
     Welformed ph ->
-    Ge ph ph ->
+    NHB ph ph ->
     Reduces ph t o ph' ->
-    Ge ph' ph.
+    NHB ph' ph.
   Proof.
     intros ? ? ? ? WF Hge R.
     remember(as_tv_op o) as o'.
@@ -894,8 +942,8 @@ Module Phaser.
       apply Map_TID_Facts.add_mapsto_iff in H2;
       destruct H2 as [(?,?)|(?,?)].
       + subst.
-        assert (Taskview.Ge v v2) by (inversion Hge; eauto).
-        auto using tv_ge_register_left.
+        assert (Taskview.NHB v v2) by (inversion Hge; eauto).
+        auto using tv_nhb_register_left.
       + inversion Hge; eauto.
   Qed.
 
@@ -1042,9 +1090,9 @@ Module Phaser.
   Lemma ph_reduces_updates_preserves_ge_left:
     forall x y z t o,
     Welformed y ->
-    Ge y x ->
+    NHB y x ->
     ReducesUpdates y t o z ->
-    Ge z x.
+    NHB z x.
   Proof.
     intros.
     apply ph_rel_def.
@@ -1067,9 +1115,9 @@ Module Phaser.
       subst.
       assert (Taskview.Reduces v o' (Taskview.eval o' v))
       by (inversion R; eauto using ph_reduces_to_tv_reduce).
-      assert (Taskview.Ge v vx) by (inversion H0; eauto).
+      assert (Taskview.NHB v vx) by (inversion H0; eauto).
       assert (Taskview.Welformed v) by (inversion H; eauto).
-      eauto using tv_ge_eval_lhs.
+      eauto using tv_nhb_eval_lhs.
     }
     destruct H1.
     assert (R := H4).
@@ -1092,16 +1140,16 @@ Module Phaser.
         trivial.
     }
     subst.
-    assert (Taskview.Ge v vx)
+    assert (Taskview.NHB v vx)
     by (inversion H0; eauto).
-    eauto using tv_ge_register_left.
+    eauto using tv_nhb_register_left.
   Qed.
 
   Lemma ph_reduces_drop_preserves_ge_left:
     forall x y z t,
-    Ge y x ->
+    NHB y x ->
     Reduces y t DROP z ->
-    Ge z x.
+    NHB z x.
   Proof.
     intros.
     apply ph_rel_def; intros tz tx vz vx; intros.
@@ -1117,9 +1165,9 @@ Module Phaser.
   Lemma ph_s_reduces_preserves_ge_left:
     forall x y z,
     Welformed y ->
-    Ge y x ->
+    NHB y x ->
     SReduces y z ->
-    Ge z x.
+    NHB z x.
   Proof.
     intros.
     destruct H1.
@@ -1144,9 +1192,9 @@ Module Phaser.
   Lemma ph_s_reduces_trans_refl_ge_refl:
     forall x y,
     Welformed x ->
-    Ge x x ->
+    NHB x x ->
     clos_refl_trans phaser SReduces x y ->
-    Ge y y.
+    NHB y y.
   Proof.
     intros.
     induction H1; auto.
@@ -1159,9 +1207,9 @@ Module Phaser.
   Lemma ph_s_reduces_trans_refl_ge:
     forall x y,
     Welformed x ->
-    Ge x x ->
+    NHB x x ->
     clos_refl_trans phaser SReduces x y ->
-    Ge y x.
+    NHB y x.
   Proof.
     intros.
     rewrite clos_rt_rtn1_iff in H1.
@@ -1202,7 +1250,107 @@ Module Phaser.
     apply tv_ex_2; auto.
   Qed.
   End EX2.
-    
+
+  Import Notations.
+  Lemma ph_signal_lhs_ge_rhs:
+    forall x t,
+    x >= x ->
+    SignalPre t x ->
+    x >= signal t x.
+  Proof.
+    intros.
+    inversion H0.
+    apply ph_rel_def.
+    intros.
+    apply signal_mapsto_inv in H4.
+    destruct H4 as [(?,(v',(?,?)))|(?,?)].
+    - subst.
+      assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H6.
+      assert (Taskview.NHB v1 v). {
+        inversion H; eauto.
+      }
+      auto using signal_preserves_rhs.
+    - inversion H; eauto.
+  Qed.
+
+  Lemma ph_wait_lhs_ge_rhs:
+    forall x t,
+    x >= x ->
+    WaitPre t x ->
+    x >= wait t x.
+  Proof.
+    intros.
+    inversion H0; clear H0.
+    apply ph_rel_def.
+    intros.
+    apply wait_mapsto_inv in H4.
+    destruct H4 as [(?,(v',(?,?)))|(?,?)].
+    - subst.
+      assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H6.
+      assert (Taskview.NHB v1 v). {
+        inversion H; eauto.
+      }
+      inversion H3; subst.
+      + assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
+        apply tv_nhb_so.
+        rewrite wait_preserves_mode.
+        assumption.
+      + assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
+        inversion H7.
+        assert (Hx := H5 _ _ H0).
+        apply wait_preserves_rhs; auto.
+    - inversion H; eauto.
+  Qed.
+
+  Lemma ph_register_lhs_ge_rhs:
+    forall x r t,
+    x >= x ->
+    RegisterPre r t x ->
+    x >= register r t x.
+  Proof.
+    intros.
+    inversion H0; clear  H0.
+    apply ph_rel_def.
+    intros.
+    apply ph_register_inv_mapsto in H4 as [?|(?,(v',(?,?)))]. {
+      inversion H; eauto.
+    }
+    subst.
+    assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
+    apply tv_nhb_register_right; auto.
+    inversion H; eauto.
+  Qed.
+
+  Lemma ph_drop_lhs_ge_rhs:
+    forall x t,
+    x >= x ->
+    DropPre t x ->
+    x >= drop t x.
+  Proof.
+    intros.
+    inversion H0.
+    apply ph_rel_def.
+    intros.
+    apply drop_mapsto_inv in H3.
+    destruct H3 as (?,?).
+    inversion H; eauto.
+  Qed.
+
+  Lemma reduces_ne:
+    forall x y,
+    Ge x x ->
+    SReduces x y ->
+    x >= y.
+  Proof.
+    intros.
+    inversion H0; clear H0.
+    inversion H1.
+    destruct o; simpl in *; subst; clear H1.
+    - auto using ph_signal_lhs_ge_rhs.
+    - auto using ph_wait_lhs_ge_rhs.
+    - auto using ph_drop_lhs_ge_rhs.
+    - auto using ph_register_lhs_ge_rhs.
+  Qed.
 End Phaser.
 
 
