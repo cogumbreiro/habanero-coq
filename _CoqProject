@@ -7,7 +7,8 @@ src/Phasers/Phaser.v
 src/Phasers/Phasermap.v
 src/Phasers/Lang.v
 src/Phasers/Welformedness.v
-src/Phasers/PhaseOrdering.v
+src/Phasers/PhaseOrdering/Taskview.v
+src/Phasers/PhaseOrdering/Phaser.v
 src/Phasers/PhaseDiff.v
 src/Phasers/Rel.v
 src/Phasers/TransClosure.v
