@@ -295,7 +295,7 @@ Section Facts.
     intuition.
  Qed.
 
-  Lemma tv_nhb_reduces:
+  Let tv_nhb_reduces:
     forall v o v',
     Welformed v ->
     Reduces v o v' ->
@@ -365,25 +365,7 @@ Section Facts.
       intuition.
   Qed.
 
-  Lemma tv_nhb_trans_helper
-    (x y z: taskview)
-    (Hcont:mode x <> WAIT_ONLY -> mode z <> SIGNAL_ONLY -> (signal_phase x >= wait_phase z)%nat):
-    x >= y ->
-    y >= z ->
-    x >= z.
-  Proof.
-    intros.
-    destruct (regmode_eq_dec (mode x) WAIT_ONLY).
-    {
-      auto using tv_nhb_wo.
-    }
-    destruct (regmode_eq_dec (mode z) SIGNAL_ONLY). {
-      auto using tv_nhb_so.
-    }
-    auto using tv_nhb_ge.
-  Qed.
-
-  Lemma tv_eval_preserves_le:
+  Let tv_eval_preserves_le:
     forall v1 v2 o,
     Welformed v1 ->
     (signal_phase v1 >= wait_phase v2)%nat ->
@@ -415,25 +397,6 @@ Section Facts.
       auto using tv_nhb_wo.
   Qed.
 
-  Lemma tv_nhb_eval_rhs:
-    forall v1 v2 o,
-    NHB v1 (eval o v2) ->
-    Reduces v2 o (eval o v2) ->
-    NHB v1 v2.
-  Proof.
-    intros.
-    inversion H.
-    - apply tv_nhb_ge.
-      destruct o; simpl in *.
-      + rewrite signal_preserves_wait_phase in *.
-        assumption.
-      + inversion H0.
-        intuition.
-    - rewrite eval_preserves_mode in H1.
-      auto using tv_nhb_so.
-    - auto using tv_nhb_wo.
-  Qed.
-
   Lemma tv_nhb_eval_lhs:
     forall v1 v2 o,
     Welformed v1 ->
@@ -453,7 +416,7 @@ Section Facts.
       assumption.
   Qed.
 
-  Lemma lt_irreflexive:
+  Theorem tv_lt_irreflexive:
     forall v,
     Welformed v ->
     ~ (HB v v).
@@ -463,7 +426,7 @@ Section Facts.
     auto using tv_welformed_to_ge_refl.
   Qed.
 
-  Lemma lt_trans:
+  Theorem tv_lt_trans:
     forall x y z,
     Welformed y ->
     x < y ->
@@ -486,7 +449,7 @@ Section Facts.
   Variable wfx: Welformed x.
   Variable wfy: Welformed y.
 
-  Lemma lt_antisym:
+  Theorem tv_lt_antisym:
     x < y ->
     ~ (y < x).
   Proof.
@@ -539,7 +502,7 @@ Section Facts.
     eauto using tv_hb_def.
   Qed.
 
-  Lemma tv_ex_2:
+  Example tv_ex_2:
     forall (v:taskview),
     SignalPre v ->
     WaitPre (signal v) ->
