@@ -14,53 +14,50 @@ Import PhaseOrdering.Taskview.
 Set Implict Arguments.
 
 Section Defs.
-  Inductive Rel (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
+  Inductive Forall (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
     ph_rel_def:
       (forall t1 t2 v1 v2,
         Map_TID.MapsTo t1 v1 ph1 ->
         Map_TID.MapsTo t2 v2 ph2 ->
         R v1 v2) ->
-      Rel R ph1 ph2.
+      Forall R ph1 ph2.
+
+  Definition Facilitates := Forall Taskview.Facilitates.
 
   Inductive HappensBefore (ph1 ph2:phaser) : Prop :=
     ph_happens_before_def:
       forall t1 t2 v1 v2,
       Map_TID.MapsTo t1 v1 ph1 ->
       Map_TID.MapsTo t2 v2 ph2 ->
-      HB v1 v2 ->
+      Taskview.HappensBefore v1 v2 ->
       HappensBefore ph1 ph2.
 
 
-  Definition Ge := Rel Taskview.NHB.
-  Definition Le := Rel Taskview.MHP.
+  Definition MayHappenParallel x y := Facilitates y x.
 
-  Definition NHB := Rel Taskview.NHB.
-  Definition WaitsFor x y := HappensBefore x y.
+  Definition BlockedBy x y := HappensBefore x y.
+
+  Inductive WellOrdered x : Prop :=
+    well_ordered_def:
+      Facilitates x x ->
+      WellOrdered x.
 
 End Defs.
 
 Module Notations.
   Infix "<" := HappensBefore : phaser_scope.
-  Infix ">" := WaitsFor : phaser_scope.
-  Infix ">=" := Ge : phaser_scope.
-  Infix "<=" := Le : phaser_scope.
+  Infix ">" := BlockedBy : phaser_scope.
+  Infix "<=" := MayHappenParallel : phaser_scope.
+  Infix ">=" := Facilitates : phaser_scope.
 End Notations.
 
 Section Facts.
-(*
-  Import Taskview.
-  Require Import HJ.Phasers.Regmode.
-  Require Import HJ.Phasers.Taskview.
-  Import Welformedness.Taskview.
 
-  Require Import HJ.Phasers.Phaser.
-  Import Welformedness.Phaser.
-*)
   Lemma ph_rel_inv:
     forall R ph1 ph2 t1 t2 v1 v2,
     Map_TID.MapsTo t1 v1 ph1 ->
     Map_TID.MapsTo t2 v2 ph2 ->
-    Rel R ph1 ph2 ->
+    Forall R ph1 ph2 ->
     R v1 v2.
   Proof.
     intros.
@@ -68,31 +65,44 @@ Section Facts.
     eauto.
   Qed.
 
+  Lemma well_ordered_to_facilitates:
+    forall v1 v2 t1 t2 ph,
+    WellOrdered ph ->
+    Map_TID.MapsTo t1 v1 ph ->
+    Map_TID.MapsTo t2 v2 ph ->
+    Taskview.Facilitates v1 v2.
+  Proof.
+    intros.
+    destruct H as (Hx).
+    inversion Hx.
+    eauto.
+  Qed.
+
   Lemma ph_hb_to_not_chb:
     forall ph1 ph2,
     HappensBefore ph1 ph2 ->
-    ~ NHB ph1 ph2.
+    ~ Facilitates ph1 ph2.
   Proof.
     intros.
     intuition.
     inversion H.
     inversion H0.
-    assert (Taskview.NHB v1 v2) by eauto.
-    assert (~ Taskview.NHB v1 v2) by auto using tv_hb_to_not_ge.
+    assert (Taskview.Facilitates v1 v2) by eauto.
+    assert (~ Taskview.Facilitates v1 v2) by auto using tv_hb_to_not_ge.
     contradiction H6.
   Qed.
 
   Lemma ph_chb_to_not_hb:
     forall ph1 ph2,
-    NHB ph1 ph2 ->
+    Facilitates ph1 ph2 ->
     ~ HappensBefore ph1 ph2.
   Proof.
     intros.
     intuition.
     inversion H.
     inversion H0.
-    assert (Taskview.NHB v1 v2) by eauto.
-    assert (~ Taskview.NHB v1 v2) by auto using tv_hb_to_not_ge.
+    assert (Taskview.Facilitates v1 v2) by eauto.
+    assert (~ Taskview.Facilitates v1 v2) by auto using tv_hb_to_not_ge.
     contradiction H6.
   Qed.
 
@@ -100,20 +110,20 @@ Section Facts.
     forall ph1 ph2 ph3,
     HappensBefore ph1 ph2 ->
     HappensBefore ph2 ph3 ->
-    NHB ph2 ph2 ->
+    Facilitates ph2 ph2 ->
     HappensBefore ph1 ph3.
   Proof.
     intros.
     inversion H.
     inversion H0.
     clear H H0.
-    assert (Taskview.NHB v0 v2) by (inversion H1; eauto).
+    assert (Taskview.Facilitates v0 v2) by (inversion H1; eauto).
     eauto using lt_trans_ex, ph_happens_before_def.
   Qed.
 
   Lemma hb_irreflexive:
     forall ph,
-    NHB ph ph ->
+    Facilitates ph ph ->
     ~ (HappensBefore ph ph).
   Proof.
     intros.
@@ -125,8 +135,8 @@ Section Facts.
 
   Variable wx: Welformed x.
   Variable wy: Welformed y.
-  Variable gx: NHB x x.
-  Variable gy: NHB y y.
+  Variable gx: WellOrdered x.
+  Variable gy: WellOrdered y.
 
   Lemma ph_hb_antisym:
     HappensBefore x y ->
@@ -138,13 +148,14 @@ Section Facts.
     intros.
     destruct (tv_hb_ge_dec v1 v2); auto.
     inversion H.
-    assert (HB v1 v3). {
-      inversion gx.
-      assert (Taskview.NHB v0 v2) by eauto.
+    assert (Taskview.HappensBefore v1 v3). {
+      inversion gx as (gx').
+      inversion gx'.
+      assert (Taskview.Facilitates v0 v2) by eauto.
       eauto using lt_trans_ex.
     }
-    assert (~ Taskview.NHB v1 v3) by eauto using tv_hb_to_not_ge.
-    assert (Taskview.NHB v1 v3) by (inversion gy; eauto).
+    assert (~ Taskview.Facilitates v1 v3) by eauto using tv_hb_to_not_ge.
+    assert (Taskview.Facilitates v1 v3) by (inversion gy as (gy'); inversion gy'; eauto).
     contradiction.
   Qed.
   End Antisym.
@@ -152,10 +163,10 @@ Section Facts.
   Let ph_ge_refl_preserves_reduces_some:
     forall ph ph' t o o',
     Welformed ph ->
-    NHB ph ph ->
+    WellOrdered ph ->
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
-    NHB ph' ph'.
+    Facilitates ph' ph'.
   Proof.
     intros.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
@@ -179,12 +190,12 @@ Section Facts.
             ph_welformed_to_tv_welformed,
             tv_welformed_to_ge_refl.
         * apply tv_lhs_eval_ge with (v2:=v2) in H3;
-          eauto using ph_welformed_to_tv_welformed.
-          eapply ph_rel_inv; eauto.
+          eauto using ph_welformed_to_tv_welformed, well_ordered_to_facilitates.
       + apply Map_TID_Facts.add_mapsto_iff in H5.
         destruct H5 as [(?,?)|(?,?)].
         * subst.
-          assert (R : Taskview.NHB v1 v) by (inversion H0; eauto).
+          assert (R : Taskview.Facilitates v1 v) by
+          eauto using well_ordered_to_facilitates.
           inversion R; clear R.
           - destruct o'; simpl in *.
             {
@@ -217,31 +228,32 @@ Section Facts.
             rewrite eval_preserves_mode.
             assumption.
           - auto using tv_nhb_wo.
-        * inversion H0; eauto.
+        * eauto using well_ordered_to_facilitates.
   Qed.
 
   Let ph_ge_refl_preserves_reduces_drop:
     forall ph ph' t,
-    NHB ph ph ->
+    WellOrdered ph ->
     Reduces ph t DROP ph' ->
-    NHB ph' ph'.
+    WellOrdered ph'.
   Proof.
     intros.
     inversion H0.
     subst.
     unfold drop in *.
+    apply well_ordered_def.
     apply ph_rel_def.
     intros; simpl in *.
     apply Map_TID.remove_3 in H3.
     apply Map_TID.remove_3 in H2.
-    inversion H; eauto.
+    eauto using well_ordered_to_facilitates.
   Qed.
 
   Let tv_nhb_register_left:
     forall r v1 v2,
     r_le (get_mode r) (mode v1) ->
-    Taskview.NHB v1 v2 ->
-    Taskview.NHB (set_mode v1 (get_mode r)) v2.
+    Taskview.Facilitates v1 v2 ->
+    Taskview.Facilitates (set_mode v1 (get_mode r)) v2.
   Proof.
     intros ? ? ? Hle Hge.
     inversion Hge.
@@ -259,8 +271,8 @@ Section Facts.
   Let tv_nhb_register_both:
     forall r v,
     r_le (get_mode r) (mode v) ->
-    Taskview.NHB v v ->
-    Taskview.NHB (set_mode v (get_mode r)) (set_mode v (get_mode r)).
+    Taskview.Facilitates v v ->
+    Taskview.Facilitates (set_mode v (get_mode r)) (set_mode v (get_mode r)).
   Proof.
     intros.
     destruct (get_mode r); auto using tv_nhb_so, tv_nhb_wo.
@@ -274,8 +286,8 @@ Section Facts.
   Let tv_nhb_register_right:
     forall v1 v2 r,
     r_le (get_mode r) (mode v2) ->
-    Taskview.NHB v1 v2 ->
-    Taskview.NHB v1 (set_mode v2 (get_mode r)).
+    Taskview.Facilitates v1 v2 ->
+    Taskview.Facilitates v1 (set_mode v2 (get_mode r)).
   Proof.
     intros ? ? r Hle Hge.
     inversion Hge.
@@ -293,9 +305,9 @@ Section Facts.
 
   Let ph_ge_refl_preserves_reduces_register:
     forall t r ph ph',
-    NHB ph ph ->
+    WellOrdered ph ->
     Reduces ph t (REGISTER r) ph' ->
-    NHB ph' ph'.
+    WellOrdered ph'.
   Proof.
     intros ? ? ? ? Hge R.
     inversion R; subst; simpl in *.
@@ -305,6 +317,7 @@ Section Facts.
     assert (R:=H0).
     apply ph_register_rw with (r:=r) in R; auto.
     rewrite R; clear R.
+    apply well_ordered_def.
     apply ph_rel_def.
     intros ? ? ? ? Hmt1 Hmt2.
     apply Map_TID_Facts.add_mapsto_iff in Hmt1;
@@ -313,30 +326,27 @@ Section Facts.
       apply Map_TID_Facts.add_mapsto_iff in Hmt2;
       destruct Hmt2 as [(?,?)|(?,?)].
       + subst.
-        assert (Taskview.NHB v v) by (inversion Hge; eauto).
-        auto using tv_nhb_register_both.
-      + assert (Taskview.NHB v v2) by (inversion Hge; eauto).
-        auto using tv_nhb_register_left.
+        eauto using well_ordered_to_facilitates, tv_nhb_register_both.
+      + eauto using well_ordered_to_facilitates, tv_nhb_register_left.
     - apply Map_TID_Facts.add_mapsto_iff in Hmt2;
       destruct Hmt2 as [(?,?)|(?,?)].
       + subst.
-        assert (Taskview.NHB v1 v) by (inversion Hge; eauto).
-        auto using tv_nhb_register_right.
-      + inversion Hge; eauto.
+        eauto using well_ordered_to_facilitates, tv_nhb_register_right.
+      + eauto using well_ordered_to_facilitates.
   Qed.
 
   Theorem ph_ge_refl_preserves_reduce:
     forall ph t o ph',
     Welformed ph ->
-    NHB ph ph ->
+    WellOrdered ph ->
     Phaser.Reduces ph t o ph' ->
-    NHB ph' ph'.
+    WellOrdered ph'.
   Proof.
     intros.
     remember (as_tv_op o) as o'.
     symmetry in Heqo'.
     destruct o' as [o'|].
-    - eauto using ph_ge_refl_preserves_reduces_some.
+    - apply well_ordered_def; inversion H0; eauto using ph_ge_refl_preserves_reduces_some.
     - destruct o; try (simpl in Heqo'; inversion Heqo'); clear Heqo'.
       + eauto using ph_ge_refl_preserves_reduces_drop.
       + eauto using ph_ge_refl_preserves_reduces_register.
@@ -345,10 +355,10 @@ Section Facts.
   Let ph_ge_reduces_some:
     forall ph t o o' ph',
     Welformed ph ->
-    NHB ph ph ->
+    WellOrdered ph ->
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
-    NHB ph' ph.
+    Facilitates ph' ph.
   Proof.
     intros.
     assert (Hin : Map_TID.In t ph) by eauto using ph_in.
@@ -365,17 +375,17 @@ Section Facts.
     destruct H4 as [(?,?)|(?,?)].
     - subst.
       assert (Taskview.Welformed v) by (inversion H; eauto).
-      assert (Taskview.NHB v v2) by (inversion H0; eauto).
+      assert (Taskview.Facilitates v v2) by eauto using well_ordered_to_facilitates.
       eauto using tv_lhs_eval_ge.
-    - inversion H0; eauto.
+    - eauto using well_ordered_to_facilitates.
   Qed.
 
   Lemma ph_ge_reduce:
     forall ph t o ph',
     Welformed ph ->
-    NHB ph ph ->
+    WellOrdered ph ->
     Reduces ph t o ph' ->
-    NHB ph' ph.
+    Facilitates ph' ph.
   Proof.
     intros ? ? ? ? WF Hge R.
     remember(as_tv_op o) as o'.
@@ -387,7 +397,7 @@ Section Facts.
       apply ph_rel_def.
       intros.
       apply Map_TID.remove_3 in H0.
-      inversion Hge; eauto.
+      eauto using well_ordered_to_facilitates.
     - destruct R; simpl in *.
       destruct H.
       assert (R:=H0).
@@ -397,9 +407,8 @@ Section Facts.
       apply Map_TID_Facts.add_mapsto_iff in H2;
       destruct H2 as [(?,?)|(?,?)].
       + subst.
-        assert (Taskview.NHB v v2) by (inversion Hge; eauto).
-        auto using tv_nhb_register_left.
-      + inversion Hge; eauto.
+        eauto using well_ordered_to_facilitates, tv_nhb_register_left.
+      + eauto using well_ordered_to_facilitates.
   Qed.
 
   Section Trans.
@@ -545,9 +554,9 @@ Section Facts.
   Lemma ph_reduces_updates_preserves_ge_left:
     forall x y z t o,
     Welformed y ->
-    NHB y x ->
+    Facilitates y x ->
     ReducesUpdates y t o z ->
-    NHB z x.
+    Facilitates z x.
   Proof.
     intros.
     apply ph_rel_def.
@@ -570,7 +579,7 @@ Section Facts.
       subst.
       assert (Taskview.Reduces v o' (Taskview.eval o' v))
       by (inversion R; eauto using ph_reduces_to_tv_reduce).
-      assert (Taskview.NHB v vx) by (inversion H0; eauto).
+      assert (Taskview.Facilitates v vx) by (inversion H0; eauto).
       assert (Taskview.Welformed v) by (inversion H; eauto).
       eauto using tv_nhb_eval_lhs.
     }
@@ -595,16 +604,16 @@ Section Facts.
         trivial.
     }
     subst.
-    assert (Taskview.NHB v vx)
+    assert (Taskview.Facilitates v vx)
     by (inversion H0; eauto).
     eauto using tv_nhb_register_left.
   Qed.
 
   Lemma ph_reduces_drop_preserves_ge_left:
     forall x y z t,
-    NHB y x ->
+    Facilitates y x ->
     Reduces y t DROP z ->
-    NHB z x.
+    Facilitates z x.
   Proof.
     intros.
     apply ph_rel_def; intros tz tx vz vx; intros.
@@ -620,9 +629,9 @@ Section Facts.
   Lemma ph_s_reduces_preserves_ge_left:
     forall x y z,
     Welformed y ->
-    NHB y x ->
+    Facilitates y x ->
     SReduces y z ->
-    NHB z x.
+    Facilitates z x.
   Proof.
     intros.
     destruct H1.
@@ -647,9 +656,9 @@ Section Facts.
   Lemma ph_s_reduces_trans_refl_ge_refl:
     forall x y,
     Welformed x ->
-    NHB x x ->
+    WellOrdered x ->
     clos_refl_trans phaser SReduces x y ->
-    NHB y y.
+    WellOrdered y.
   Proof.
     intros.
     induction H1; auto.
@@ -662,21 +671,25 @@ Section Facts.
   Lemma ph_s_reduces_trans_refl_ge:
     forall x y,
     Welformed x ->
-    NHB x x ->
+    WellOrdered x ->
     clos_refl_trans phaser SReduces x y ->
-    NHB y x.
+    Facilitates y x.
   Proof.
     intros.
     rewrite clos_rt_rtn1_iff in H1.
-    induction H1; auto.
-    assert (Welformed y) by (rewrite <- clos_rt_rtn1_iff in H2; eauto using ph_s_reduces_trans_refl_welformed).
-    apply ph_s_reduces_preserves_ge_left with (y); auto.
+    induction H1.
+    - inversion H0; auto.
+    - assert (Welformed y). {
+        rewrite <- clos_rt_rtn1_iff in H2.
+        eauto using ph_s_reduces_trans_refl_welformed.
+      }
+      apply ph_s_reduces_preserves_ge_left with (y); auto.
   Qed.
 
   (* 
   Suppose~$\Ph \Rwait \Phy \Rsignal \Phz$ and that $\Mode[\Ph(\Tid)] = \SW$.
   %
-  We have that~$\Ph \HB \Phz$.
+  We have that~$\Ph \HappensBefore \Phz$.
   *)
   Section EX2.
   Variable x y z: phaser.
@@ -711,7 +724,7 @@ Section Facts.
 
   Lemma ph_signal_lhs_ge_rhs:
     forall x t,
-    x >= x ->
+    WellOrdered x ->
     SignalPre t x ->
     x >= signal t x.
   Proof.
@@ -723,16 +736,13 @@ Section Facts.
     destruct H4 as [(?,(v',(?,?)))|(?,?)].
     - subst.
       assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H6.
-      assert (Taskview.NHB v1 v). {
-        inversion H; eauto.
-      }
-      auto using signal_preserves_rhs.
-    - inversion H; eauto.
+      eauto using well_ordered_to_facilitates, signal_preserves_rhs.
+    - eauto using well_ordered_to_facilitates.
   Qed.
 
   Lemma ph_wait_lhs_ge_rhs:
     forall x t,
-    x >= x ->
+    WellOrdered x ->
     WaitPre t x ->
     x >= wait t x.
   Proof.
@@ -744,9 +754,7 @@ Section Facts.
     destruct H4 as [(?,(v',(?,?)))|(?,?)].
     - subst.
       assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H6.
-      assert (Taskview.NHB v1 v). {
-        inversion H; eauto.
-      }
+      assert (Taskview.Facilitates v1 v) by eauto using well_ordered_to_facilitates.
       inversion H3; subst.
       + assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
         apply tv_nhb_so.
@@ -756,31 +764,31 @@ Section Facts.
         inversion H7.
         assert (Hx := H5 _ _ H0).
         apply wait_preserves_rhs; auto.
-    - inversion H; eauto.
+    - eauto using well_ordered_to_facilitates.
   Qed.
 
   Lemma ph_register_lhs_ge_rhs:
     forall x r t,
-    x >= x ->
+    WellOrdered x ->
     RegisterPre r t x ->
     x >= register r t x.
   Proof.
     intros.
-    inversion H0; clear  H0.
+    inversion H0; clear H0.
     apply ph_rel_def.
     intros.
     apply ph_register_inv_mapsto in H4 as [?|(?,(v',(?,?)))]. {
-      inversion H; eauto.
+      eauto using well_ordered_to_facilitates.
     }
     subst.
     assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
     apply tv_nhb_register_right; auto.
-    inversion H; eauto.
+    eauto using well_ordered_to_facilitates.
   Qed.
 
   Lemma ph_drop_lhs_ge_rhs:
     forall x t,
-    x >= x ->
+    WellOrdered x ->
     DropPre t x ->
     x >= drop t x.
   Proof.
@@ -790,12 +798,12 @@ Section Facts.
     intros.
     apply drop_mapsto_inv in H3.
     destruct H3 as (?,?).
-    inversion H; eauto.
+    eauto using well_ordered_to_facilitates.
   Qed.
 
   Lemma reduces_ne:
     forall x y,
-    Ge x x ->
+    WellOrdered x ->
     SReduces x y ->
     x >= y.
   Proof.

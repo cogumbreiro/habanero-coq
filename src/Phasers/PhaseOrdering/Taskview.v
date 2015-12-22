@@ -33,37 +33,37 @@ Section Defs.
   Require Import HJ.Phasers.Taskview.
   Import Welformedness.Taskview.
 
-  Inductive HB v1 v2 : Prop :=
+  Inductive HappensBefore v1 v2 : Prop :=
     tv_hb_def:
       signal_phase v1 < wait_phase v2 ->
       SignalCap (mode v1) ->
       WaitCap (mode v2) ->
-      HB v1 v2.
+      HappensBefore v1 v2.
 
   (** v2 is beghind of v1, or v1 and v2 intersect. *)
 
-  Inductive NHB v1 v2 : Prop := 
+  Inductive Facilitates v1 v2 : Prop := 
     | tv_nhb_ge:
        signal_phase v1 >= wait_phase v2 ->
-       NHB v1 v2
+       Facilitates v1 v2
     | tv_nhb_so:
       mode v2 = SIGNAL_ONLY ->
-      NHB v1 v2
+      Facilitates v1 v2
     | tv_nhb_wo:
       mode v1 = WAIT_ONLY ->
-      NHB v1 v2.
+      Facilitates v1 v2.
 
-  Definition MHP v1 v2 := NHB v2 v1.
+  Definition MayHappenParallel v1 v2 := Facilitates v2 v1.
 
-  Definition Blocked v1 v2 := HB v2 v1.
+  Definition BlockedBy v1 v2 := HappensBefore v2 v1.
 End Defs.
 
 
 Module Notations.
-  Infix "<" := HB : phaser_scope.
-  Infix ">" := Blocked : phaser_scope.
-  Infix "<=" := MHP : phaser_scope.
-  Infix ">=" := NHB : phaser_scope.
+  Infix "<" := HappensBefore : phaser_scope.
+  Infix ">" := BlockedBy : phaser_scope.
+  Infix "<=" := MayHappenParallel : phaser_scope.
+  Infix ">=" := Facilitates : phaser_scope.
 End Notations.
 
 
@@ -149,7 +149,7 @@ Section Facts.
     { auto using tv_nhb_so. }
     destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
     { auto using tv_nhb_wo. }
-    assert (HB v1 v2). {
+    assert (HappensBefore v1 v2). {
       assert (signal_phase v1 < wait_phase v2) % nat by intuition.
       auto using tv_hb_def, neq_wo_to_signal_cap, neq_so_to_wait_cap.
     }
@@ -173,17 +173,17 @@ Section Facts.
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           auto using tv_hb_def.
         }
-        assert (NHB v1 v2). {
+        assert (Facilitates v1 v2). {
           assert (signal_phase v1 >= wait_phase v2) % nat by intuition.
           auto using tv_nhb_ge.
         }
         contradiction.
       }
-      assert (NHB v1 v2) by
+      assert (Facilitates v1 v2) by
         auto using tv_nhb_wo, not_signal_cap_to_wo.
       contradiction.
     }
-    assert (NHB v1 v2) by
+    assert (Facilitates v1 v2) by
       auto using tv_nhb_so, not_wait_cap_to_so.
     contradiction.
   Qed.
@@ -276,7 +276,7 @@ Section Facts.
     forall v v',
     Welformed v ->
     Reduces v SIGNAL v' ->
-    NHB v' v.
+    Facilitates v' v.
   Proof.
     intros.
     inversion H0.
@@ -287,7 +287,7 @@ Section Facts.
   Let tv_wait_ge_lhs:
     forall v,
     WaitPre v ->
-    NHB (wait v) v.
+    Facilitates (wait v) v.
   Proof.
     intros.
     destruct H.
@@ -299,7 +299,7 @@ Section Facts.
     forall v o v',
     Welformed v ->
     Reduces v o v' ->
-    NHB v' v.
+    Facilitates v' v.
   Proof.
     intros.
     inversion H0; subst.
@@ -318,8 +318,8 @@ Section Facts.
     (signal_phase z >= wait_phase x)%nat.
   Proof.
     intros.
-    assert (NHB z y) by eauto using tv_nhb_reduces.
-    assert (NHB y x) by eauto using tv_nhb_reduces.
+    assert (Facilitates z y) by eauto using tv_nhb_reduces.
+    assert (Facilitates y x) by eauto using tv_nhb_reduces.
     destruct o.
     - apply reduces_rw_signal in H2.
       destruct o'.
@@ -381,9 +381,9 @@ Section Facts.
   Lemma tv_lhs_eval_ge:
     forall v1 v2 v1' o,
     Welformed v1 ->
-    NHB v1 v2 ->
+    Facilitates v1 v2 ->
     Reduces v1 o v1' ->
-    NHB v1' v2.
+    Facilitates v1' v2.
   Proof.
     intros.
     inversion H0.
@@ -400,9 +400,9 @@ Section Facts.
   Lemma tv_nhb_eval_lhs:
     forall v1 v2 o,
     Welformed v1 ->
-    NHB v1 v2 ->
+    Facilitates v1 v2 ->
     Reduces v1 o (eval o v1) ->
-    NHB (eval o v1) v2.
+    Facilitates (eval o v1) v2.
   Proof.
     intros.
     inversion H0.
@@ -419,7 +419,7 @@ Section Facts.
   Theorem tv_lt_irreflexive:
     forall v,
     Welformed v ->
-    ~ (HB v v).
+    ~ (HappensBefore v v).
   Proof.
     intros.
     rewrite tv_not_lt_rw_tv_ge.
