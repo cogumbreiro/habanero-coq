@@ -63,6 +63,12 @@ Inductive Child (p:l_task) (f:finish) : Prop :=
     List.In p (get_tasks f) ->
     Child p f.
 
+Inductive Registered (t:tid) (f:finish) : Prop :=
+  registered_def:
+    forall a,
+    Child (t, a) f ->
+    Registered t f.
+
 Lemma child_eq:
   forall p l,
   Child p (Node (p :: l)).
@@ -127,6 +133,49 @@ Proof.
   apply InA_alt.
   exists p.
   intuition.
+Qed.
+
+Lemma registered_cons:
+  forall t l p,
+  Registered t (Node l) ->
+  Registered t (Node (p::l)).
+Proof.
+  intros.
+  inversion H.
+  eauto using child_cons, registered_def.
+Qed.
+
+Lemma registered_eq:
+  forall t l a,
+  Registered t (Node ((t,a)::l)).
+Proof.
+  intros.
+  eauto using registered_def, child_eq.
+Qed.
+
+Lemma registered_absurd_nil:
+  forall t,
+  ~ Registered t (Node nil).
+Proof.
+  intros.
+  intuition.
+  inversion H.
+  apply child_absurd_nil in H0.
+  assumption.
+Qed.
+
+Lemma registered_inv_cons:
+  forall t t' a l,
+  Registered t (Node ((t', a) :: l)) ->
+  t = t' \/ Registered t (Node l).
+Proof.
+  intros.
+  inversion H.
+  apply child_inv_cons in H0.
+  destruct H0 as [Hx|?].
+  - inversion Hx; subst; clear Hx.
+    intuition.
+  - eauto using registered_def.
 Qed.
 
 Lemma ina_eq_key_subst:
