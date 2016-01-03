@@ -314,8 +314,37 @@ Definition heap_store (h:phid) (n:nat) : state :=
 Definition remove_task (t:tid) : state :=
   mk_state s.(get_finish) (Map_TID.remove t s.(get_taskmap)) s.(get_heap) s.(get_program).
 
-Definition update_statement (t:tid) (s':statement) : state :=
-  mk_state s.(get_finish) (Map_TID.add t s' s.(get_taskmap)) s.(get_heap) s.(get_program).
+Definition tm_update (f:statement -> statement) t m :=
+  match Map_TID.find t m with
+  | Some s => Map_TID.add t (f s) m
+  | None => m
+  end.
+
+Definition tm_pop t m :=
+  tm_update 
+  (fun s =>
+    match s with
+    | seq _ s => s
+    | snil => snil
+    end)
+  t m.
+
+Fixpoint concat (s1:statement) (s2:statement) : statement :=
+  match s1 with
+  | snil => s2
+  | seq i s1' => seq i (concat s1' s2)
+  end.
+
+Definition tm_push t s m := tm_update (fun s' => concat s s') t m.
+
+Definition update_taskmap s f :=
+  mk_state (get_finish s) (f (get_taskmap s)) (get_heap s) (get_program s).
+
+Definition pop_instruction s t := update_taskmap s (tm_pop t).
+
+Definition push_statement s t s' := update_taskmap s (tm_push t s').
+
+Definition add_task s t (stmt:statement) := update_taskmap s (Map_TID.add t stmt).
 
 Definition get_function (h:phid) : statement :=
   match Map_PHID.find h s.(get_program) with
@@ -333,14 +362,18 @@ Inductive GetStatement (t:tid) (s':statement) : Prop :=
       Map_TID.MapsTo t s' S.(get_taskmap) ->
       GetStatement t s'.
 
-Definition FReduce := Semantics.Reduce S.(get_finish).
+Inductive PeekInstruction (t:tid) (i:instruction) : Prop :=
+  peek_inst_def:
+    forall s,
+    GetStatement t (seq i s) ->
+    PeekInstruction t i.
 
-Fixpoint concat (s1:statement) (s2:statement) : statement :=
-  match s1 with
-  | snil => s2
-  | seq i s1' => seq i (concat s1' s2)
-  end.
+Notation FReduce := (Semantics.Reduce S.(get_finish)).
 
+Inductive In t : Prop :=
+  in_def:
+    Map_TID.In t (get_taskmap S) ->
+    In t.
 
 Inductive Reduce: state -> Prop :=
   | reduce_snil:
@@ -351,57 +384,56 @@ Inductive Reduce: state -> Prop :=
     Reduce (set_finish S' f')
 
   | reduce_skip:
-    forall t s,
-    GetStatement t (seq skip s) ->
-    Reduce (update_statement S t s)
+    forall t,
+    PeekInstruction t skip ->
+    Reduce (pop_instruction S t)
 
   | reduce_store:
-    forall t h s e,
-    GetStatement t (seq (arr_store h e) s) ->
+    forall t h e,
+    PeekInstruction t (arr_store h e) ->
     let n := eval S e in
     let S' := heap_store S h n in
-    Reduce (update_statement S' t s)
+    Reduce (pop_instruction S' t)
 
   | reduce_while_end:
-    forall t s1 s2 h,
-    GetStatement t (seq (while h s1) s2) ->
+    forall t s h,
+    PeekInstruction t (while h s) ->
     heap_load S h = 0 ->
-    Reduce (update_statement S t s2)
+    Reduce (pop_instruction S t)
   
   | reduce_while_loop:
-    forall s1 s2 h t,
-    GetStatement t (seq (while h s1) s2) ->
+    forall s h t,
+    PeekInstruction t (while h s) ->
     heap_load S h <> 0 ->
-    let s3 := concat s1 (seq (while h s1) s2) in
-    Reduce (update_statement S t s3)
+    Reduce (push_statement S t s)
   
   | reduce_async:
-    forall t1 t2 f' s1 s2,
-    GetStatement t1 (seq (async s2) s1) ->
-    ~ Map_TID.In t2 S.(get_taskmap) ->
+    forall t1 t2 f' s,
+    PeekInstruction t1 (async s) ->
+    ~ In t2 ->
     FReduce t1 (Semantics.BEGIN_ASYNC t2) f' ->
-    let S' := update_statement (update_statement S t2 s2) t1 s1 in
-    Reduce (set_finish S' f')
-
-  | reduce_begin_finish:
-    forall s t f',
-    GetStatement t (seq begin_finish s) ->
-    FReduce t Semantics.BEGIN_FINISH f' ->
-    let S' := update_statement S t s in
-    Reduce (set_finish S' f')
-    
-  | reduce_end_finish:
-    forall s t f',
-    GetStatement t (seq end_finish s) ->
-    FReduce t Semantics.END_FINISH f' ->
-    let S' := update_statement S t s in
+    let S := pop_instruction S t1 in
+    let S := add_task S t2 s in
     Reduce (set_finish S f')
 
+  | reduce_begin_finish:
+    forall t f',
+    PeekInstruction t begin_finish ->
+    FReduce t Semantics.BEGIN_FINISH f' ->
+    Reduce (set_finish (pop_instruction S t) f')
+    
+  | reduce_end_finish:
+    forall t f',
+    PeekInstruction t end_finish ->
+    FReduce t Semantics.END_FINISH f' ->
+    Reduce (set_finish (pop_instruction S t) f')
+
   | reduce_call:
-    forall s t h,
-    GetStatement t (seq (call h) s) ->
-    let s' := concat (get_function S h) s in
-    Reduce (update_statement S t s').
+    forall t h,
+    PeekInstruction t (call h) ->
+    let S := pop_instruction S t in
+    let f := get_function S h in
+    Reduce (push_statement S t f).
 End OS.
 
 Module Example1_1.
@@ -428,11 +460,15 @@ Let S2 := skip.
 Let S1 : statement  := (from_list (
   begin_finish :: 
   async S3 ::
-  call f :: S2 :: nil) % list ).
+  call f ::
+  S2 ::
+  nil) % list ).
 
 Let S1_1 := from_list (
   async S3 ::
-  call f :: S2 :: nil) % list.
+  call f ::
+  S2 ::
+  nil) % list.
 
 Let S0 := run t1 S1.
 
@@ -448,11 +484,17 @@ Module F := HJ.AsyncFinish.Semantics.
 *)
 Goal Reduce S0 (set_finish
   (* Update the body of task t1: *)
-  (update_statement S0 t1 S1_1)
+  (add_task S0 t1 S1_1)
   (* Update the finish configuration: *)
   ([ ! t1 ] |+ (t1 <| [! t1]))).
 Proof.
   intros.
+  assert (set_finish
+  (* Update the body of task t1: *)
+  (add_task S0 t1 S1_1)
+  (* Update the finish configuration: *)
+  ([ ! t1 ] |+ (t1 <| [! t1])) = 
+  
   apply reduce_begin_finish with (s:=S1_1) (t:=t1).
   - apply get_statement_def.
     simpl.
