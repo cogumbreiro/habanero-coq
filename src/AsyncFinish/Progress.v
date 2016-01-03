@@ -299,6 +299,43 @@ Proof.
     subst.
     assumption.
 Qed.
+
+Lemma in_to_registered:
+  forall t f,
+  Flat f ->
+  In t f ->
+  Registered t f.
+Proof.
+  intros ? ? Hf Hin.
+  inversion Hf as (He, Hn).
+  destruct Hin as (f', (a, ?)).
+  apply flat_le in H0; auto.
+  destruct H0.
+  - subst.
+    eauto using registered_def.
+  - subst.
+    apply child_absurd_nil in H.
+    inversion H.
+Qed.
+(*
+(**
+  Any flat finish reduces. 
+  *)
+Corollary flat_reduces_simpl:
+  forall f,
+  Flat f ->
+  exists f' t o, Reduce f t o f'.
+Proof.
+  intros.
+  inversion H.
+  inversion H1; subst; clear H1.
+  apply in_to_registered in H2; auto.
+  inversion H2.
+  exists f.
+  exists t.
+  
+Qed.
+*)
 (*
 Lemma check_translate:
   forall f t o f',
