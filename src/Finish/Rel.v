@@ -1,4 +1,4 @@
-Require Import HJ.AsyncFinish.Syntax.
+Require Import HJ.Finish.Syntax.
 Require Import Coq.Relations.Relation_Operators.
 Require Import Coq.Relations.Operators_Properties.
 Require Import HJ.Vars.

@@ -1,7 +1,7 @@
 Require Import Coq.Lists.SetoidList.
 
 Require Import HJ.Vars.
-Require Import HJ.AsyncFinish.Lang.
+Require Import HJ.Finish.Lang.
 
 Import FinishNotations.
 
@@ -140,9 +140,9 @@ Proof.
 Qed.
 
 
-Require Import HJ.AsyncFinish.Semantics.
-Require Import HJ.AsyncFinish.Typesystem.
-Require Import HJ.AsyncFinish.LangExtra.
+Require Import HJ.Finish.Semantics.
+Require Import HJ.Finish.Typesystem.
+Require Import HJ.Finish.LangExtra.
 
 Lemma sub_notin:
   forall x y t,

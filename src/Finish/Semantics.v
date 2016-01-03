@@ -1,5 +1,5 @@
-Require Import HJ.AsyncFinish.Syntax.
-Require Import HJ.AsyncFinish.Rel.
+Require Import HJ.Finish.Syntax.
+Require Import HJ.Finish.Rel.
 Require Import HJ.Vars.
 Require Import Coq.Lists.List.
 

@@ -1,4 +1,4 @@
-Require Import HJ.AsyncFinish.Lang.
+Require Import HJ.Finish.Lang.
 Require Import HJ.Vars.
 Require Import Aniceto.Graphs.Bipartite.Bipartite.
 Require Import Aniceto.Graphs.Graph.

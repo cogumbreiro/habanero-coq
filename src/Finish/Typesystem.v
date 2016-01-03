@@ -1,7 +1,7 @@
 Require Import Coq.Lists.SetoidList.
 
 Require Import HJ.Vars.
-Require Import HJ.AsyncFinish.Lang.
+Require Import HJ.Finish.Lang.
 
 Inductive IsMap : finish -> Prop :=
   is_map_def:
@@ -75,7 +75,7 @@ Proof.
     auto.
 Qed.
 
-Require Import HJ.AsyncFinish.LangExtra.
+Require Import HJ.Finish.LangExtra.
 
 Lemma in_to_ina:
   forall t a l, 

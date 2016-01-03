@@ -1,8 +1,8 @@
-Require HJ.AsyncFinish.Syntax.
-Module F := HJ.AsyncFinish.Syntax.
+Require HJ.Finish.Syntax.
+Module F := HJ.Finish.Syntax.
 Require Import HJ.Phasers.Phasermap.
 Require Import HJ.Vars.
-Require Import HJ.AsyncFinish.IEF.
+Require Import HJ.Finish.IEF.
 Require Import HJ.Common.
 Notation fstate := (Map_FID.t phasermap).
 

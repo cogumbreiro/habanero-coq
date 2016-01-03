@@ -1,7 +1,7 @@
 Require Import Coq.Lists.List.
 
 Require Import HJ.Vars.
-Require Import HJ.AsyncFinish.Lang.
+Require Import HJ.Finish.Lang.
 
 Fixpoint NotIn (t:tid) (f:finish) : Prop :=
   match f with

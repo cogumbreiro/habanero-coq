@@ -3,7 +3,7 @@ Require Import Coq.Relations.Relation_Operators.
 
 Require Import Aniceto.List.
 
-Require Import HJ.AsyncFinish.Lang.
+Require Import HJ.Finish.Lang.
 
 Section Find.
   Variable check: finish -> bool.
