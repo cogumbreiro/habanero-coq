@@ -488,13 +488,6 @@ Module Progress.
   Import Lang.FinishNotations.
   Open Scope finish_scope.
 
-  Variable le_to_fid:
-    forall f f',
-    f <= f' -> exists i, FIDPath f i f'.
-  Variable fid_path_le:
-    forall f l f',
-    FIDPath f l f' ->
-    f <= f'.
 
   Notation ROOT := (get_finish s).
 
@@ -503,12 +496,6 @@ Module Progress.
     FIDPath f h ROOT /\
     Progress.Flat f /\ 
     Map_FID.MapsTo h m (get_fstate s).
-
-  Notation FRequestOf f := (RequestOf (Finish.Typesystem.Check f)).
-  Variable request_of_fid:
-    forall l f,
-    FIDPath f l ROOT ->
-    exists r, FRequestOf f r.
 
   Variable reqs: Map_TID.t op.
 
@@ -582,8 +569,8 @@ Module Progress.
     assert (Rc : exists ctx', CtxReduce (P_P.get_state p, ROOT) t o ctx'). {
       remember (as_f_op o) as o1.
       destruct o1 as [o1|].
-      - eauto using ctx_reduce_le_some.
-      - eauto using ctx_reduce_le_none.
+      - eauto using ctx_reduce_le_some, fid_path_to_le.
+      - eauto using ctx_reduce_le_none, fid_path_to_le.
     }
     destruct Rc as (ctx', Rc).
     eauto using reduce_def.
