@@ -144,50 +144,6 @@ Record phased := mk_phased {
   to mode [r].
   *)
 
-(* ---- *)
-
-Section EqDec.
-
-Variable A:Type.
-
-Variable eq_dec: forall (x y:A), { x = y } + { x <> y }.
-
-Definition eq_dec_to_bool x y := if eq_dec x y then true else false.
-
-Lemma eq_dec_inv_true:
-  forall x y,
-  eq_dec_to_bool x y = true -> x = y.
-Proof.
-  intros.
-  unfold eq_dec_to_bool in *.
-  destruct (eq_dec x y); auto; try inversion H.
-Qed.
-
-Lemma eq_dec_inv_false:
-  forall x y,
-  eq_dec_to_bool x y = false -> x <> y.
-Proof.
-  intros.
-  unfold eq_dec_to_bool in *.
-  destruct (eq_dec x y); auto; try inversion H.
-Qed.
-
-Lemma eq_dec_rw:
-  forall x y,
-  { eq_dec_to_bool x y = true /\ x = y } +
-  { eq_dec_to_bool x y = false /\ x <> y }.
-Proof.
-  intros.
-  unfold eq_dec_to_bool.
-  destruct (eq_dec x y).
-  - left; intuition.
-  - right; intuition.
-Qed.
-
-End EqDec.
-
-(* ---- *)
-
 Definition async_1 (ps:phased) t p ph : phaser :=
 match Map_PHID.find p (get_args ps) with
 | Some r => register (mk_registry (get_new_task ps) r) t ph
