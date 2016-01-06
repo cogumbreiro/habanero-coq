@@ -247,41 +247,20 @@ Proof.
   trivial.
 Qed.
 
-Structure state := {
-  get_requests : Map_TID.t op;
-  get_state : phasermap;
-  IsValid : Valid get_state;
-  reqs_spec_1: forall t, In t get_state -> Map_TID.In t get_requests;
-  reqs_spec_2: forall t, Map_TID.In t get_requests ->  In t get_state;
-  reqs_spec_3: forall t i, Map_TID.MapsTo t i get_requests -> Check get_state t i
-}.
-
-Inductive RReduce (s:state) (t:tid) (o:op) (m:phasermap) : Prop :=
-  r_reduce_def:
-    Map_TID.MapsTo t o (get_requests s) ->
-    Reduces (get_state s) t o m ->
-    RReduce s t o m.
-
-Variable s:state.
-
-(*
 Variable reqs: Map_TID.t op.
 Variable pm: phasermap.
-Variable pm_spec: Valid pm.
-*)
+Variable IsValid: Valid pm.
+
 Require Import HJ.Phasers.PhaseDiff.
-(*
+
 Variable reqs_spec_1:
   forall t,
   In t pm <-> Map_TID.In t reqs.
 
-Variable reqs_spec_2:
+Variable reqs_spec_3:
   forall t i,
   Map_TID.MapsTo t i reqs ->
   Check pm t i.
-*)
-Notation pm := (get_state s).
-Notation reqs := (get_requests s).
 
 Require Import HJ.Phasers.Welformedness.
 
@@ -366,7 +345,7 @@ Proof.
   apply Map_TID_Extra.nonempty_in in H.
   destruct H as (t, Hin).
   intuition.
-  apply reqs_spec_2 in Hin.
+  apply reqs_spec_1 in Hin.
   unfold tids in *.
   apply pm_tids_spec_2 in Hin.
   rewrite H in *.
@@ -376,7 +355,7 @@ Qed.
 Lemma progress_blocking:
   ~ Map_TID.Empty reqs ->
   (forall t o, Map_TID.MapsTo t o reqs -> negb (eq_wait_all o) = false) ->
-  exists t i m, RReduce s t i m.
+  exists t i m, Reduces pm t i m.
 Proof.
   intros.
   assert (AllSig: AllSignalled pm). {
@@ -389,7 +368,7 @@ Proof.
   assert (Hnil : tids <> nil). {
     auto using nonempty_to_tids_not_nil.
   }
-  destruct (has_unblocked (IsValid s) AllSig WF Hnil) as (t, (Hin, (m, Hred))).
+  destruct (has_unblocked IsValid AllSig WF Hnil) as (t, (Hin, (m, Hred))).
   exists t.
   assert (In t pm). {
     auto using pm_tids_spec_1.
@@ -407,7 +386,7 @@ Proof.
     subst.
     auto.
   }
-  auto using r_reduce_def.
+  auto using reduces.
 Qed.
 
 Lemma tids_nonempty:
@@ -424,7 +403,7 @@ Qed.
 Theorem progress:
   ~ Map_TID.Empty reqs ->
   exists t i m,
-  RReduce s t i m.
+  Reduces pm t i m.
 Proof.
   intros.
   destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:op) =>  negb (eq_wait_all o))); auto with *.
@@ -438,7 +417,7 @@ Proof.
     }
     destruct R as (m, R).
     exists m.
-    auto using r_reduce_def.
+    auto using reduces.
   - auto using progress_blocking.
 Qed.
 End PROGRESS.
