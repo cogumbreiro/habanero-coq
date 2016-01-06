@@ -19,6 +19,7 @@ src/Phasers/SubjectReduction.v
 src/Phasers/Typesystem.v
 #src/ReverseSemaphore.v
 src/Finish/Lang.v
+src/Finish/LangDec.v
 src/Finish/Syntax.v
 src/Finish/Rel.v
 src/Finish/Semantics.v
