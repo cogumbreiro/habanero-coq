@@ -491,11 +491,31 @@ Module Progress.
 
   Notation ROOT := (get_finish s).
 
-  Variable exists_flat:
+  Variable get_fstate_spec:
+    forall x l,
+    FIDPath x l ROOT ->
+    exists m, Map_FID.MapsTo l m (get_fstate s).
+
+  Let exists_flat:
+    F_P.Nonempty ROOT ->
     exists f h m,
     FIDPath f h ROOT /\
     Progress.Flat f /\ 
     Map_FID.MapsTo h m (get_fstate s).
+  Proof.
+    intros.
+    apply F_P.find_flat in H.
+    destruct H as (x, (Hf, Hr)).
+    exists x.
+    apply le_to_fid_path in Hr.
+    destruct Hr as (p, Hp).
+    exists p.
+    assert (Hx := Hp).
+    apply get_fstate_spec in Hx.
+    destruct Hx as (m, Hx).
+    exists m.
+    intuition.
+  Qed.
 
   Variable reqs: Map_TID.t op.
 
@@ -506,21 +526,43 @@ Module Progress.
     FS.Disjoint ROOT o'.
 
   Inductive WFContext h f : Prop :=
-    get_context_def:
+    wf_context_def:
       forall p reqs1 reqs2,
       Map_TID_Props.Partition reqs reqs1 reqs2 ->
       PRequests p reqs1 ->
-      RequestToCheck (Check (P_P.get_state p, f)) reqs1 ->
-      Welformedness.Phasermap.Welformed (P_P.get_state p) ->
+      RequestToCheck (Check (P_P.get_state p, f)) reqs1 -> (* Why? *)
+      Welformedness.Phasermap.Welformed (P_P.get_state p) -> (* Why? Shouldn't P_P.state be enough? *)
       Map_FID.MapsTo h (P_P.get_state p) (get_fstate s) ->
       (forall t o, Map_TID.MapsTo t o reqs1 -> F.Registered t f) ->
       ~ Map_TID.Empty reqs1 ->
       WFContext h f.
+  Require Import HJ.Finish.LangDec.
 
-  Variable get_wf_context:
+  Let split_reqs f := Map_TID_Props.partition (fun (t:tid) _ => is_registered t f) reqs.
+  Let to_p_reqs r := Map_TID_Extra.omap (fun _ (o:op) => as_p_op o) r.
+
+  Variable valid_pm:
+    forall f h m,
+    FIDPath f h ROOT ->
+    Map_FID.MapsTo h m (get_fstate s) ->
+    Phasers.Typesystem.Valid m.
+
+  Let get_wf_context:
     forall h f,
     FIDPath f h ROOT ->
     WFContext h f.
+  Proof.
+    intros.
+    remember (split_reqs f) as p.
+    destruct p as (r1, r2).
+    destruct (get_fstate_spec f h) as (m, Hm); auto.
+    remember (to_p_reqs r1) as p_r1.
+    assert (Phasers.Typesystem.Valid m) by eauto.
+  reqs_spec_1: forall t, In t get_state -> Map_TID.In t get_requests;
+  reqs_spec_2: forall t, Map_TID.In t get_requests ->  In t get_state;
+  reqs_spec_3: forall t i, Map_TID.MapsTo t i get_requests -> Check get_state t i
+
+    apply wf_context_def.
 
   Let flat_to_ief:
     forall t f,
