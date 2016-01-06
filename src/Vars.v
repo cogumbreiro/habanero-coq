@@ -8,6 +8,7 @@ Require Coq.FSets.FSetProperties.
 Require Coq.FSets.FSetBridge.
 Require Import Aniceto.Map.
 Require Import Aniceto.Set.
+Require Import Aniceto.EqDec.
 
 Module TID := Nat_as_OT.
 Module TID_Facts := OrderedTypeFacts TID.
@@ -28,6 +29,28 @@ Lemma tid_eq_rw:
 Proof.
   intros.
   auto with *.
+Qed.
+
+(** Boolean comparison of tid instances. *)
+Definition beq_tid := eq_dec_to_bool tid TID.eq_dec.
+
+Lemma beq_tid_to_eq:
+  forall x y,
+  beq_tid x y = true ->
+  x = y.
+Proof.
+  intros.
+  unfold beq_tid in *.
+  eauto using eq_dec_inv_true.
+Qed.
+
+Lemma beq_tid_refl:
+  forall x,
+  beq_tid x x = true.
+Proof.
+  intros.
+  unfold beq_tid.
+  auto using eq_dec_refl.
 Qed.
 
 Module PHID := Nat_as_OT.
