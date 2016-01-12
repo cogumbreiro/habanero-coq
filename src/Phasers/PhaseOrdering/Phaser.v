@@ -42,6 +42,12 @@ Section Defs.
       Facilitates x x ->
       WellOrdered x.
 
+  Inductive Par x y: Prop :=
+    par_def:
+      Facilitates x y ->
+      Facilitates y x ->
+      Par x y.
+
 End Defs.
 
 Module Notations.
@@ -49,6 +55,7 @@ Module Notations.
   Infix ">" := BlockedBy : phaser_scope.
   Infix "<=" := MayHappenParallel : phaser_scope.
   Infix ">=" := Facilitates : phaser_scope.
+  Infix "||" := Par : phaser_scope.
 End Notations.
 
 Section Facts.
@@ -110,10 +117,11 @@ Section Facts.
     forall ph1 ph2 ph3,
     HappensBefore ph1 ph2 ->
     HappensBefore ph2 ph3 ->
-    Facilitates ph2 ph2 ->
+    WellOrdered ph2 ->
     HappensBefore ph1 ph3.
   Proof.
     intros.
+    destruct H1.
     inversion H.
     inversion H0.
     clear H H0.
@@ -121,12 +129,13 @@ Section Facts.
     eauto using lt_trans_ex, ph_happens_before_def.
   Qed.
 
-  Lemma hb_irreflexive:
+  Lemma ph_hb_irreflexive:
     forall ph,
-    Facilitates ph ph ->
+    WellOrdered ph ->
     ~ (HappensBefore ph ph).
   Proof.
     intros.
+    inversion H.
     auto using ph_chb_to_not_hb.
   Qed.
 
@@ -815,6 +824,28 @@ Section Facts.
     - auto using ph_wait_lhs_ge_rhs.
     - auto using ph_drop_lhs_ge_rhs.
     - auto using ph_register_lhs_ge_rhs.
+  Qed.
+
+  Lemma reduces_par:
+    forall x y,
+    Welformed x ->
+    WellOrdered x ->
+    SReduces x y ->
+    x || y.
+  Proof.
+    intros.
+    inversion H1.
+    apply par_def.
+    - eauto using reduces_ne.
+    - eauto using ph_ge_reduce.
+  Qed.
+
+  Lemma ph_par_symm:
+    forall x y,
+    x || y <-> y || x.
+  Proof.
+    split; intros;
+    inversion H; eauto using par_def.
   Qed.
 End Facts.
 

@@ -355,7 +355,7 @@ Qed.
 Lemma progress_blocking:
   ~ Map_TID.Empty reqs ->
   (forall t o, Map_TID.MapsTo t o reqs -> negb (eq_wait_all o) = false) ->
-  exists t i m, Reduces pm t i m.
+  exists t i m, Map_TID.MapsTo t i reqs /\ Reduces pm t i m.
 Proof.
   intros.
   assert (AllSig: AllSignalled pm). {
@@ -403,7 +403,7 @@ Qed.
 Theorem progress:
   ~ Map_TID.Empty reqs ->
   exists t i m,
-  Reduces pm t i m.
+  Map_TID.MapsTo t i reqs /\ Reduces pm t i m.
 Proof.
   intros.
   destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:op) =>  negb (eq_wait_all o))); auto with *.
@@ -418,6 +418,37 @@ Proof.
     destruct R as (m, R).
     exists m.
     auto using reduces.
-  - auto using progress_blocking.
+  - eauto using progress_blocking.
 Qed.
 End PROGRESS.
+Module ProgressSpec.
+  Section ValidPRequest.
+    Set Implicit Arguments.
+    Unset Strict Implicit.
+    Require Import HJ.Phasers.Welformedness.
+    Require Import HJ.Phasers.Typesystem.
+    Structure phasermap_t := {
+      pm_t_value: phasermap;
+      pm_t_spec_1: Valid pm_t_value;
+      pm_t_spec_2: Phasermap.Welformed pm_t_value
+    }.
+    Variable pm:phasermap.
+    Structure pm_request := {
+      pm_request_value: Map_TID.t Phasermap.op;
+      pm_request_spec_1: (forall t : tid, In t pm <-> Map_TID.In t pm_request_value);
+      pm_request_spec_2: forall t i, Map_TID.MapsTo t i pm_request_value -> Phasers.Typesystem.Check pm t i;
+      pm_request_spec_3: ~ Map_TID.Empty pm_request_value
+    }.
+  End ValidPRequest.
+
+  Lemma progress:
+    forall (m: phasermap_t) (r:pm_request (pm_t_value m)),
+    exists t i m', Map_TID.MapsTo t i (pm_request_value r) /\ Reduces (pm_t_value m) t i m'.
+  Proof.
+    intros.
+    destruct m.
+    destruct r.
+    simpl in *.
+    eauto using progress.
+  Qed.
+End ProgressSpec.
