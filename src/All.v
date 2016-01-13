@@ -261,30 +261,50 @@ Module Progress.
   Import Semantics.
   Import Typesystem.
 
+  Import P_P.ProgressSpec.
+
+  Inductive ProgressArg reqs m : Prop :=
+    | some_f_req:
+      forall  t i o,
+      Map_TID.MapsTo t i reqs ->
+      translate i = only_f o ->
+      ProgressArg reqs m
+    | only_p_req:
+      forall (r:pm_request (pm_t_value m)),
+      (forall t i, Map_TID.MapsTo t i reqs -> exists o, as_p_op i = Some o  /\ Map_TID.MapsTo t o (pm_request_value r)) ->
+      (forall t o, Map_TID.MapsTo t o (pm_request_value r) -> exists i, as_p_op i = Some o /\ Map_TID.MapsTo t i reqs) ->
+      ProgressArg reqs m.
+
   Section CtxProgress.
     Import P_P.ProgressSpec.
 
     Variable f:F.finish.
     Variable p:phasermap_t.
     Let pm := pm_t_value p.
-    Variable p_reqs: pm_request pm.
+(*    Variable p_reqs: pm_request pm.*)
 
     Variable reqs: Map_TID.t op.
-
+    Variable hp: ProgressArg reqs p.
+(*
     Variable mt_p_reqs:
       forall t i o,
       Map_TID.MapsTo t i reqs ->
       as_p_op i = Some o ->
       Map_TID.MapsTo t o (pm_request_value p_reqs).
-
+*)
+(*
     Variable mt_f_reqs:
       forall t i o,
       Map_TID.MapsTo t i reqs ->
       as_f_op i = Some o ->
       F_T.Check f t o.
-
+*)
     Let ctx := (p, f).
 
+    Variable ReqsChecked:
+      forall t i,
+      Map_TID.MapsTo t i reqs -> Check ctx t i.
+(*
     Let ReqsChecked:
       forall t i,
       Map_TID.MapsTo t i reqs -> Check ctx t i.
@@ -306,12 +326,7 @@ Module Progress.
        + symmetry in Heqo; apply translate_both_impl_as_p_op in Heqo.
        eauto using pm_request_spec_2.
     Qed.
-
-    Variable p_reqs_spec_1:
-      forall t o,
-      Map_TID.MapsTo t o (pm_request_value p_reqs) ->
-      exists i, Map_TID.MapsTo t i reqs /\ as_p_op i = Some o.
-
+*)
     Require Import HJ.Finish.Progress.
     Variable IsFlat:
       Flat f.
@@ -340,12 +355,12 @@ Module Progress.
       exists f'.
       apply reduces_f with (o); auto.
     Qed.
-    
-    Let is_p_impl_reqs_f_spec_1:
-      (forall t i, Map_TID.MapsTo t i reqs ->  exists o, as_p_op i = Some o) ->
+
+    Let is_p_impl_reqs_f_spec_1 (r:pm_request pm):
+      (forall t i, Map_TID.MapsTo t i reqs ->  exists o, as_p_op i = Some o /\ Map_TID.MapsTo t o (pm_request_value r)) ->
       forall t i,
       Map_TID.MapsTo t i reqs ->
-      (exists o, as_p_op i = Some o /\ Map_TID.MapsTo t o (pm_request_value p_reqs)).
+      (exists o, as_p_op i = Some o /\ Map_TID.MapsTo t o (pm_request_value r)).
     Proof.
       intros IsP.
       intros.
@@ -353,13 +368,12 @@ Module Progress.
       apply IsP in H.
       destruct H as (o, ?).
       exists o; intuition.
-      eauto.
     Qed.
 
-    Let empty_to_f_empty:
+    Let empty_to_f_empty (r:pm_request pm):
       ~ Map_TID.Empty reqs ->
-      (forall t i, Map_TID.MapsTo t i reqs ->  exists o, as_p_op i = Some o) ->
-      ~ Map_TID.Empty (pm_request_value p_reqs).
+      (forall t i, Map_TID.MapsTo t i reqs ->  exists o, as_p_op i = Some o /\ Map_TID.MapsTo t o (pm_request_value r)) ->
+      ~ Map_TID.Empty (pm_request_value r).
     Proof.
       intros.
       apply Map_TID_Extra.nonempty_in.
@@ -367,25 +381,27 @@ Module Progress.
       destruct H as (k, Hmt).
       apply Map_TID_Extra.in_to_mapsto in Hmt.
       destruct Hmt as (i, Hmt).
-      assert (Hx: exists o, as_p_op i = Some o). {
-        eauto.
-      }
+      apply H0 in Hmt.
       exists k.
-      destruct Hx as (o, Hx).
+      destruct Hmt as (o, (_,Hx)).
       eauto using Map_TID_Extra.mapsto_to_in.
     Qed.
 
-    Let progress_all_p:
+    Let progress_all_p
+      (r:pm_request pm)
+      (p_reqs_spec_1:
+        forall t o, Map_TID.MapsTo t o (pm_request_value r) ->
+        exists i, as_p_op i = Some o /\ Map_TID.MapsTo t i reqs):
       ~ Map_TID.Empty reqs ->
-      (forall t i, Map_TID.MapsTo t i reqs ->  exists o, as_p_op i = Some o) ->
+      (forall t i, Map_TID.MapsTo t i reqs ->  exists o, as_p_op i = Some o  /\ Map_TID.MapsTo t o (pm_request_value r)) ->
       exists t i ctx', Map_TID.MapsTo t i reqs /\ CtxReduces ctx t i ctx'.
     Proof.
       intros.
-      destruct (progress p_reqs) as (t, (o_p, (m, (mt, R)))).
+      destruct (progress r) as (t, (o_p, (m, (mt, R)))).
       exists t.
       inversion R.
       apply p_reqs_spec_1 in mt.
-      destruct mt as (i, (mt,Hx)).
+      destruct mt as (i, (Hx,mt)).
       exists i.
       apply as_p_op_some_impl_translate in Hx.
       destruct Hx as [?|(o_f, Hx)].
@@ -444,21 +460,13 @@ Module Progress.
       exists t i ctx', Map_TID.MapsTo t i reqs /\ CtxReduces ctx t i ctx'.
     Proof.
       intros.
-      destruct (Map_TID_Extra.pred_choice reqs find_only_f)
-        as [(t,(i,(?,?)))|?]; auto with *.
+      destruct hp.
       - exists t.
         exists i.
-        assert (R: exists f', CtxReduces ctx t i (pm, f')). {
-          apply find_only_f_to_some in H1.
-          destruct H1.
-          eauto.
-        }
-        destruct R as (f', ?).
+        assert (Hc : exists f', CtxReduces ctx t i (pm, f')) by eauto.
+        destruct Hc as (f', Hc).
         eauto.
-     - apply progress_all_p; auto.
-       intros.
-       apply e in H0.
-       eauto using find_none_impl_some_p.
+      - apply progress_all_p with (r:=r); eauto.
     Qed.
   End CtxProgress.
 
@@ -627,6 +635,24 @@ Module Progress.
     - auto using split_reqs_aux_Proper.
   Qed.
 
+  Let in_restrict:
+    forall f t m h,
+    FIDPath f h ROOT ->
+    Map_FID.MapsTo h m (get_fstate s) ->
+    Map_TID.In t (restrict f) ->
+    F.Registered t f.
+  Proof.
+    intros.
+    apply Map_TID_Extra.in_to_mapsto in H1.
+    destruct H1 as (o, mt).
+    unfold restrict in *.
+    rewrite Map_TID_Props.partition_iff_1  with (m:=reqs) (f:=split_reqs_aux f) in mt;
+    auto using split_reqs_aux_Proper.
+    destruct mt as (mt, C).
+    unfold split_reqs_aux in *.
+    auto using is_registered_to_prop.
+  Qed.
+
   Require Import Aniceto.Option.
 
   Let is_f_req (t:tid) (o:op) :=
@@ -646,25 +672,8 @@ Module Progress.
     eauto.
   Qed.
 
-(*  Let only_p_reqs r := Map_TID_Props.partition (fun _ (o:op) => is_some (as_p_op o)) r.
-*)
   Let to_p_reqs_aux (t:tid) := as_p_op.
   Let to_p_reqs r := Map_TID_Extra.omap to_p_reqs_aux r.
-
-  Let to_p_reqs_restrict_1:
-    forall t o f,
-    Map_TID.MapsTo t o (to_p_reqs (restrict f)) ->
-    exists o', as_p_op o' = Some o /\ Map_TID.MapsTo t o' reqs.
-  Proof.
-    intros.
-    unfold to_p_reqs in H.
-    unfold to_p_reqs_aux in *.
-    apply Map_TID_Extra.omap_spec_2 in H; auto using tid_eq_rw.
-    destruct H as (o', (Ho, mt)).
-    exists o'.
-    intuition.
-    eauto.
-  Qed.
 
   Variable p_reqs_spec_1_1:
     forall f t m h,
@@ -684,7 +693,7 @@ Module Progress.
     FIDPath f h ROOT ->
     Map_FID.MapsTo h m (get_fstate s) ->
     Map_TID.MapsTo t o reqs ->
-    Check (m, ROOT) t o.
+    Check (m, ROOT) t o.    
 
   Let is_f_req_as_p_op:
     forall t o,
@@ -702,32 +711,44 @@ Module Progress.
     - eauto using translate_both_impl_as_p_op.
   Qed.
 
+  Let to_p_reqs_restrict_1:
+    forall t o f h m,
+    FIDPath f h ROOT ->
+    Map_FID.MapsTo h m (get_fstate s) ->
+    Map_TID.MapsTo t o (to_p_reqs (restrict f)) ->
+    exists o', as_p_op o' = Some o /\ F.Registered t f /\ Map_TID.MapsTo t o' reqs.
+  Proof.
+    intros.
+    unfold to_p_reqs in H.
+    unfold to_p_reqs_aux in *.
+    apply Map_TID_Extra.omap_spec_2 in H1; auto using tid_eq_rw.
+    destruct H1 as (o', (Ho, mt)).
+    exists o'.
+    try repeat (split; eauto).
+    apply Map_TID_Extra.mapsto_to_in in mt.
+    eapply in_restrict; eauto.
+  Qed.
 
+  Variable Hn: ~ Map_TID.Empty reqs.
 
-  Import P_P.ProgressSpec.
   Let get_reqs_for:
     forall f h m,
     FIDPath f h ROOT ->
     Map_FID.MapsTo h m (get_fstate s) ->
-    (exists t i o, Map_TID.MapsTo t i reqs /\ translate i = only_f o) \/ exists (r:pm_request (pm_t_value m)), True.
+    F_P.Flat f ->
+    ProgressArg (restrict f) m.
   Proof.
     intros.
     destruct (Map_TID_Extra.pred_choice (restrict f) is_f_req); auto with *.
-    - left.
-      destruct e as (t, (o, (mt, Hx))).
-      exists t.
-      exists o.
+    - destruct e as (t, (o, (mt, Hx))).
       apply is_f_req_to_prop in Hx.
       destruct Hx as (o', Hx).
-      exists o'.
-      intuition.
-      eauto.
-    - right.
-      remember (to_p_reqs (restrict f)) as r.
+      eauto using some_f_req.
+    - remember (to_p_reqs (restrict f)) as r.
       assert (S1: forall t, In t (pm_t_value m) <-> Map_TID.In t r). {
         split;intros.
-        - apply p_reqs_spec_1_1 with (h:=h) (f:=f) in H1; eauto.
-          destruct H1 as (o, (mt, Hc)).
+        - apply p_reqs_spec_1_1 with (h:=h) (f:=f) in H2; eauto.
+          destruct H2 as (o, (mt, Hc)).
           assert (mt_r: Map_TID.MapsTo t o (restrict f)) by eauto.
           subst.
           assert (Hx: exists x, Map_TID.MapsTo t x (to_p_reqs (restrict f))). {
@@ -739,38 +760,99 @@ Module Progress.
           }
           destruct Hx as (x, Hx).
           eauto using Map_TID_Extra.mapsto_to_in.
-        - apply Map_TID_Extra.in_to_mapsto in H1.
-          destruct H1 as (x, mt).
+        - apply Map_TID_Extra.in_to_mapsto in H2.
+          destruct H2 as (x, mt).
           subst.
-          apply to_p_reqs_restrict_1 in mt.
-          destruct mt as (o', (He, mt)).
+          apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in mt; auto.
+          destruct mt as (o', (He, (R, mt))).
           eauto.
       }
       assert (S2: forall t i, Map_TID.MapsTo t i r ->
                         Phasers.Typesystem.Check (pm_t_value m) t i). {
         intros.
         subst.
-        apply to_p_reqs_restrict_1 in H1.
-        destruct H1 as (o, (He, mt)).
+        apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in H2; auto.
+        destruct H2 as (o, (He, (_, mt))).
         assert (Hc: Check (m,ROOT) t o) by eauto.
         inversion Hc; subst.
         - simpl in *.
           assert (o0 = i). {
-            apply translate_only_p_impl_as_p_op in H1.
-            rewrite H1 in He.
+            apply translate_only_p_impl_as_p_op in H2.
+            rewrite H2 in He.
             inversion He; auto.
           }
           subst; auto.
-        - apply translate_only_f_impl_as_p_op in H1.
-          rewrite H1 in He; inversion He.
+        - apply translate_only_f_impl_as_p_op in H2.
+          rewrite H2 in He; inversion He.
         - simpl in *.
           assert (o0 = i). {
-            apply translate_both_impl_as_p_op in H1.
-            rewrite H1 in He.
+            apply translate_both_impl_as_p_op in H2.
+            rewrite H2 in He.
             inversion He; auto.
           }
           subst; auto.
       }
+      assert (S3: ~ Map_TID.Empty r). {
+        assert (Hf: exists t, F.Registered t f). {
+          inversion H1.
+          inversion H3.
+          subst.
+          eauto using Progress.in_to_registered.
+        }
+        destruct Hf as (t, Hf).
+        assert (mt: exists o, Map_TID.MapsTo t o (restrict f)). {
+          assert (mt: exists o : op, Map_TID.MapsTo t o reqs). {
+            assert (Hin: FS.In t ROOT). {
+              eauto using FS.in_def, fid_path_to_le.
+            }
+            apply in_reqs in Hin.
+            auto using Map_TID_Extra.in_to_mapsto.
+          }
+          destruct mt as (o, mt).
+          eauto.
+        }
+        destruct mt as (o, mt).
+        assert (Hx: exists x, Map_TID.MapsTo t x r). {
+          subst.
+          assert (Hx: exists x, as_p_op o = Some x) by eauto.
+          destruct Hx as (x, Hx).
+          exists x.
+          unfold to_p_reqs.
+          eauto using tid_eq_rw, Map_TID_Extra.in_omap_1.
+        }
+        rewrite Map_TID_Extra.nonempty_in.
+        destruct Hx as (x, Hx).
+        exists t.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      }
+      remember (Build_pm_request S1 S2 S3) as pr.
+      apply only_p_req with (r:=pr); subst; simpl in *.
+      + intros.
+        assert (Hx: exists x, Map_TID.MapsTo t x (to_p_reqs (restrict f))). {
+          subst.
+          assert (Hx: exists x, as_p_op i = Some x) by eauto.
+          destruct Hx as (x, Hx).
+          exists x.
+          unfold to_p_reqs.
+          eauto using tid_eq_rw, Map_TID_Extra.in_omap_1.
+        }
+        destruct Hx as (x, mt).
+        exists x.
+        assert (Hx:=mt).
+        apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in mt; auto.
+        destruct mt as (o', (?, (_,mt))).
+        intuition.
+        assert (o' = i). {
+          assert (Map_TID.MapsTo t i reqs) by eauto.
+          eauto using Map_TID_Facts.MapsTo_fun.
+        }
+        subst.
+        assumption.
+      + intros.
+        apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in H2; auto.
+        destruct H2 as (i, (Hx, (Hf,mt))).
+        exists i.
+        intuition.
   Qed.
 
   Let reqs_disjoint:
