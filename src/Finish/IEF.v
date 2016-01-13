@@ -13,6 +13,29 @@ Section IEF.
       Registered t f ->
       IEF t f.
 
+  (** [IEF] behaves as a function in the whole tree [f]. *)
+  Inductive IEFFun f : Prop :=
+    ief_fun_def:
+      (forall x y t, x <= f -> IEF t x -> y <= f -> IEF t y -> x = y) ->
+      IEFFun f.
+
+  Lemma leaf_to_ief:
+    forall f,
+    UniqueChildren f ->
+    forall t,
+    Child (!t) f ->
+    IEF t f.
+  Proof.
+    intros.
+    apply ief_def.
+    - intros.
+      assert (f <= f) by intuition.
+      inversion H.
+      assert (c < f) by intuition.
+      eauto.
+    - eauto using registered_def.
+  Qed.
+  
   (**
     [FIDPath f1 l f2] means that we can go from [f1] to [f2] according to path [l].
    *)
@@ -25,6 +48,7 @@ Section IEF.
       FIDPath y l z ->
       Child (t <| x) y ->
       FIDPath x (t::l) % list z.
+
 End IEF.
 
 Section LeToFid.
@@ -64,5 +88,4 @@ Section LeToFid.
       by eauto using le_def, rt_step, sub_def.
       eauto using le_trans.
   Qed.
-
 End LeToFid.

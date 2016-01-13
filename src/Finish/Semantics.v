@@ -212,3 +212,22 @@ Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
     Reduce f' t o f'' ->
     Reduce f t o (f |+ t' <| f'').
 
+(** No ancestors *)
+Inductive UniqueChildren f : Prop :=
+  unique_child_def:
+    (forall x y t, x <= f -> Child (!t) x -> y < x -> ~ In t y) ->
+    UniqueChildren f.
+
+Lemma unique_children_le:
+  forall x y,
+  UniqueChildren x ->
+  y <= x ->
+  UniqueChildren y.
+Proof.
+  intros.
+  destruct H as (H).
+  apply unique_child_def.
+  intros a b; intros.
+  assert (a <= x) by eauto using le_trans.
+  eauto.
+Qed.
