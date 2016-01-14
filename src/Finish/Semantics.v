@@ -26,6 +26,20 @@ Proof.
   eauto using in_def, lt_to_le, le_trans.
 Qed.
 
+Lemma notin_le:
+  forall t x y,
+  ~ In t x ->
+  y <= x ->
+  ~ In t y.
+Proof.
+  intros.
+  unfold not; intros.
+  destruct H1.
+  assert (Le f' x) by eauto using le_trans.
+  contradiction H.
+  eauto using in_def.
+Qed.
+
 Lemma in_eq:
   forall t f l,
   In t (Node ((t, f) :: l)).
@@ -188,6 +202,18 @@ Proof.
     assumption.
 Qed.
 
+Lemma disjoint_le:
+  forall o x y,
+  Disjoint x o ->
+  y <= x ->
+  Disjoint y o.
+Proof.
+  intros.
+  destruct H.
+  - eauto using disjoint_ok, notin_le.
+  - auto using disjoint_skip. 
+Qed.
+
 Import Notations.
 Import Syntax.Notations.
 Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
@@ -212,22 +238,3 @@ Inductive Reduce (f:finish) (t:tid) : op -> finish -> Prop :=
     Reduce f' t o f'' ->
     Reduce f t o (f |+ t' <| f'').
 
-(** No ancestors *)
-Inductive UniqueChildren f : Prop :=
-  unique_child_def:
-    (forall x y t, x <= f -> Child (!t) x -> y < x -> ~ In t y) ->
-    UniqueChildren f.
-
-Lemma unique_children_le:
-  forall x y,
-  UniqueChildren x ->
-  y <= x ->
-  UniqueChildren y.
-Proof.
-  intros.
-  destruct H as (H).
-  apply unique_child_def.
-  intros a b; intros.
-  assert (a <= x) by eauto using le_trans.
-  eauto.
-Qed.
