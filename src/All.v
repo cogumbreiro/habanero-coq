@@ -266,6 +266,7 @@ Module Progress.
       forall (r:pm_request (pm_t_value m)),
       (forall t i, Map_TID.MapsTo t i reqs -> exists o, as_p_op i = Some o  /\ Map_TID.MapsTo t o (pm_request_value r)) ->
       (forall t o, Map_TID.MapsTo t o (pm_request_value r) -> exists i, as_p_op i = Some o /\ Map_TID.MapsTo t i reqs) ->
+      ~ Map_TID.Empty reqs ->
       ProgressArg reqs m.
 
   Section CtxProgress.
@@ -489,11 +490,15 @@ Module Progress.
   Section ApplyCtx.
   Variable s: state.
   Require HJ.Finish.Lang.
+  Require HJ.Finish.Semantics.
   Import Lang.FinishNotations.
   Open Scope finish_scope.
 
 
   Notation ROOT := (get_finish s).
+
+  Variable finish_t_spec_1: IEFFun ROOT.
+  Variable finish_t_spec_2: UniqueIEF ROOT.
 
   Variable get_fstate_spec:
     forall x l,
@@ -632,12 +637,31 @@ Module Progress.
   Let to_p_reqs_aux (t:tid) := as_p_op.
   Let to_p_reqs r := Map_TID_Extra.omap to_p_reqs_aux r.
 
-  Variable p_reqs_spec_1_1:
+  Variable in_pm_in_f:
     forall f t m h,
     FIDPath f h ROOT ->
     Map_FID.MapsTo h m (get_fstate s) ->
     In t (pm_t_value m) ->
-    (exists o, Map_TID.MapsTo t o reqs /\ F.Registered t f).    
+    F.Registered t f.
+
+  Let p_reqs_spec_1_1:
+    forall f t m h,
+    FIDPath f h ROOT ->
+    Map_FID.MapsTo h m (get_fstate s) ->
+    In t (pm_t_value m) ->
+    (exists o, Map_TID.MapsTo t o reqs /\ F.Registered t f).
+  Proof.
+    intros.
+    assert (F.Registered t f) by eauto.
+    assert (FS.In t ROOT). {
+      eauto using FS.in_def, fid_path_to_le.
+    }
+    assert (Hin: Map_TID.In t reqs) by auto.
+    apply Map_TID_Extra.in_to_mapsto in Hin.
+    destruct Hin as (o, mt).
+    eauto.
+  Qed.
+
   Variable p_reqs_spec_1_2:
     forall f t m h x y,
     FIDPath f h ROOT ->
@@ -673,17 +697,12 @@ Module Progress.
     FIDPath f h ROOT ->
     Map_FID.MapsTo h m (get_fstate s) ->
     Map_TID.MapsTo t o (to_p_reqs (restrict f)) ->
-    exists o', as_p_op o' = Some o /\ F.Registered t f /\ Map_TID.MapsTo t o' reqs.
+    exists o', as_p_op o' = Some o /\ Map_TID.MapsTo t o' (restrict f).
   Proof.
     intros.
-    unfold to_p_reqs in H.
+    unfold to_p_reqs in *.
     unfold to_p_reqs_aux in *.
     apply Map_TID_Extra.omap_spec_2 in H1; auto using tid_eq_rw.
-    destruct H1 as (o', (Ho, mt)).
-    exists o'.
-    try repeat (split; eauto).
-    apply Map_TID_Extra.mapsto_to_in in mt.
-    eapply in_restrict; eauto.
   Qed.
 
   Variable Hn: ~ Map_TID.Empty reqs.
@@ -721,7 +740,7 @@ Module Progress.
           destruct H2 as (x, mt).
           subst.
           apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in mt; auto.
-          destruct mt as (o', (He, (R, mt))).
+          destruct mt as (o', (He, mt)).
           eauto.
       }
       assert (S2: forall t i, Map_TID.MapsTo t i r ->
@@ -729,7 +748,7 @@ Module Progress.
         intros.
         subst.
         apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in H2; auto.
-        destruct H2 as (o, (He, (_, mt))).
+        destruct H2 as (o, (He, mt)).
         assert (Hc: Check (m,ROOT) t o) by eauto.
         inversion Hc; subst.
         - simpl in *.
@@ -797,7 +816,7 @@ Module Progress.
         exists x.
         assert (Hx:=mt).
         apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in mt; auto.
-        destruct mt as (o', (?, (_,mt))).
+        destruct mt as (o', (?, mt)).
         intuition.
         assert (o' = i). {
           assert (Map_TID.MapsTo t i reqs) by eauto.
@@ -807,33 +826,38 @@ Module Progress.
         assumption.
       + intros.
         apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in H2; auto.
-        destruct H2 as (i, (Hx, (Hf,mt))).
-        exists i.
-        intuition.
+      + apply Map_TID_Extra.nonempty_in in S3.
+        destruct S3 as (t, Hin).
+        rewrite Map_TID_Extra.nonempty_in.
+        apply Map_TID_Extra.in_to_mapsto in Hin.
+        destruct Hin as (o, mt).
+        apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in mt; auto.
+        destruct mt as (o', (?, mt)).
+        exists t.
+        eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
-  Variable f_check_flat:
+  Let f_check_flat:
     forall f h t o i m,
     FIDPath f h ROOT ->
-    Progress.Flat f ->
+    IEF t f ->
     Map_FID.MapsTo h m (get_fstate s) ->
     Map_TID.MapsTo t i reqs ->
     Check (m, ROOT) t i ->
     as_f_op i = Some o ->
     F_T.Check ROOT t o ->
     F_T.Check f t o.
-(*
   Proof.
     intros.
-    destruct H5.
-    destruct H5.
-    -  
+    inversion H5.
+    assert (f <= ROOT) by eauto using fid_path_to_le.
+    apply check_ief with (x:=ROOT); auto.
   Qed.
-*)
+
   Let check_flat:
     forall f h t i m,
     FIDPath f h ROOT ->
-    Progress.Flat f ->
+    IEF t f ->
     Map_FID.MapsTo h m (get_fstate s) ->
     Map_TID.MapsTo t i reqs ->
     Check (m, ROOT) t i ->
@@ -853,15 +877,14 @@ Module Progress.
     IEF t f.
   Proof.
     intros.
-    apply ief_def.
-    - inversion H0.
-      intros.
-      inversion H3.
-      apply H1 in H4.
-      inversion H4.
-      subst.
-      auto using FS.in_absurd_nil.
-    - assumption.
+    destruct H.
+    destruct a as [|x].
+    - auto using ief_ready.
+    - apply ief_blocked with (x:=x); auto.
+      destruct H0.
+      apply H0 in H.
+      inversion H.
+      auto using F.registered_absurd_nil.
   Qed.
 
   Variable reqs_to_in:
@@ -881,8 +904,19 @@ Module Progress.
     eauto using F_P.nonempty_def.
   Qed.
 
+  Let progress_arg_nonempty:
+    forall r m,
+    ProgressArg r m ->
+    ~ Map_TID.Empty r.
+  Proof.
+    intros.
+    inversion H.
+    - rewrite Map_TID_Extra.nonempty_in.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    - assumption.
+  Qed.
+
   Theorem progress:
-    ~ Map_TID.Empty reqs ->
     exists t i h f m c',
     Map_TID.MapsTo t i reqs /\
     FIDPath f h ROOT /\
@@ -894,14 +928,9 @@ Module Progress.
     assert (Hx: ProgressArg (restrict f) x) by eauto.
     apply ctx_progress with (f:=f) in Hx; eauto.
     - destruct Hx as (t, (i, (ctx', (mt, Hc)))).
-      exists t.
-      exists i.
-      exists h.
-      exists f.
-      exists x.
-      exists ctx'.
-      intuition.
-      eauto.
+      repeat eexists; intuition; eauto.
     - intros.
-      
+      assert (IEF t f) by eauto using Map_TID_Extra.mapsto_to_in.
+      eauto.
   Qed.
+End ApplyCtx.
