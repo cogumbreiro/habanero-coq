@@ -255,8 +255,12 @@ Require Import HJ.Phasers.PhaseDiff.
 
 Variable reqs_spec_1:
   forall t,
+  In t pm -> Map_TID.In t reqs.
+(*
+Variable reqs_spec_1:
+  forall t,
   In t pm <-> Map_TID.In t reqs.
-
+*)
 Variable reqs_spec_3:
   forall t i,
   Map_TID.MapsTo t i reqs ->
@@ -303,7 +307,7 @@ Proof.
   ).
 Qed.
 
-Lemma negb_eq_wait_all:
+Let negb_eq_wait_all:
   forall o,
   negb (eq_wait_all o) = false <-> o = WAIT_ALL.
 Proof.
@@ -312,7 +316,7 @@ Proof.
   tauto.
 Qed.
 
-Lemma all_sig:
+Let all_sig:
   (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
   AllSignalled pm.
 Proof.
@@ -337,19 +341,77 @@ Proof.
  inversion H3; auto.
 Qed.
 
-Lemma nonempty_to_tids_not_nil:
-  ~ Map_TID.Empty reqs ->
-  tids <> nil.
+Let eq_wait_all_dec:
+  forall i,
+  { i <> WAIT_ALL } + { i = WAIT_ALL }.
 Proof.
   intros.
+  destruct i;
+  try (left; intuition; inversion H; assumption).
+  right; auto.
+Qed.
+
+Let check_pm_inv_in:
+  forall t i,
+  Map_TID.MapsTo t i reqs ->
+  ~ In t pm ->
+  exists m, Reduces pm t i m.
+Proof.
+  intros.
+  assert (Check pm t i) by eauto.
+  destruct (eq_wait_all_dec i).
+  - eauto using progress_unblocking_simple.
+  - subst.
+    exists (wait_all t pm).
+    apply reduces.
+    simpl.
+    apply wait_all_pre.
+    intros.
+    contradiction H0.
+    eauto using in_def.
+Qed.
+
+Let nonempty_to_tids_not_nil:
+  ~ Map_TID.Empty reqs ->
+  (exists t i m, Map_TID.MapsTo t i reqs /\ Reduces pm t i m) \/ (tids <> nil /\ (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL)).
+Proof.
+  intros.
+  destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:op) =>  negb (eq_wait_all o))); auto with *.
+  - destruct e as (t, (o, (mt, He))).
+    rewrite Bool.negb_true_iff in *.
+    apply eq_wait_all_false in He.
+    left.
+    exists t.
+    exists o.
+    assert (Check pm t o) by eauto.
+    assert (R: exists m, Reduces pm t o m) by eauto using progress_unblocking_simple.
+    destruct R as (m, O).
+    eauto.
+  -
   apply Map_TID_Extra.nonempty_in in H.
   destruct H as (t, Hin).
-  intuition.
-  apply reqs_spec_1 in Hin.
-  unfold tids in *.
-  apply pm_tids_spec_2 in Hin.
-  rewrite H in *.
-  inversion Hin.
+  apply Map_TID_Extra.in_to_mapsto in Hin.
+  destruct Hin as (i, mt).
+    destruct (in_dec pm t).
+    + apply pm_tids_spec_2 in i0.
+    right.
+    split.
+    * 
+    intuition.
+    subst.
+    rewrite H in *.
+    inversion i0.
+    * intros.
+      assert (Hx: negb (eq_wait_all o) = false) by eauto.
+      rewrite Bool.negb_false_iff in Hx.
+      apply eq_wait_all_true in Hx.
+      assumption.
+    + left.
+      exists t.
+      exists i.
+      assert (Hx : exists m, Reduces pm t i m) by eauto.
+      destruct Hx as (m, Hx).
+      eauto.
 Qed.
 
 Lemma progress_blocking:
@@ -365,9 +427,8 @@ Proof.
     rewrite negb_eq_wait_all in *.
     assumption.
   }
-  assert (Hnil : tids <> nil). {
-    auto using nonempty_to_tids_not_nil.
-  }
+  destruct (nonempty_to_tids_not_nil H); auto.
+  destruct H1 as (Hnil, Hall).
   destruct (has_unblocked IsValid AllSig WF Hnil) as (t, (Hin, (m, Hred))).
   exists t.
   assert (In t pm). {
@@ -379,9 +440,7 @@ Proof.
     apply reqs_spec_1 in H1.
     destruct H1 as (o, Hmt).
     assert (Heq : o = WAIT_ALL). {
-      apply H0 in Hmt.
-      rewrite negb_eq_wait_all in Hmt.
-      assumption.
+      eauto.
     }
     subst.
     auto.
@@ -409,7 +468,6 @@ Proof.
   destruct (Map_TID_Extra.pred_choice reqs (fun (_:tid) (o:op) =>  negb (eq_wait_all o))); auto with *.
   - destruct e as (t, (o, (Hmt, Hneq))).
     exists t; exists o.
-    intuition.
     assert (R : exists m, Reduces pm t o m). {
       apply Bool.negb_true_iff in Hneq.
       rewrite eq_wait_all_false in Hneq.
@@ -417,7 +475,7 @@ Proof.
     }
     destruct R as (m, R).
     exists m.
-    auto using reduces.
+    intuition.
   - eauto using progress_blocking.
 Qed.
 End PROGRESS.
@@ -435,7 +493,7 @@ Module ProgressSpec.
     Variable pm:phasermap.
     Structure pm_request := {
       pm_request_value: Map_TID.t Phasermap.op;
-      pm_request_spec_1: (forall t : tid, In t pm <-> Map_TID.In t pm_request_value);
+      pm_request_spec_1: forall t : tid, In t pm -> Map_TID.In t pm_request_value;
       pm_request_spec_2: forall t i, Map_TID.MapsTo t i pm_request_value -> Phasers.Typesystem.Check pm t i;
       pm_request_spec_3: ~ Map_TID.Empty pm_request_value
     }.

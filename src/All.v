@@ -662,20 +662,33 @@ Module Progress.
     eauto.
   Qed.
 
-  Variable p_reqs_spec_1_2:
-    forall f t m h x y,
-    FIDPath f h ROOT ->
-    Map_FID.MapsTo h m (get_fstate s) ->
-    Map_TID.MapsTo t x reqs ->
-    as_p_op x = Some y ->
-    In t (Semantics.pm_t_value m).
   Variable p_reqs_spec_2:
     forall f t m h o,
     FIDPath f h ROOT ->
     Map_FID.MapsTo h m (get_fstate s) ->
     Map_TID.MapsTo t o reqs ->
     Check (m, ROOT) t o.    
-
+(*
+  Let p_reqs_spec_1_2:
+    forall f t m h x y,
+    FIDPath f h ROOT ->
+    Map_FID.MapsTo h m (get_fstate s) ->
+    Map_TID.MapsTo t x reqs ->
+    as_p_op x = Some y ->
+    In t (Semantics.pm_t_value m).
+  Proof.
+    intros.
+    assert (Hc: Check (m, ROOT) t x) by eauto.
+    inversion Hc.
+    - assert (y = o). {
+        apply translate_only_p_impl_as_p_op in H3.
+        rewrite H3 in H2.
+        inversion H2; auto.
+      }
+      subst.
+      simpl in *.
+  Qed.
+*)
   Let is_f_req_as_p_op:
     forall t o,
     is_f_req t o = false ->
@@ -721,27 +734,21 @@ Module Progress.
       destruct Hx as (o', Hx).
       eauto using some_f_req.
     - remember (to_p_reqs (restrict f)) as r.
-      assert (S1: forall t, In t (pm_t_value m) <-> Map_TID.In t r). {
-        split;intros.
-        - apply p_reqs_spec_1_1 with (h:=h) (f:=f) in H2; eauto.
-          destruct H2 as (o, (mt, Hc)).
-          assert (mt_r: Map_TID.MapsTo t o (restrict f)) by eauto.
-          subst.
-          assert (Hx: exists x, Map_TID.MapsTo t x (to_p_reqs (restrict f))). {
-            assert (Hx: exists x, as_p_op o = Some x) by eauto.
-            destruct Hx as (x, Hx).
-            exists x.
-            unfold to_p_reqs.
-            eauto using tid_eq_rw, Map_TID_Extra.in_omap_1.
-          }
+      assert (S1: forall t, In t (pm_t_value m) -> Map_TID.In t r). {
+        intros.
+        apply p_reqs_spec_1_1 with (h:=h) (f:=f) in H2; eauto.
+        destruct H2 as (o, (mt, Hc)).
+        assert (mt_r: Map_TID.MapsTo t o (restrict f)) by eauto.
+        subst.
+        assert (Hx: exists x, Map_TID.MapsTo t x (to_p_reqs (restrict f))). {
+          assert (Hx: exists x, as_p_op o = Some x) by eauto.
           destruct Hx as (x, Hx).
-          eauto using Map_TID_Extra.mapsto_to_in.
-        - apply Map_TID_Extra.in_to_mapsto in H2.
-          destruct H2 as (x, mt).
-          subst.
-          apply to_p_reqs_restrict_1 with (h:=h) (m:=m) in mt; auto.
-          destruct mt as (o', (He, mt)).
-          eauto.
+          exists x.
+          unfold to_p_reqs.
+          eauto using tid_eq_rw, Map_TID_Extra.in_omap_1.
+        }
+        destruct Hx as (x, Hx).
+        eauto using Map_TID_Extra.mapsto_to_in.
       }
       assert (S2: forall t i, Map_TID.MapsTo t i r ->
                         Phasers.Typesystem.Check (pm_t_value m) t i). {
