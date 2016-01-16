@@ -141,7 +141,7 @@ Proof.
   exists o1.
   trivial.
 Qed.
-
+(*
 Inductive PhasermapOf (s:state) (t:tid) (l:fid) (m:phasermap_t) : Prop :=
   phasermap_of:
     forall f',
@@ -149,18 +149,20 @@ Inductive PhasermapOf (s:state) (t:tid) (l:fid) (m:phasermap_t) : Prop :=
     FIDPath f' l (get_finish s) ->
     Map_FID.MapsTo l m s.(get_fstate) ->
     PhasermapOf s t l m.
-
+*)
 Definition context_t := (phasermap_t * F.finish) % type.
 
 Definition context := (phasermap * F.finish) % type.
 
 Inductive ContextOf (s:state) (t:tid) : context_t -> Prop :=
   context_of_def:
-    forall f m,
-    PhasermapOf s t f m ->
+    forall f l m,
+    IEF t f ->
+    FIDPath f l (get_finish s) ->
+    Map_FID.MapsTo l m s.(get_fstate) ->
     ContextOf s t (m, (get_finish s)).
 
-Notation pm_t_value := Progress.ProgressSpec.pm_t_value.
+Import Progress.ProgressSpec.
 
 Inductive CtxReduces (ctx:context_t) (t:tid) (o:op) : context -> Prop :=
   | reduces_p:
@@ -187,6 +189,7 @@ Module Typesystem.
   Import Semantics.
   Require HJ.Phasers.Typesystem.
   Require HJ.Finish.Typesystem.
+  Import Progress.ProgressSpec.
   Module P_T := HJ.Phasers.Typesystem.
   Module F_T := HJ.Finish.Typesystem.
   
@@ -668,27 +671,7 @@ Module Progress.
     Map_FID.MapsTo h m (get_fstate s) ->
     Map_TID.MapsTo t o reqs ->
     Check (m, ROOT) t o.    
-(*
-  Let p_reqs_spec_1_2:
-    forall f t m h x y,
-    FIDPath f h ROOT ->
-    Map_FID.MapsTo h m (get_fstate s) ->
-    Map_TID.MapsTo t x reqs ->
-    as_p_op x = Some y ->
-    In t (Semantics.pm_t_value m).
-  Proof.
-    intros.
-    assert (Hc: Check (m, ROOT) t x) by eauto.
-    inversion Hc.
-    - assert (y = o). {
-        apply translate_only_p_impl_as_p_op in H3.
-        rewrite H3 in H2.
-        inversion H2; auto.
-      }
-      subst.
-      simpl in *.
-  Qed.
-*)
+
   Let is_f_req_as_p_op:
     forall t o,
     is_f_req t o = false ->
