@@ -6,32 +6,15 @@ Require Import HJ.Phasers.Welformedness.
 
 Set Implict Arguments.
 
-(**
-  Phase-ordering is a phaser-level property that considers the
-  relationship between two arbitrary taskviews.
-  It is a correctness property that lets us reason about the "temporal" ordering
-  of a taskview, with respect to a given reduction relation.
-  
-  Phase ordering is a way
-  to compare the various members, the taskviews, of a phaser. We say that
-  v1 <= v2 if (i) the wait phase of v1 is smaller than or equals the signal phase
-  of v2, (ii) v2 has signal-only mode, or (iii) v1 has wait-only mode. 
-  
-  
-  There are two important ideas behind the Phase Ordering property, both
-  capture how phaser synchronization develops. The first idea is that
-  phase ordering defines the correctness of synchronization: for any
-  taskviews v1 and v2 picked from the same phaser we have that v1 <= v2,
-  that is the wait phase of v1 is at *most* as great as the signal-phase of v2,
-  but not greater. For instance, after executing a wait, the task's signal
-  phase must be greater-than or equal other members' wait phase. 
-  
-  
-*)
+(** Phase-ordering corresponds to a happens-before relation between taskviews. *)
+
 Section Defs.
   Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
   Import Welformedness.Taskview.
+
+  (** Taskview [v1] happened before [v2] when [v1] 
+    signalled fewer times than [v2] observed. *)
 
   Inductive HappensBefore v1 v2 : Prop :=
     tv_hb_def:
@@ -40,7 +23,7 @@ Section Defs.
       WaitCap (mode v2) ->
       HappensBefore v1 v2.
 
-  (** v2 is beghind of v1, or v1 and v2 intersect. *)
+  (** The negation of [HappensBefore] is [Facilitates]. *)
 
   Inductive Facilitates v1 v2 : Prop := 
     | tv_nhb_ge:
@@ -206,18 +189,20 @@ Section Facts.
 
   Lemma tv_welformed_to_ge_refl:
     forall v,
-    Welformed v ->
+    WellFormed v ->
     v >= v.
   Proof.
     intros.
     inversion H;
-      apply tv_nhb_ge;
-      intuition.
+      try (apply tv_nhb_ge;
+      intuition || fail).
+    - auto using tv_nhb_so.
+    - auto using tv_nhb_wo.
   Qed.
 
   Let signal_preserves_lhs:
     forall v,
-    Welformed v ->
+    WellFormed v ->
     forall v',
     v >= v' ->
     (Taskview.signal v) >= v'.
@@ -225,7 +210,7 @@ Section Facts.
     intros.
     inversion H0; subst.
     - apply tv_nhb_ge.
-      destruct (signal_phase_signal_inv _ H); intuition.
+      simpl; intuition.
     - auto using tv_nhb_so.
     - rewrite <- signal_preserves_mode in *.
       auto using tv_nhb_wo.
@@ -250,7 +235,7 @@ Section Facts.
   Section wait_preserves_rhs.
   Variable v1 v2: taskview.
   Variable G1: v1 >= v2.
-  Variable L1: SignalCap (mode v1) -> (signal_phase v1 >= signal_phase v2)%nat.
+  Variable L1: SignalCap (mode v1) -> (signal_phase v1 >= S (wait_phase v2) )%nat.
   Variable L2: WaitPre v2.
   Lemma wait_preserves_rhs:
     v1 >= (wait v2).
@@ -259,9 +244,8 @@ Section Facts.
     inversion G1; subst; clear G1.
     - destruct (signal_cap_wo_dec (mode v1)). {
         apply tv_nhb_ge.
-        apply L1 in s.
-        rewrite wait_wait_phase.
-        inversion L2.
+        simpl.
+        apply L1 in s; clear L1.
         intuition.
       }
       auto using tv_nhb_wo.
@@ -274,7 +258,7 @@ Section Facts.
 
   Let tv_signal_ge_lhs:
     forall v v',
-    Welformed v ->
+    WellFormed v ->
     Reduces v SIGNAL v' ->
     Facilitates v' v.
   Proof.
@@ -291,13 +275,17 @@ Section Facts.
   Proof.
     intros.
     destruct H.
-    apply tv_nhb_ge.
-    intuition.
+    - apply tv_nhb_wo.
+      rewrite wait_preserves_mode.
+      assumption.
+    - apply tv_nhb_ge.
+      rewrite wait_preserves_signal_phase.
+      intuition.
  Qed.
 
   Let tv_nhb_reduces:
     forall v o v',
-    Welformed v ->
+    WellFormed v ->
     Reduces v o v' ->
     Facilitates v' v.
   Proof.
@@ -309,9 +297,9 @@ Section Facts.
 
   Let tv_nhb_reduces_trans_sw:
     forall x o y o' z,
-    Welformed x ->
-    Welformed y ->
-    Welformed z ->
+    WellFormed x ->
+    WellFormed y ->
+    WellFormed z ->
     Reduces x o y ->
     Reduces y o' z ->
     mode x = SIGNAL_WAIT ->
@@ -321,41 +309,25 @@ Section Facts.
     assert (Facilitates z y) by eauto using tv_nhb_reduces.
     assert (Facilitates y x) by eauto using tv_nhb_reduces.
     destruct o.
-    - apply reduces_rw_signal in H2.
-      destruct o'.
-      + apply reduces_rw_signal in H3.
-        assert (R: mode z = mode x). {
-          subst.
-          repeat rewrite signal_preserves_mode in *.
-          trivial.
-        }
-        assert (WaitCap (mode z)). {
-          rewrite R.
-          rewrite H4.
-          apply wait_cap_sw.
-        }
-        subst.
-        assert (WaitCap (mode x)). {
-          rewrite H4.
-          apply wait_cap_sw.
-        }
-        rewrite signal_signal_wait_cap; auto.
-        rewrite signal_wait_cap_signal_phase; (intuition || auto).
-      + apply reduces_rw_wait in H3.
-        assert (wait_phase x <= signal_phase x)%nat by auto
-          using welformed_wait_phase_le_signal_phase.
-        subst.
-        rewrite wait_preserves_signal_phase.
-        assert (signal_phase x <= signal_phase (signal x)) % nat. {
-          auto using signal_phase_le_signal.
-        }
-        intuition.
+    - inversion H2.
+      assert (o' = WAIT) by eauto using reduces_signal_inv_sw; subst.
+      apply reduces_rw_signal in H2.
+      apply reduces_rw_wait in H3.
+      subst.
+      rewrite wait_preserves_signal_phase.
+      simpl.
+      assert (wait_phase x = signal_phase x). {
+        inversion H7.
+        - trivial.
+        - rewrite H4 in H3.
+        inversion H3.
+      }
+      intuition.
     - assert (WaitCap (mode x)). {
         rewrite H4.
         auto using wait_cap_sw.
       }
-      assert (o' = SIGNAL) by eauto using reduces_trans_inv.
-      subst.
+      assert (o' = SIGNAL) by eauto using reduces_wait_inv_sw; subst.
       assert (R: signal_phase y = wait_phase y) by eauto using reduces_wait_inv_wait_cap.
       inversion H2; subst.
       inversion H3; subst.
@@ -367,7 +339,7 @@ Section Facts.
 
   Let tv_eval_preserves_le:
     forall v1 v2 o,
-    Welformed v1 ->
+    WellFormed v1 ->
     (signal_phase v1 >= wait_phase v2)%nat ->
     (signal_phase (eval o v1) >= wait_phase v2)%nat.
   Proof.
@@ -380,7 +352,7 @@ Section Facts.
 
   Lemma tv_lhs_eval_ge:
     forall v1 v2 v1' o,
-    Welformed v1 ->
+    WellFormed v1 ->
     Facilitates v1 v2 ->
     Reduces v1 o v1' ->
     Facilitates v1' v2.
@@ -399,7 +371,7 @@ Section Facts.
 
   Lemma tv_nhb_eval_lhs:
     forall v1 v2 o,
-    Welformed v1 ->
+    WellFormed v1 ->
     Facilitates v1 v2 ->
     Reduces v1 o (eval o v1) ->
     Facilitates (eval o v1) v2.
@@ -408,7 +380,7 @@ Section Facts.
     inversion H0.
     - apply tv_nhb_ge.
       destruct o; simpl in *.
-      + apply signal_phase_signal_inv in H; intuition.
+      + intuition.
       + assumption.
     - auto using tv_nhb_so.
     - apply tv_nhb_wo.
@@ -418,7 +390,7 @@ Section Facts.
 
   Theorem tv_lt_irreflexive:
     forall v,
-    Welformed v ->
+    WellFormed v ->
     ~ (HappensBefore v v).
   Proof.
     intros.
@@ -428,7 +400,7 @@ Section Facts.
 
   Theorem tv_lt_trans:
     forall x y z,
-    Welformed y ->
+    WellFormed y ->
     x < y ->
     y < z ->
     x < z.
@@ -437,8 +409,11 @@ Section Facts.
     inversion H0.
     inversion H1.
     apply tv_hb_def; auto.
-    assert (wait_phase y <= signal_phase y)%nat
-    by auto using welformed_wait_phase_le_signal_phase.
+    assert (mode y = SIGNAL_WAIT) by eauto using signal_cap_wait_cap_to_sw.
+    assert (wait_phase y <= signal_phase y)%nat. {
+      apply tv_wellformed_inv_sw in H8; auto.
+      destruct H8; intuition.
+    }
     intuition.
   Qed.
 
@@ -446,8 +421,8 @@ Section Facts.
 
   Variable x y:taskview.
   
-  Variable wfx: Welformed x.
-  Variable wfy: Welformed y.
+  Variable wfx: WellFormed x.
+  Variable wfy: WellFormed y.
 
   Theorem tv_lt_antisym:
     x < y ->
@@ -456,17 +431,22 @@ Section Facts.
     intros.
     rewrite tv_not_lt_rw_tv_ge.
     inversion H; clear H.
+    (*
     destruct x as (sx, wx, rx).
     destruct y as (sy, wy, ry).
+    *)
     simpl in *.
     inversion H1; clear H1. {
       subst.
       inversion H2; clear H2. {
-        subst; simpl in *.
+        symmetry in H3.
+        symmetry in H1.
         apply tv_nhb_ge.
-        simpl in *.
-        inversion wfx; simpl in *; subst;
-        inversion wfy; simpl in *; subst; intuition.
+        assert (wait_phase x <= signal_phase x) % nat by
+        auto using welformed_wait_phase_le_signal_phase.
+        assert (wait_phase y <= signal_phase y) % nat by
+        auto using welformed_wait_phase_le_signal_phase.
+        intuition.
       }
       subst.
       auto using tv_nhb_wo.
@@ -510,14 +490,16 @@ Section Facts.
     v < (wait (signal v)).
   Proof.
     intros.
-    inversion H0; clear H0.
+    inversion H0; clear H0. {
+      rewrite signal_preserves_mode in *.
+      rewrite H1 in H2.
+      inversion H2.
+    }
     apply tv_hb_def.
-    - rewrite wait_wait_phase.
-      rewrite signal_preserves_wait_phase.
-      inversion H.
-      + intuition.
-      + rewrite H0 in *.
-        inversion H1.
+    - rewrite wait_wait_phase in *.
+      rewrite signal_preserves_wait_phase in *.
+      simpl in *.
+      intuition.
     - rewrite H1.
       apply signal_cap_sw.
     - rewrite wait_preserves_mode.

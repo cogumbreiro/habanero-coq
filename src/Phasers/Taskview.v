@@ -28,6 +28,14 @@ Definition set_signal_phase v n := TV n (wait_phase v) (mode v).
 Definition set_wait_phase v n := TV (signal_phase v) n (mode v).
 Definition set_mode v m := TV (signal_phase v) (wait_phase v) m.
 
+  Inductive SignalPre v: Prop :=
+    | signal_pre_w:
+      mode v = SIGNAL_WAIT ->
+      wait_phase v = signal_phase v ->
+      SignalPre v
+    | signal_pre_s:
+      mode v = SIGNAL_ONLY ->
+      SignalPre v.
 (** 
   The two mutators available of taskviews are signal and wait, defined following.
   The semantics of signal depends on the
@@ -36,11 +44,19 @@ Definition set_mode v m := TV (signal_phase v) (wait_phase v) m.
   one phase ahead of the wait phase (this is to "absord" consecutive signals before a wait).
 *)
 
-Definition signal v :=
-match mode v with
-| SIGNAL_ONLY => set_signal_phase v (S (signal_phase v))
-| _ => set_signal_phase v (S (wait_phase v))
-end.
+Definition signal v := set_signal_phase v (S (signal_phase v)).
+
+(**
+  Function [safe_signal] can be invoked even when [Taskview.SignalPre] is not respected,
+  the semantics is more intricate as it must consider the case when a signal-wait
+  task performs multiple signals.
+ *)
+
+Definition try_signal v :=
+  match mode v with
+  | SIGNAL_WAIT => set_signal_phase v (S (wait_phase v))
+  | _ => signal v
+  end.
 
 (**
   A task with wait capability must interleave a signal with an await.
@@ -54,8 +70,48 @@ end.
   its definition to the following section.
 *)
 
+  (**
+  The operational semantics not only defines a closed set of operations that
+  can operate on a value (here a taskview), but also defines the preconditions of
+  each operation.
+  Contrary to [eval], relation [Reduces] defines a precondition
+  to [wait], called [WaitPre]: in order to issue a wait, the wait phase must be
+  behind (smaller than) the signal phase. We define [CanWait] so it can be reused
+  in other developments.
+  *)
+
+  Inductive WaitPre v: Prop :=
+    | wait_pre_wo:
+      mode v = WAIT_ONLY ->
+      WaitPre v
+    | wait_pre_sw:
+      mode v = SIGNAL_WAIT ->
+      S (wait_phase v) = signal_phase v ->
+      WaitPre v.
+
 Definition wait v := set_wait_phase v (S (wait_phase v)).
 
+Inductive WaitPhase v: nat -> Prop :=
+  wait_phase_def:
+    WaitCap (mode v) ->
+    WaitPhase v (wait_phase v).
+
+Definition get_wait_phase v :=
+  match (wait_cap_dec (mode v)) with
+  | left _ => Some (wait_phase v)
+  | right _ => None
+  end.
+
+Inductive SignalPhase v : nat -> Prop :=
+  signal_phase_def:
+    SignalCap (mode v) ->
+    SignalPhase v (signal_phase v).
+
+Definition get_signal_phase v :=
+  match (signal_cap_dec (mode v)) with
+  | left _ => Some (signal_phase v)
+  | right _ => None
+  end.
 (* begin hide *)
 
 Section Facts.
@@ -140,6 +196,14 @@ Section Facts.
     simpl_taskview v.
   Qed.
 
+  Lemma try_signal_preserves_mode:
+    forall v,
+    mode (try_signal v) = mode v.
+  Proof.
+    intros.
+    simpl_taskview v.
+  Qed.
+
   Lemma signal_preserves_wait_phase:
     forall v,
     wait_phase (signal v) = wait_phase v.
@@ -148,14 +212,21 @@ Section Facts.
     simpl_taskview v.
   Qed.
 
-  Lemma signal_wait_cap_signal_phase:
+  Lemma try_signal_preserves_wait_phase:
     forall v,
-    WaitCap (mode v) ->
-    signal_phase (signal v) = S (wait_phase v).
+    wait_phase (try_signal v) = wait_phase v.
   Proof.
     intros.
     simpl_taskview v.
-    inversion H.
+  Qed.
+
+  Lemma try_signal_signal_phase_sw:
+    forall v,
+    mode v = SIGNAL_WAIT ->
+    S (wait_phase v) = signal_phase (try_signal v).
+  Proof.
+    intros.
+    simpl_taskview v; inversion H.
   Qed.
 
   Lemma signal_phase_set_signal_phase:
@@ -173,9 +244,7 @@ Section Facts.
     signal_phase (signal v) = S (signal_phase v).
   Proof.
     intros.
-    unfold signal.
-    rewrite H.
-    rewrite signal_phase_set_signal_phase.
+    simpl.
     trivial.
   Qed.
 
@@ -207,16 +276,38 @@ Section Facts.
   Proof.
     intros.
     unfold wait.
-    rewrite wait_phase_set_wait_phase.
-    trivial.
+    destruct (signal_cap_wo_dec (mode v)).
+    - destruct (mode v);
+      inversion s;
+      rewrite wait_phase_set_wait_phase;
+      trivial.
+    - simpl.
+      trivial.
   Qed.
 
+  Lemma signal_wait_cap_signal_phase:
+    forall v,
+    SignalPre v ->
+    mode v = SIGNAL_WAIT ->
+    signal_phase (signal v) = S (wait_phase v).
+  Proof.
+    intros.
+    simpl.
+    inversion H; auto.
+    rewrite H0 in H1.
+    inversion H1.
+  Qed.
+
+(*
   Lemma signal_signal_wait_cap:
     forall v,
-    WaitCap (mode v) ->
+    mode v = SIGNAL_WAIT ->
     signal (signal v) = signal v.
   Proof.
     intros.
+    unfold signal at 1.
+    simpl.
+    trivial.
     inversion H;
       unfold signal;
       unfold set_signal_phase;
@@ -224,6 +315,20 @@ Section Facts.
       simpl;
       auto.
   Qed.
+*)
+(*
+  Lemma wait_wait_phase_eq_signal_phase:
+    forall v,
+    mode v = WAIT_ONLY ->
+    wait_phase (wait v) = signal_phase (wait v).
+  Proof.
+    intros.
+    simpl_taskview v.
+    unfold wait.
+    rewrite H.
+    auto.
+  Qed.
+*)
 End Facts.
 
 Section Semantics.
@@ -249,32 +354,11 @@ Section Semantics.
   | WAIT => wait
   end.
 
-  (**
-  The operational semantics not only defines a closed set of operations that
-  can operate on a value (here a taskview), but also defines the preconditions of
-  each operation.
-  Contrary to [eval], relation [Reduces] defines a precondition
-  to [wait], called [WaitPre]: in order to issue a wait, the wait phase must be
-  behind (smaller than) the signal phase. We define [CanWait] so it can be reused
-  in other developments.
-  *)
-
-  Inductive WaitPre v :=
-    wait_pre:
-      wait_phase v < signal_phase v ->
-      WaitPre v.
-
-  Inductive SignalPre v :=
-    | signal_pre_w:
-      WaitCap (mode v) ->
-      wait_phase v = signal_phase v ->
-      SignalPre v
-    | signal_pre_s:
-      mode v = SIGNAL_ONLY ->
-      SignalPre v.
+      
 
   Inductive Reduces v : op -> taskview -> Prop :=
     | tv_reduces_signal:
+      SignalPre v ->
       Reduces v SIGNAL (signal v)
     | tv_reduces_wait:
       WaitPre v ->
@@ -334,6 +418,76 @@ Section Semantics.
     apply reduces_spec in H.
     subst.
     auto using eval_preserves_mode.
+  Qed.
+
+  Lemma reduces_signal_inv_sw:
+    forall x y z o,
+    Reduces x SIGNAL y ->
+    Reduces y o z ->
+    mode x = SIGNAL_WAIT ->
+    o = WAIT.
+  Proof.
+    intros.
+    inversion H; subst.
+    assert (wait_phase x = signal_phase x). {
+      inversion H2.
+      - trivial.
+      - rewrite H1 in H3.
+        inversion H3.
+    }
+    destruct H0.
+    - assert (wait_phase (signal x) = signal_phase (signal x)). {
+        inversion H0.
+        - trivial.
+        - rewrite signal_preserves_mode in *.
+          rewrite H1 in H4.
+          inversion H4.
+      }
+      rewrite signal_preserves_wait_phase in *.
+      rewrite H3 in H4.
+      simpl in *.
+      remember (signal_phase x).
+      clear Heqn H3.
+      induction n.
+      + inversion H4.
+      + inversion H4.
+        auto.
+    - trivial.
+  Qed.
+
+  Lemma reduces_wait_inv_sw:
+    forall x y z o,
+    Reduces x WAIT y ->
+    Reduces y o z ->
+    mode x = SIGNAL_WAIT ->
+    o = SIGNAL.
+  Proof.
+    intros.
+    inversion H; subst.
+    assert (S (wait_phase x) = signal_phase x). {
+      inversion H2.
+      - rewrite H1 in H3.
+        inversion H3.
+      - trivial.
+    }
+    destruct H0.
+    - trivial.
+    - assert (S (wait_phase (wait x)) = signal_phase (wait x)). {
+        inversion H0.
+        - rewrite wait_preserves_mode in *.
+          rewrite H1 in H4.
+          inversion H4.
+        - trivial.
+      }
+      rewrite wait_preserves_signal_phase in *.
+      simpl in *.
+      rewrite <- H3 in H4.
+      remember (wait_phase x).
+      clear Heqn H3.
+      induction n.
+      + inversion H4.
+      + inversion H4.
+        auto.
   Qed.
 
 End Semantics.

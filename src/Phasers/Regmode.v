@@ -208,6 +208,17 @@ Section Facts.
     destruct H; trivial.
     inversion H0.
   Qed.
+
+  Lemma signal_cap_wait_cap_to_sw:
+    forall r,
+    WaitCap r ->
+    SignalCap r ->
+    r = SIGNAL_WAIT.
+  Proof.
+    intros.
+    destruct r; try (inversion H || inversion H0).
+    trivial.
+  Qed.
 End Facts.
 
 (* end hide *)

@@ -508,7 +508,6 @@ Section Drop.
 End Drop.
 
 Section Signal.
-
   Let ph_diff_signal:
     forall t e z ph,
     ph_diff (signal t ph) e z ->
@@ -543,6 +542,40 @@ Section Signal.
         auto using ph_diff_def.
   Qed.
 
+  Let ph_diff_try_signal:
+    forall t e z ph,
+    ph_diff (try_signal t ph) e z ->
+    ph_diff ph e z.
+  Proof.
+    intros.
+    inversion H; subst.
+    apply try_signal_mapsto_inv in H0.
+    apply try_signal_mapsto_inv in H1.
+    destruct H0.
+    - destruct H1.
+      + destruct a as (?, (?,(?,?))).
+        destruct a0 as (?, (?,(?,?))).
+        subst.
+        repeat rewrite try_signal_preserves_wait_phase in *.
+        auto using ph_diff_def.
+      + destruct a as (?, (?,(?,?))).
+        destruct a0 as (?, ?).
+        subst.
+        repeat rewrite try_signal_preserves_wait_phase in *.
+        auto using ph_diff_def.
+    - destruct H1.
+      + destruct a0 as (?, (?,(?,?))).
+        destruct a as (?, ?).
+        subst.
+        repeat rewrite try_signal_preserves_wait_phase in *.
+        auto using ph_diff_def.
+      + destruct a0 as (?, ?).
+        destruct a as (?, ?).
+        subst.
+        repeat rewrite try_signal_preserves_wait_phase in *.
+        auto using ph_diff_def.
+  Qed.
+
   Let pm_diff_signal_all:
     forall t e z pm,
     pm_diff (signal_all t pm) e z ->
@@ -554,7 +587,7 @@ Section Signal.
     apply Map_PHID_Facts.mapi_inv in H0.
     destruct H0 as (ph', (p', (?, (?, ?)))).
     subst.
-    eauto using pm_diff_def, ph_diff_def, ph_diff_signal.
+    eauto using pm_diff_def, ph_diff_def, ph_diff_try_signal.
   Qed.
 
   Lemma sr_signal_all:

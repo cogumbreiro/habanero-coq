@@ -142,8 +142,8 @@ Section Facts.
   Section Antisym.
   Variable x y:phaser.
 
-  Variable wx: Welformed x.
-  Variable wy: Welformed y.
+  Variable wx: WellFormed x.
+  Variable wy: WellFormed y.
   Variable gx: WellOrdered x.
   Variable gy: WellOrdered y.
 
@@ -171,7 +171,7 @@ Section Facts.
 
   Let ph_ge_refl_preserves_reduces_some:
     forall ph ph' t o o',
-    Welformed ph ->
+    WellFormed ph ->
     WellOrdered ph ->
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
@@ -225,9 +225,8 @@ Section Facts.
             {
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
               destruct (Regmode.signal_cap_wo_dec (mode v1)). {
-                destruct H8.
                 apply tv_nhb_ge.
-                assert (signal_phase v1 >= (signal_phase v)) by (inversion H12; eauto).
+                assert (signal_phase v1 >= S (wait_phase v)) by (inversion H12; eauto).
                 rewrite wait_wait_phase.
                 intuition.
               }
@@ -346,7 +345,7 @@ Section Facts.
 
   Theorem ph_ge_refl_preserves_reduce:
     forall ph t o ph',
-    Welformed ph ->
+    WellFormed ph ->
     WellOrdered ph ->
     Phaser.Reduces ph t o ph' ->
     WellOrdered ph'.
@@ -363,7 +362,7 @@ Section Facts.
 
   Let ph_ge_reduces_some:
     forall ph t o o' ph',
-    Welformed ph ->
+    WellFormed ph ->
     WellOrdered ph ->
     Reduces ph t o ph' ->
     as_tv_op o = Some o' ->
@@ -383,7 +382,7 @@ Section Facts.
     apply Map_TID_Facts.add_mapsto_iff in H4;
     destruct H4 as [(?,?)|(?,?)].
     - subst.
-      assert (Taskview.Welformed v) by (inversion H; eauto).
+      assert (Taskview.WellFormed v) by (inversion H; eauto).
       assert (Taskview.Facilitates v v2) by eauto using well_ordered_to_facilitates.
       eauto using tv_lhs_eval_ge.
     - eauto using well_ordered_to_facilitates.
@@ -391,7 +390,7 @@ Section Facts.
 
   Lemma ph_ge_reduce:
     forall ph t o ph',
-    Welformed ph ->
+    WellFormed ph ->
     WellOrdered ph ->
     Reduces ph t o ph' ->
     Facilitates ph' ph.
@@ -562,7 +561,7 @@ Section Facts.
 
   Lemma ph_reduces_updates_preserves_ge_left:
     forall x y z t o,
-    Welformed y ->
+    WellFormed y ->
     Facilitates y x ->
     ReducesUpdates y t o z ->
     Facilitates z x.
@@ -589,7 +588,7 @@ Section Facts.
       assert (Taskview.Reduces v o' (Taskview.eval o' v))
       by (inversion R; eauto using ph_reduces_to_tv_reduce).
       assert (Taskview.Facilitates v vx) by (inversion H0; eauto).
-      assert (Taskview.Welformed v) by (inversion H; eauto).
+      assert (Taskview.WellFormed v) by (inversion H; eauto).
       eauto using tv_nhb_eval_lhs.
     }
     destruct H1.
@@ -637,7 +636,7 @@ Section Facts.
 
   Lemma ph_s_reduces_preserves_ge_left:
     forall x y z,
-    Welformed y ->
+    WellFormed y ->
     Facilitates y x ->
     SReduces y z ->
     Facilitates z x.
@@ -652,9 +651,9 @@ Section Facts.
   
   Lemma ph_s_reduces_trans_refl_welformed:
     forall x y,
-    Welformed x ->
+    WellFormed x ->
     clos_refl_trans phaser SReduces x y ->
-    Welformed y.
+    WellFormed y.
   Proof.
     intros.
     induction H0; auto.
@@ -664,7 +663,7 @@ Section Facts.
 
   Lemma ph_s_reduces_trans_refl_ge_refl:
     forall x y,
-    Welformed x ->
+    WellFormed x ->
     WellOrdered x ->
     clos_refl_trans phaser SReduces x y ->
     WellOrdered y.
@@ -673,13 +672,13 @@ Section Facts.
     induction H1; auto.
     - destruct H1.
       eauto using ph_ge_refl_preserves_reduce.
-    - assert (Welformed y) by eauto using ph_s_reduces_trans_refl_welformed.
+    - assert (WellFormed y) by eauto using ph_s_reduces_trans_refl_welformed.
       eauto.
   Qed.
 
   Lemma ph_s_reduces_trans_refl_ge:
     forall x y,
-    Welformed x ->
+    WellFormed x ->
     WellOrdered x ->
     clos_refl_trans phaser SReduces x y ->
     Facilitates y x.
@@ -688,7 +687,7 @@ Section Facts.
     rewrite clos_rt_rtn1_iff in H1.
     induction H1.
     - inversion H0; auto.
-    - assert (Welformed y). {
+    - assert (WellFormed y). {
         rewrite <- clos_rt_rtn1_iff in H2.
         eauto using ph_s_reduces_trans_refl_welformed.
       }
@@ -708,7 +707,7 @@ Section Facts.
   Variable v: taskview.
   Variable mt1: Map_TID.MapsTo t v x.
   Variable is_sw: mode v = SIGNAL_WAIT.
-  Variable wf: Taskview.Welformed v.
+  Variable wf: Taskview.WellFormed v.
 
   Example ex2:
     HappensBefore x z.
@@ -771,7 +770,7 @@ Section Facts.
         assumption.
       + assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
         inversion H7.
-        assert (Hx := H5 _ _ H0).
+        assert (Hx := H5 _ _ H0); clear H5 H7.
         apply wait_preserves_rhs; auto.
     - eauto using well_ordered_to_facilitates.
   Qed.
@@ -828,7 +827,7 @@ Section Facts.
 
   Lemma reduces_par:
     forall x y,
-    Welformed x ->
+    WellFormed x ->
     WellOrdered x ->
     SReduces x y ->
     x || y.

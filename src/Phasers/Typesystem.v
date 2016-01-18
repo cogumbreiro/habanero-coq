@@ -26,7 +26,7 @@ Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
       Map_PHID.MapsTo p ph pm ->
       forall v,
       Map_TID.MapsTo t v ph ->
-      Taskview.WaitPre v) ->
+      wait_phase v < signal_phase v) ->
     Check pm t WAIT_ALL
   | check_async:
     forall ps,

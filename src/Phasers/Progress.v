@@ -151,7 +151,7 @@ Definition AllSignalled : Prop  :=
   Map_PHID.MapsTo p ph pm ->
   forall t v,
   Map_TID.MapsTo t v ph ->
-  v.(wait_phase) < v.(signal_phase).
+  wait_phase v < signal_phase v.
 
 Variable AS : AllSignalled.
 
@@ -159,7 +159,7 @@ Require Import HJ.Phasers.Welformedness.
 
 Import Phasermap.
 
-Variable WF : Welformed pm.
+Variable WF : WellFormed pm.
 
 Lemma smallest_to_sync:
   forall t p ph,
@@ -172,16 +172,16 @@ Proof.
   apply Map_TID_Extra.in_to_mapsto in H1.
   destruct H1 as (v, mt).
   destruct (wait_cap_so_dec (mode v)).
-  - apply sync_wait with (v:=v); auto.
-    apply await_def. 
-    intros t' v' Hmt'.
+  - 
+    apply sync_wait with (v:=v); auto.
+    apply await_def.
+    intros t' v' Hmt'; intros.
     (* show that: n <= WP(v') *)
     assert (Hle : wait_phase v <= wait_phase v')
     by eauto using Smallest_to_WaitPhase.
-    assert (wait_phase v' < signal_phase v')
-    by eauto using AS.
-    assert (wf: Taskview.Welformed v). {
-      assert (WF1: Phaser.Welformed ph) by (inversion WF; eauto).
+    assert (wait_phase v' < signal_phase v') by eauto using AS.
+    assert (wf: Taskview.WellFormed v). {
+      assert (WF1: Phaser.WellFormed ph) by (inversion WF; eauto).
       inversion WF1; eauto.
     }
     destruct wf.
@@ -192,7 +192,9 @@ Proof.
       }
       contradiction.
     + intuition.
-    + apply so_to_not_wait_cap in H2; contradiction.
+    + apply so_to_not_wait_cap in H3; contradiction.
+    + intros.
+      intuition. 
   - eauto using sync_so.
 Qed.
 
@@ -221,8 +223,30 @@ Proof.
   assert (i := H1).
   apply Map_TID_Extra.in_to_mapsto in H1.
   destruct H1 as (v, mt).
-  eauto using wait_pre, Taskview.wait_pre, smallest_to_sync.
+  assert (v_wf:Taskview.WellFormed v). {
+    inversion WF.
+    assert (Phaser.WellFormed ph) by eauto.
+    inversion H2.
+    eauto.
+  }
+  destruct (wait_cap_so_dec (mode v)). {
+    apply try_wait_pre_can_wait.
+    apply wait_pre with (v:=v); eauto using smallest_to_sync.
+    inversion w;
+    symmetry in H2.
+    - apply Taskview.wait_pre_sw; auto.
+      apply Taskview.tv_wellformed_inv_sw in H2; auto.
+      destruct H2; auto.
+      assert (wait_phase v <> signal_phase v). {
+        assert (wait_phase v < signal_phase v) by eauto.
+        intuition.
+      }
+      contradiction.
+    - apply Taskview.wait_pre_wo; auto.
+  }
+  eauto using try_wait_pre_so.
 Qed.
+
 End HAS_SMALLEST.
 
 Require Import HJ.Phasers.Typesystem.
@@ -268,7 +292,7 @@ Variable reqs_spec_3:
 
 Require Import HJ.Phasers.Welformedness.
 
-Variable WF: Phasermap.Welformed pm.
+Variable WF: Phasermap.WellFormed pm.
 Let tids := pm_tids pm.  
 
 
@@ -337,8 +361,7 @@ Proof.
     assumption.
  }
  inversion Hcheck; subst.
- assert (Taskview.WaitPre v) by eauto.
- inversion H3; auto.
+ eauto.
 Qed.
 
 Let eq_wait_all_dec:
@@ -488,7 +511,7 @@ Module ProgressSpec.
     Structure phasermap_t := {
       pm_t_value: phasermap;
       pm_t_spec_1: Valid pm_t_value;
-      pm_t_spec_2: Phasermap.Welformed pm_t_value
+      pm_t_spec_2: Phasermap.WellFormed pm_t_value
     }.
     Variable pm:phasermap.
     Structure pm_request := {

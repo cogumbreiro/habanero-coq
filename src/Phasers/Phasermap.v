@@ -90,7 +90,7 @@ Map_PHID.mapi (fun _ ph => f ph).
 (** Function [signal_all] lets task [t] perform a [Phaser.signal] on all phasers
     it is registered with. There are no pre-conditions to this operation. *)
 
-Definition signal_all (t:tid) := foreach (Phaser.signal t).
+Definition signal_all (t:tid) := foreach (Phaser.try_signal t).
 
 Definition signal_all_op := mk_op (fun _ _ => True) signal_all.
 
@@ -101,7 +101,7 @@ Definition signal_all_op := mk_op (fun _ _ => True) signal_all.
 
 Inductive WaitAllPre t m : Prop :=
   wait_all_pre:
-    (forall p ph, Map_PHID.MapsTo p ph m -> Map_TID.In t ph -> WaitPre t ph) ->
+    (forall p ph, Map_PHID.MapsTo p ph m -> Map_TID.In t ph -> TryWaitPre t ph) ->
     WaitAllPre t m.
 
 Definition wait_all (t:tid) := foreach (Phaser.wait t).

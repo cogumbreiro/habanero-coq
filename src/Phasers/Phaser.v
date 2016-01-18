@@ -73,6 +73,17 @@ Definition signal (t:tid) : phaser -> phaser := update t Taskview.signal.
 
 Definition signal_op t := mk_op (SignalPre t) (signal t).
 
+(**
+  Function [try_signal] can be called without a pre-condition. It is crucial for
+  the definition of an instruction that signals all phasers.
+  *)
+
+Definition try_signal (t:tid) : phaser -> phaser := update t Taskview.try_signal.
+
+(** We define [try_signal_op] without a pre-condition. *)
+
+Definition try_signal_op t := mk_op (fun ph => True) (try_signal t).
+
 (** * Wait *)
 
 (**
@@ -113,7 +124,7 @@ Inductive Sync : phaser -> tid -> Prop :=
     forall ph t v,
     MapsTo t v ph ->
     WaitCap (mode v) ->
-    Await ph (signal_phase v) ->
+    Await ph (S (wait_phase v)) ->
     Sync ph t.
 
 (**
@@ -136,6 +147,24 @@ Definition wait (t:tid) : phaser -> phaser := update t Taskview.wait.
 
 Definition wait_op t := mk_op (WaitPre t) (wait t).
 
+(**
+  Function [try_wait] can even be invoked by any task.
+  This is important to show deadlock-freedom of phasermap operations.
+  *)
+
+Inductive TryWaitPre t ph : Prop :=
+  | try_wait_pre_can_wait:
+    WaitPre t ph ->
+    TryWaitPre t ph
+  | try_wait_pre_so:
+    forall v,
+    Map_TID.MapsTo t v ph ->
+    mode v = SIGNAL_ONLY ->
+    TryWaitPre t ph.
+
+Definition try_wait := wait.
+
+Definition try_wait_op t := mk_op (TryWaitPre t) (try_wait t).
 
 (** * Drop *)
 
@@ -513,6 +542,16 @@ Section Facts.
     eauto using update_mapsto_eq.
   Qed.
 
+  Lemma try_signal_mapsto_eq:
+    forall t v ph,
+    Map_TID.MapsTo t v (try_signal t ph) ->
+    exists v', v = Taskview.try_signal v' /\ Map_TID.MapsTo t v' ph.
+  Proof.
+    intros.
+    unfold signal in *.
+    eauto using update_mapsto_eq.
+  Qed.
+
   Lemma signal_mapsto_neq:
     forall t v t' ph,
     Map_TID.MapsTo t v (signal t' ph) ->
@@ -521,6 +560,17 @@ Section Facts.
   Proof.
     intros.
     unfold signal in *.
+    eauto using update_mapsto_neq.
+  Qed.
+
+  Lemma try_signal_mapsto_neq:
+    forall t v t' ph,
+    Map_TID.MapsTo t v (try_signal t' ph) ->
+    t' <> t ->
+    Map_TID.MapsTo t v ph.
+  Proof.
+    intros.
+    unfold try_signal in *.
     eauto using update_mapsto_neq.
   Qed.
 
@@ -538,6 +588,22 @@ Section Facts.
     right.
     intuition.
     eauto using signal_mapsto_neq.
+  Qed.
+
+  Lemma try_signal_mapsto_inv:
+    forall  t v t' ph,
+    Map_TID.MapsTo t v (try_signal t' ph) ->
+    { t' = t /\ exists v', (v = Taskview.try_signal v' /\ Map_TID.MapsTo t v' ph) } +
+    { t' <> t /\ Map_TID.MapsTo t v ph }.
+  Proof.
+    intros.
+    destruct (TID.eq_dec t' t). {
+      subst; left. intuition.
+      auto using try_signal_mapsto_eq.
+    }
+    right.
+    intuition.
+    eauto using try_signal_mapsto_neq.
   Qed.
 
   Lemma signal_mapsto_spec:
@@ -649,7 +715,10 @@ Section Facts.
     intros.
     destruct o'; simpl.
     - apply as_tv_op_inv_signal in H0; subst.
-      apply tv_reduces_signal.
+      inversion H; subst; simpl in *.
+      inversion H0.
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      auto using tv_reduces_signal.
     - apply as_tv_op_inv_wait in H0; subst.
       inversion H.
       subst; simpl in *.
