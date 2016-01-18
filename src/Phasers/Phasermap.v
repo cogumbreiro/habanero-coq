@@ -213,7 +213,6 @@ Inductive Reduces m t o : phasermap -> Prop :=
     can_run (get_impl o) t m ->
     Reduces m t o (run (get_impl o) t m).
 
-(* begin hide *)
 Section Facts.
 
   Lemma pm_update_rw:
@@ -409,5 +408,3 @@ Section Facts.
     auto using Map_PHID.add_1.
   Qed.
 End Facts.
-
-(* end hide *)

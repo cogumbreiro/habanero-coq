@@ -431,10 +431,6 @@ Section Facts.
     intros.
     rewrite tv_not_lt_rw_tv_ge.
     inversion H; clear H.
-    (*
-    destruct x as (sx, wx, rx).
-    destruct y as (sy, wy, ry).
-    *)
     simpl in *.
     inversion H1; clear H1. {
       subst.

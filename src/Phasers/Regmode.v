@@ -50,8 +50,6 @@ Inductive SignalCap : regmode -> Prop :=
 
 Hint Constructors SignalCap.
 
-(* begin hide *)
-
 Section Facts.
   Import Notations.
   Open Scope reg_scope.
@@ -220,5 +218,3 @@ Section Facts.
     trivial.
   Qed.
 End Facts.
-
-(* end hide *)

@@ -137,6 +137,7 @@ Section Facts.
     intros.
     destruct r; simpl; eauto.
   Qed.
+
   (** A property of correctness: [set_mode] preserves the signal phase. *)
   
 
@@ -298,42 +299,9 @@ Section Facts.
     inversion H1.
   Qed.
 
-(*
-  Lemma signal_signal_wait_cap:
-    forall v,
-    mode v = SIGNAL_WAIT ->
-    signal (signal v) = signal v.
-  Proof.
-    intros.
-    unfold signal at 1.
-    simpl.
-    trivial.
-    inversion H;
-      unfold signal;
-      unfold set_signal_phase;
-      rewrite <- H1;
-      simpl;
-      auto.
-  Qed.
-*)
-(*
-  Lemma wait_wait_phase_eq_signal_phase:
-    forall v,
-    mode v = WAIT_ONLY ->
-    wait_phase (wait v) = signal_phase (wait v).
-  Proof.
-    intros.
-    simpl_taskview v.
-    unfold wait.
-    rewrite H.
-    auto.
-  Qed.
-*)
 End Facts.
 
 Section Semantics.
-
-(* end hide *)
   
   (** * Small-step operational semantics*)
 
@@ -378,7 +346,6 @@ Section Semantics.
     inversion H; subst; simpl; trivial.
   Qed.
 
-(* begin hide *)
   Lemma reduces_rw_signal:
     forall v v',
     Reduces v SIGNAL v' ->
@@ -491,4 +458,4 @@ Section Semantics.
   Qed.
 
 End Semantics.
-(* end hide *)
+

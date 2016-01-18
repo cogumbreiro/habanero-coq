@@ -14,8 +14,6 @@ Module Taskview.
   Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
 
-(* end hide *)
-
   (** A welformed taskview has three possible cases:
   (i) the task has wait-capability and is ready to issue a signal,
   in which case the signal-phase and wait-phase match;
@@ -70,38 +68,6 @@ Module Taskview.
     destruct H0; intuition.
   Qed.
 
-(* begin hide *)
-(*
-  Lemma tv_welformed_eq:
-    forall v,
-    wait_phase v = signal_phase v ->
-    WellFormed v.
-  Proof.
-    intros.
-    destruct (wait_cap_so_dec (mode v)); auto; intuition.
-  Qed.
-
-  Lemma tv_welformed_succ:
-    forall v,
-    S (wait_phase v) = signal_phase v ->
-    WellFormed v.
-  Proof.
-    intros.
-    destruct (wait_cap_so_dec (mode v)); auto; intuition.
-  Qed.
-
-  Lemma welformed_inv_sw:
-    forall v,
-    WellFormed v ->
-    WaitCap (mode v) ->
-    (wait_phase v = signal_phase v) \/ (S (wait_phase v) = signal_phase v).
-  Proof.
-    intros.
-    inversion H; intuition.
-    apply so_to_not_wait_cap in H1.
-    contradiction.
-  Qed.
-*)
   Lemma tv_make_welformed:
     WellFormed Taskview.make.
   Proof.
@@ -171,8 +137,6 @@ Module Taskview.
         assumption.
   Qed.
 
-  (* end hide*)
-
   (** The operational semantics of taskviews preserves the property of [WellFormed]. *)
 
   Theorem tv_reduces_preserves_welformed:
@@ -186,8 +150,6 @@ Module Taskview.
     auto using tv_signal_preserves_welformed, tv_wait_preserves_welformed.
   Qed.
 
-  (* begin hide *)
-
   Lemma signal_phase_le_signal:
     forall v,
     WellFormed v ->
@@ -197,41 +159,7 @@ Module Taskview.
     simpl.
     intuition.
   Qed.
-(*
-  Lemma reduces_wait_post:
-    forall v v',
-    WellFormed v ->
-    Reduces v WAIT v' ->
-    (WaitCap (mode v) /\ wait_phase v' = signal_phase v').
-  Proof.
-    intros.
-    inversion H0.
-    destruct H1.
-    inversion H.
-    - rewrite H1 in H2.
-      inversion H2.
-    - rewrite H1 in H2.
-      inversion H2.
-    - rewrite H1 in H2.
-      inversion H2.
-    - simpl.
-   right.
-      inversion H1.
-      + rewrite wait_preserves_mode.
-        intuition.
-        rewrite wait_preserves_signal_phase.
-        * rewrite wait_wait_phase.
-          assumption.
-        * rewrite <- H5.
-          auto using signal_cap_sw.
-      + rewrite wait_preserves_mode.
-        intuition.
-        auto using wait_wait_phase_eq_signal_phase.
-    - left.
-      rewrite wait_preserves_mode.
-      assumption.
-  Qed.
-*)
+
   Lemma reduces_wait_inv_wait_cap:
     forall v v',
     WellFormed v ->
@@ -318,7 +246,6 @@ Module Taskview.
     auto using tv_wellformed_set_mode_sw.
   Qed.
 
-(* end hide *)
 End Facts.
 End Taskview.
 
@@ -335,8 +262,6 @@ Module Phaser.
         Map_TID.MapsTo t v ph ->
         Taskview.WellFormed v) ->
       WellFormed ph.
-
-  (* begin hide *)
 
   Lemma ph_welformed_add:
     forall t v ph,
@@ -474,8 +399,6 @@ Module Phaser.
     auto using ph_welformed_add, set_mode_preserves_welformed.
   Qed.
 
-  (* end hide *)
-
   Lemma ph_reduces_preserves_welformed:
     forall ph t o ph',
     WellFormed ph ->
@@ -526,7 +449,7 @@ Module Phasermap.
         Map_PHID.MapsTo p ph m ->
         Phaser.WellFormed ph) ->
       WellFormed m.
-  (* begin hide *)
+
   Lemma pm_welformed_add:
     forall m ph p,
     WellFormed m ->
@@ -705,8 +628,6 @@ Module Phasermap.
     eauto using ph_async_1_preserves_welformed.
   Qed.
 
-  (* end hide *)
-  
   Lemma pm_reduces_preserves_welformed:
     forall m t o m',
     WellFormed m ->

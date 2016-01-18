@@ -1,13 +1,9 @@
-(* begin hide *)
-
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Taskview.
 
 Section Defs.
 Import HJ.Vars.Map_TID.
-
-(* end hide *)
 
 (**
   A phaser is a map from task names [tid] into taskviews, represented
@@ -225,10 +221,9 @@ Definition register (r:registry) (t:tid) (ph:phaser) : phaser :=
 
 Definition register_op r t := mk_op (RegisterPre r t) (register r t).
 
-(** * Operational semantics *)
-(* begin hide *)
 End Defs.
-(* end hide *)
+
+(** * Operational semantics *)
 
 (** The operational semantics defines a closed set of the possible operations:
   signal, wait, drop (that deregisters the issuer),
@@ -272,7 +267,6 @@ match o with
 | _ => None
 end.
 
-  (* begin hide *)
 Section Facts.
 
   Lemma as_tv_op_inv_signal:
@@ -675,7 +669,6 @@ Section Facts.
       apply Map_TID_Facts.empty_mapsto_iff in H0.
       inversion H0.
   Qed.
-  (* end hide *)
 
   (**
     The importance of function [as_tv_op] is captured by the following two properties.
@@ -728,6 +721,5 @@ Section Facts.
       subst.
       intuition.
   Qed.
-(* begin hide *)
+
 End Facts.
-(* end hide *)
