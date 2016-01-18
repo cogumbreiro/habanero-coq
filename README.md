@@ -11,7 +11,7 @@ read a Coq library, for the verification of synchronization mechanisms.
 # Overview
 
 We are currently working on:
-* [phase-ordering](https://bitbucket.org/cogumbreiro/hj-coq/wiki/Phase_Ordering): happens-before and may-happens-in-parallel for phaser operations
+* [PLACES'16 project page](https://github.com/cogumbreiro/hj-coq/wiki/PLACES%2716): Formalization of Phase Ordering
 * deadlock-free subset of phaser operations
 * async-finish 
 
