@@ -8,10 +8,15 @@ properties, such as deadlock freedom and race freedom.
 The overarching goal of the project is to provide theoretical framework,
 read a Coq library, for the verification of synchronization mechanisms.
 
+# Publications page
+
+**[[PLACES'16] Formalization of Phase Ordering](https://github.com/cogumbreiro/hj-coq/wiki/PLACES%2716)**
+
+
 # Overview
 
 We are currently working on:
-* [PLACES'16 project page](https://github.com/cogumbreiro/hj-coq/wiki/PLACES%2716): Formalization of Phase Ordering
+
 * deadlock-free subset of phaser operations
 * async-finish 
 
@@ -28,7 +33,7 @@ git clone https://bitbucket.org/cogumbreiro/aniceto-coq
 
 To setup the requirements of this software do:
 ```
-source dev.sh # to install dependencies and setup the environment
+source configure.sh # to install dependencies and setup the environment
 ```
 
 # Setting up CoqIDE in MacOS X
