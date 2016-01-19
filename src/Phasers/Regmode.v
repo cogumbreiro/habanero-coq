@@ -1,4 +1,4 @@
-(** * Regmode : Registration modes *)
+(** * Registration modes *)
 
 (**
   There are three registration modes:
@@ -51,6 +51,9 @@ Inductive SignalCap : regmode -> Prop :=
 Hint Constructors SignalCap.
 
 Section Facts.
+  
+  (** We now define the facts related to registration modes. *)
+
   Import Notations.
   Open Scope reg_scope.
 

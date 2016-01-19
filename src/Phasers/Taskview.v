@@ -1,32 +1,47 @@
 Require Import HJ.Phasers.Regmode.
 
-(**
-  The taskview represents the local view of a phaser that a registered
-  task has. It records: the number of signals
-  the task issued, the number of waits the task issued, and the task's
-  registration mode. The taskview is changed by invoking signal and wait
-  on a phaser (or next). 
-*)
+Section Defs.
+  (**
+    The taskview represents the local view of a phaser that a registered
+    task has. It records: the number of signals
+    the task issued, the number of waits the task issued, and the task's
+    registration mode. The taskview is changed by invoking signal and wait
+    on a phaser (or next). 
+  *)
 
-Record taskview := TV {
-  signal_phase: nat;
-  wait_phase: nat;
-  mode: regmode
-}.
+  Record taskview := TV {
+    signal_phase: nat;
+    wait_phase: nat;
+    mode: regmode
+  }.
 
-(**
-  When creating a phaser, the creator is the only task registered in that phaser.
-  Value [make] represents the first taskview that is initialized in [SIGNAL_WAIT] mode
-  and accounts for zero signals and zero waits.
- *)
+  (** * Creation *)
 
-Definition make := TV 0 0 SIGNAL_WAIT.
+  (**
+    When creating a phaser, the creator is the only task registered in that phaser.
+    Value [make] represents the first taskview that is initialized in [SIGNAL_WAIT] mode
+    and accounts for zero signals and zero waits.
+  *)
 
-(** We define the mutators of a taskview. These are only used internally. *)
+  Definition make := TV 0 0 SIGNAL_WAIT.
 
-Definition set_signal_phase v n := TV n (wait_phase v) (mode v).
-Definition set_wait_phase v n := TV (signal_phase v) n (mode v).
-Definition set_mode v m := TV (signal_phase v) (wait_phase v) m.
+  (** * Basic mutators *)
+
+  (** We define the mutators of a taskview. These are only used internally. *)
+
+  Definition set_signal_phase v n := TV n (wait_phase v) (mode v).
+  Definition set_wait_phase v n := TV (signal_phase v) n (mode v).
+  Definition set_mode v m := TV (signal_phase v) (wait_phase v) m.
+
+  (** * Signal *)
+
+  (** 
+    The two mutators available of taskviews are signal and wait, defined following.
+    The semantics of signal depends on the
+    registration mode of the issuer (this is captured by [SignalPre]: 
+    [SIGNAL_WAIT] tasks interleave signals and waits and the first operation is a signal;
+    [SIGNAL_ONLY] tasks can always issue a signal.
+  *)
 
   Inductive SignalPre v: Prop :=
     | signal_pre_w:
@@ -36,48 +51,32 @@ Definition set_mode v m := TV (signal_phase v) (wait_phase v) m.
     | signal_pre_s:
       mode v = SIGNAL_ONLY ->
       SignalPre v.
-(** 
-  The two mutators available of taskviews are signal and wait, defined following.
-  The semantics of signal depends on the
-  registration mode of the issuer: when the issuer is registered in signal-only mode,
-  a signal increments the signal phase; otherwise, the signal becomes sets the signal-phase
-  one phase ahead of the wait phase (this is to "absord" consecutive signals before a wait).
-*)
 
-Definition signal v := set_signal_phase v (S (signal_phase v)).
+  (** The operation simply increments the signal phase. *)
 
-(**
-  Function [safe_signal] can be invoked even when [Taskview.SignalPre] is not respected,
-  the semantics is more intricate as it must consider the case when a signal-wait
-  task performs multiple signals.
- *)
+  Definition signal v := set_signal_phase v (S (signal_phase v)).
 
-Definition try_signal v :=
+  (**
+    At the language-level, however, invoking [signal] multiple times is not considered
+    an error, yet only the first [signal] after a [wait] is observed. Precondition [SignalPre v]
+    models the first [signal] after a wait.
+    Function [try_signal] can be invoked without a pre-condition and models the user-facing
+    signal operation.
+  *)
+
+  Definition try_signal v :=
   match mode v with
   | SIGNAL_WAIT => set_signal_phase v (S (wait_phase v))
   | _ => signal v
   end.
 
-(**
-  A task with wait capability must interleave a signal with an await.
-  Only the first signal is observed by other tasks, and consecutive signals are ignored until
-  another the task invokes a waits, which is why the signal phase in relation to the wait phase.
-  We postpone discussing the error-conditions of invoking signal and wait to
-  the presentation of the operational semantics of task view operations.
-
-  The wait operation increments the wait-phase. Altough the semantics of wait does not depends
-  on the registration mode, invoking wait should be guarded by a precondition that we postpone
-  its definition to the following section.
-*)
+  (** * Wait *)
 
   (**
-  The operational semantics not only defines a closed set of operations that
-  can operate on a value (here a taskview), but also defines the preconditions of
-  each operation.
-  Contrary to [eval], relation [Reduces] defines a precondition
-  to [wait], called [WaitPre]: in order to issue a wait, the wait phase must be
-  behind (smaller than) the signal phase. We define [CanWait] so it can be reused
-  in other developments.
+    The wait operation increments the wait-phase.
+    A [SIGNAL_WAIT] task must have signalled before invoking wait.
+    Tasks registered as [WAIT_ONLY] are always capable of invoking a wait.
+    [SIGNAL_ONLY] tasks cannot issue a wait.
   *)
 
   Inductive WaitPre v: Prop :=
@@ -89,29 +88,48 @@ Definition try_signal v :=
       S (wait_phase v) = signal_phase v ->
       WaitPre v.
 
-Definition wait v := set_wait_phase v (S (wait_phase v)).
+  Definition wait v := set_wait_phase v (S (wait_phase v)).
 
-Inductive WaitPhase v: nat -> Prop :=
-  wait_phase_def:
-    WaitCap (mode v) ->
-    WaitPhase v (wait_phase v).
 
-Definition get_wait_phase v :=
-  match (wait_cap_dec (mode v)) with
-  | left _ => Some (wait_phase v)
-  | right _ => None
+  (** * Small-step operational semantics*)
+
+  (**
+  The operational semantics not only defines a closed set of operations that
+  can operate on a value (here a taskview), but also defines the preconditions of
+  each operation.
+  Contrary to [eval], relation [Reduces] defines a precondition
+  to [wait], called [WaitPre]: in order to issue a wait, the wait phase must be
+  behind (smaller than) the signal phase. We define [CanWait] so it can be reused
+  in other developments.
+  *)
+
+
+  (**
+  The operational semantics of taskviews defines a closed set of operations [op]
+  that can change taskviews, signal and  wait.
+  *)
+
+  Inductive op := SIGNAL | WAIT.
+
+  (**
+  Function [eval] interprets the given operation [o] as the appropriate function.
+  *)
+
+  Definition eval o :=
+  match o with
+  | SIGNAL => signal
+  | WAIT => wait
   end.
 
-Inductive SignalPhase v : nat -> Prop :=
-  signal_phase_def:
-    SignalCap (mode v) ->
-    SignalPhase v (signal_phase v).
+  Inductive Reduces v : op -> taskview -> Prop :=
+    | tv_reduces_signal:
+      SignalPre v ->
+      Reduces v SIGNAL (signal v)
+    | tv_reduces_wait:
+      WaitPre v ->
+      Reduces v WAIT (wait v).
 
-Definition get_signal_phase v :=
-  match (signal_cap_dec (mode v)) with
-  | left _ => Some (signal_phase v)
-  | right _ => None
-  end.
+End Defs.
 
 Section Facts.
   Import Notations.
@@ -302,34 +320,6 @@ End Facts.
 
 Section Semantics.
   
-  (** * Small-step operational semantics*)
-
-  (**
-  The operational semantics of taskviews defines a closed set of operations [op]
-  that can change taskviews, signal and  wait.
-  *)
-
-  Inductive op := SIGNAL | WAIT.
-
-  (**
-  Function [eval] interprets the given operation [o] as the appropriate function.
-  *)
-
-  Definition eval o :=
-  match o with
-  | SIGNAL => signal
-  | WAIT => wait
-  end.
-
-      
-
-  Inductive Reduces v : op -> taskview -> Prop :=
-    | tv_reduces_signal:
-      SignalPre v ->
-      Reduces v SIGNAL (signal v)
-    | tv_reduces_wait:
-      WaitPre v ->
-      Reduces v WAIT (wait v).
 
   (**
   A trivial property we choose to highlight is that [Reduces]
