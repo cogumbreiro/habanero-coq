@@ -112,7 +112,6 @@ Definition get_signal_phase v :=
   | left _ => Some (signal_phase v)
   | right _ => None
   end.
-(* begin hide *)
 
 Section Facts.
   Import Notations.
