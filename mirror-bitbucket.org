@@ -1,0 +1,5 @@
+#!/bin/bash
+USER="$1"
+[[ -z $USER ]] && USER=cogumbreiro
+git push --mirror git@bitbucket.org:$USER/hj-coq.git
+
