@@ -6,7 +6,6 @@ Require Import Aniceto.Graphs.Graph.
 Require Import Aniceto.Pair.
 Require Import Aniceto.List.
 
-Require Import HJ.Phasers.Progress.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.TransDiff.
 Require Import HJ.Phasers.PhaseDiff.

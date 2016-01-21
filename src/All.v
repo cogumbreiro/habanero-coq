@@ -141,20 +141,10 @@ Proof.
   exists o1.
   trivial.
 Qed.
-(*
-Inductive PhasermapOf (s:state) (t:tid) (l:fid) (m:phasermap_t) : Prop :=
-  phasermap_of:
-    forall f',
-    IEF t f' ->
-    FIDPath f' l (get_finish s) ->
-    Map_FID.MapsTo l m s.(get_fstate) ->
-    PhasermapOf s t l m.
-*)
-Definition context_t := (phasermap_t * F.finish) % type.
 
-Definition context := (phasermap * F.finish) % type.
+Definition context := (phasermap_t * F.finish) % type.
 
-Inductive ContextOf (s:state) (t:tid) : context_t -> Prop :=
+Inductive ContextOf (s:state) (t:tid) : context -> Prop :=
   context_of_def:
     forall f l m,
     IEF t f ->
@@ -164,21 +154,21 @@ Inductive ContextOf (s:state) (t:tid) : context_t -> Prop :=
 
 Import Progress.ProgressSpec.
 
-Inductive CtxReduces (ctx:context_t) (t:tid) (o:op) : context -> Prop :=
+Inductive CtxReduces (ctx:context) (t:tid) (o:op) : context -> Prop :=
   | reduces_p:
     forall m o',
     translate o = only_p o' ->
-    Phasermap.Reduces (pm_t_value (fst ctx)) t o' m ->
+    Phasermap.Reduces (pm_t_value (fst ctx)) t o' (pm_t_value m) ->
     CtxReduces ctx t o (m, snd ctx)
   | reduces_f:
     forall f o',
     translate o = only_f o' ->
     FS.Reduce (snd ctx) t o' f ->
-    CtxReduces ctx t o (pm_t_value (fst ctx) , f)
+    CtxReduces ctx t o (fst ctx , f)
   | reduces_both:
     forall m o_p f o_f,
     translate o = both o_p o_f ->
-    Phasermap.Reduces (pm_t_value (fst ctx)) t o_p m ->
+    Phasermap.Reduces (pm_t_value (fst ctx)) t o_p (pm_t_value m) ->
     FS.Reduce (snd ctx) t o_f f ->
     CtxReduces ctx t o (m, f).
 
@@ -193,7 +183,7 @@ Module Typesystem.
   Module P_T := HJ.Phasers.Typesystem.
   Module F_T := HJ.Finish.Typesystem.
   
-  Inductive Check (ctx:context_t) (t:tid): op -> Prop :=
+  Inductive Check (ctx:context) (t:tid): op -> Prop :=
   | check_only_p:
     forall i o,
     translate i = only_p o ->
@@ -293,7 +283,7 @@ Module Progress.
       Flat f.
 
     Let pm_wf:
-      Welformedness.Phasermap.Welformed pm.
+      Welformedness.Phasermap.WellFormed pm.
     Proof.
       destruct p.
       eauto.
@@ -303,7 +293,7 @@ Module Progress.
       forall t i o,
       Map_TID.MapsTo t i reqs ->
       translate i = only_f o ->
-      exists f', CtxReduces ctx t i (pm, f').
+      exists f', CtxReduces ctx t i (p, f').
     Proof.
       intros.
       assert (R: exists f', FS.Reduce f t o f'). {
@@ -424,7 +414,7 @@ Module Progress.
       destruct hp.
       - exists t.
         exists i.
-        assert (Hc : exists f', CtxReduces ctx t i (pm, f')) by eauto.
+        assert (Hc : exists f', CtxReduces ctx t i (p, f')) by eauto.
         destruct Hc as (f', Hc).
         eauto.
       - apply progress_all_p with (r:=r); eauto.
@@ -455,7 +445,7 @@ Module Progress.
         inversion H0; subst; clear H0.
         apply F_P.reduce_le with (f3:=f') in H6; auto.
         destruct H6 as (f4, R).
-        exists (pm_t_value m, f4).
+        exists (m1, f4).
         apply reduces_f with (o':=o'); simpl; auto.
       - assert (Hx := H5).
         apply translate_both_impl_as_f_op in Hx.

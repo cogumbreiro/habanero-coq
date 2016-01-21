@@ -503,15 +503,19 @@ Proof.
 Qed.
 End PROGRESS.
 Module ProgressSpec.
+  Require Import HJ.Phasers.SubjectReduction.
+  Require Import HJ.Phasers.Welformedness.
+  Require Import HJ.Phasers.Typesystem.
+  Import Welformedness.Phasermap.
+  
   Section ValidPRequest.
     Set Implicit Arguments.
     Unset Strict Implicit.
-    Require Import HJ.Phasers.Welformedness.
-    Require Import HJ.Phasers.Typesystem.
+
     Structure phasermap_t := {
       pm_t_value: phasermap;
       pm_t_spec_1: Valid pm_t_value;
-      pm_t_spec_2: Phasermap.WellFormed pm_t_value
+      pm_t_spec_2: WellFormed pm_t_value
     }.
     Variable pm:phasermap.
     Structure pm_request := {
@@ -522,7 +526,8 @@ Module ProgressSpec.
     }.
   End ValidPRequest.
 
-  Lemma progress:
+
+  Let progress_aux:
     forall (m: phasermap_t) (r:pm_request (pm_t_value m)),
     exists t i m', Map_TID.MapsTo t i (pm_request_value r) /\ Reduces (pm_t_value m) t i m'.
   Proof.
@@ -531,5 +536,21 @@ Module ProgressSpec.
     destruct r.
     simpl in *.
     eauto using progress.
+  Qed.
+
+  Lemma progress:
+    forall (m: phasermap_t) (r:pm_request (pm_t_value m)),
+    exists t i (m':phasermap_t), Map_TID.MapsTo t i (pm_request_value r) /\ Reduces (pm_t_value m) t i (pm_t_value m').
+  Proof.
+    intros.
+    destruct (@progress_aux m r) as (t, (i, (pm, (mt, R)))).
+    assert (V: Valid pm) by eauto using subject_reduction, pm_t_spec_1.
+    assert (W: WellFormed pm) by eauto using pm_reduces_preserves_welformed, pm_t_spec_2.
+    remember ({| pm_t_value := pm; pm_t_spec_1 := V; pm_t_spec_2:= W |}) as m'.
+    exists t.
+    exists i.
+    exists m'.
+    subst.
+    intuition.
   Qed.
 End ProgressSpec.
