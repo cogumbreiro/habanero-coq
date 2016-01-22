@@ -14,6 +14,16 @@ match f with
   | Node l => l
 end.
 
+Lemma get_tasks_rw:
+  forall f,
+  Node (get_tasks f) = f.
+Proof.
+  intros.
+  destruct f.
+  simpl.
+  trivial.
+Qed.
+
 (** Labeled task  *)
 Definition l_task := (tid * task) % type.
 
