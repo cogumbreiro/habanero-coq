@@ -40,23 +40,6 @@ Section IEF.
     auto using ief_ready.
   Qed.
   
-(*
-(** No ancestors *)
-Inductive UniqueChildren f : Prop :=
-  unique_child_def:
-    (forall x t y, x <= f -> Child (t <| y) x -> ~ Registered t y -> ~ In t y) ->
-    (forall x t y, x <= f -> Child (!t) x -> y < x -> ~ In t y) ->
-    UniqueChildren f.
-
-Lemma unique_children_leaf:
-  .
-Proof.
-  intros.
-  destruct H.
-  assert (Hx := H x t y).
-  assert (~ Registered t Ready).
-Qed.
-*)
   Lemma unique_ief_le:
     forall x y,
     UniqueIEF x ->
