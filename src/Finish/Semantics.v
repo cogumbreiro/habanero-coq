@@ -127,10 +127,135 @@ Definition remove (f:finish) (t:tid) :=
 Definition put (f:finish) (p:l_task) : finish :=
   Node (p::(get_tasks (remove f (fst p) ))).
 
+
+Lemma remove_1:
+  forall t f,
+  ~ Registered t (remove f t).
+Proof.
+  intros.
+  intuition.
+  destruct H.
+  unfold remove in *.
+  destruct f.
+  induction l.
+  - inversion H.
+    simpl in *.
+    assumption.
+  - simpl in H.
+    destruct a0.
+    destruct (TID.eq_dec t t0).
+    + subst.
+      auto.
+    + destruct H.
+      destruct H.
+      * inversion H; subst.
+        contradiction n.
+        trivial.
+      * contradiction IHl.
+        auto using child_def.
+Qed.
+
+Lemma remove_2:
+  forall x y e f,
+  x <> y ->
+  Child (y, e) f ->
+  Child (y, e) (remove f x).
+Proof.
+  intros.
+  unfold remove.
+  destruct f.
+  induction l.
+  - apply child_absurd_nil in H0.
+    inversion H0.
+  - simpl.
+    destruct a.
+    destruct (TID.eq_dec x t).
+    + subst.
+      apply child_inv_cons in H0.
+      destruct H0.
+      * inversion H0.
+        subst.
+        contradiction H.
+        trivial.
+      * auto.
+    + apply child_inv_cons in H0.
+      destruct H0.
+      * inversion H0.
+        subst.
+        auto using child_eq.
+      * apply child_cons.
+        auto.
+Qed.
+
+Lemma remove_3:
+  forall x y e f,
+  Child (y, e) (remove f x) ->
+  Child (y, e) f.
+Proof.
+  intros.
+  unfold remove in *.
+  destruct f.
+  induction l; auto.
+  simpl in *.
+  destruct a.
+  destruct (TID.eq_dec x t).
+  - subst.
+    auto using child_cons.
+  - apply child_inv_cons in H.
+    destruct H.
+    + inversion H.
+      subst.
+      auto using child_eq.
+    + auto using child_cons.
+Qed.
+
 Module Notations.
   Infix " |+ " :=  (put) (at level 60, right associativity)  :  finish_scope.
   Infix " |- " :=  (remove) (at level 60, right associativity)  :  finish_scope.
 End Notations.
+
+
+Lemma put_1 :
+  forall x e f,
+  Child (x, e) (put f (x, e)).
+Proof.
+  intros.
+  apply child_def.
+  simpl.
+  intuition.
+Qed.
+
+Lemma put_2:
+  forall x y e e' f,
+  x <> y ->
+  Child (y, e) f ->
+  Child (y, e) (put f (x, e') ).
+Proof.
+  intros.
+  unfold put.
+  simpl.
+  apply child_cons.
+  rewrite get_tasks_rw in *.
+  auto using remove_2.
+Qed.
+
+Lemma put_3:
+  forall x y e e' f,
+  x <> y ->
+  Child (y, e) (put f (x, e')) ->
+  Child (y, e) f.
+Proof.
+  intros.
+  unfold put in *.
+  simpl in *.
+  apply child_inv_cons in H0.
+  destruct H0.
+  - inversion H0; subst; clear H0.
+    contradiction H.
+    trivial.
+  - rewrite get_tasks_rw in *.
+    eauto using remove_3.
+Qed.
 
 (**
   In async/finish all operations are blocking, because a task
