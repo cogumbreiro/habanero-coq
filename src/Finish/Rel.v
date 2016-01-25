@@ -244,6 +244,19 @@ Proof.
     + auto using clos_t1n_trans.
 Qed.
 
+Lemma le_inv_cons_ready:
+  forall f t l,
+  f <= (Node ((t, Ready) :: l)) ->
+  f < (Node l) \/ f = (Node ((t, Ready) :: l)).
+Proof.
+  intros.
+  apply le_inv in H.
+  destruct H.
+  - left.
+    eauto using lt_inv_cons_ready.
+  - intuition.
+Qed.
+
 Lemma sub_absurd_nil:
   forall f,
   ~ Sub f (Node nil).

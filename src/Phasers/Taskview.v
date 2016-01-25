@@ -9,7 +9,7 @@ Section Defs.
     on a phaser (or next). 
   *)
 
-  Record taskview := TV {
+  Record taskview := mk_taskview {
     signal_phase: nat;
     wait_phase: nat;
     mode: regmode
@@ -23,15 +23,15 @@ Section Defs.
     and accounts for zero signals and zero waits.
   *)
 
-  Definition make := TV 0 0 SIGNAL_WAIT.
+  Definition make := mk_taskview 0 0 SIGNAL_WAIT.
 
   (** * Basic mutators *)
 
   (** We define the mutators of a taskview. These are only used internally. *)
 
-  Definition set_signal_phase v n := TV n (wait_phase v) (mode v).
-  Definition set_wait_phase v n := TV (signal_phase v) n (mode v).
-  Definition set_mode v m := TV (signal_phase v) (wait_phase v) m.
+  Definition set_signal_phase v n := mk_taskview n (wait_phase v) (mode v).
+  Definition set_wait_phase v n := mk_taskview (signal_phase v) n (mode v).
+  Definition set_mode v m := mk_taskview (signal_phase v) (wait_phase v) m.
 
   (** * Signal *)
 
@@ -94,19 +94,16 @@ Section Defs.
   (** * Small-step operational semantics*)
 
   (**
-  The operational semantics not only defines a closed set of operations that
-  can operate on a value (here a taskview), but also defines the preconditions of
-  each operation.
-  Contrary to [eval], relation [Reduces] defines a precondition
-  to [wait], called [WaitPre]: in order to issue a wait, the wait phase must be
-  behind (smaller than) the signal phase. We define [CanWait] so it can be reused
-  in other developments.
-  *)
+    The operational semantics not only defines a closed set of operations that
+    can operate on a value (here a taskview), but also defines the preconditions of
+    each operation.
+    Contrary to [eval], relation [Reduces] defines a precondition
+    to [wait], called [WaitPre]: in order to issue a wait, the wait phase must be
+    behind (smaller than) the signal phase. We define [CanWait] so it can be reused
+    in other developments.
 
-
-  (**
-  The operational semantics of taskviews defines a closed set of operations [op]
-  that can change taskviews, signal and  wait.
+    The operational semantics of taskviews defines a closed set of operations [op]
+    that can change taskviews, signal and  wait.
   *)
 
   Inductive op := SIGNAL | WAIT.

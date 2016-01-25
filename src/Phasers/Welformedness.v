@@ -348,7 +348,7 @@ Module Phaser.
     intros.
     destruct H0.
     assert (rw := H0).
-    apply ph_wait_rw in rw.
+    apply wait_rw in rw.
     rewrite rw.
     apply ph_welformed_add; auto.
     assert (Taskview.WellFormed v) by (inversion H; eauto).
@@ -365,7 +365,7 @@ Module Phaser.
     unfold try_wait.
     inversion H0; auto using ph_wait_preserves_welformed.
     assert (rw := H1).
-    apply ph_wait_rw in rw.
+    apply wait_rw in rw.
     rewrite rw.
     apply ph_welformed_add; auto.
   Qed.
@@ -393,7 +393,7 @@ Module Phaser.
     intros.
     inversion H0.
     assert (rw := H2).
-    apply ph_register_rw with (r:=r) in rw.
+    apply register_rw with (r:=r) in rw.
     rewrite rw.
     assert (Taskview.WellFormed v) by (inversion H; eauto).
     auto using ph_welformed_add, set_mode_preserves_welformed.
@@ -487,7 +487,7 @@ Module Phasermap.
     destruct H0.
     apply pm_welformed_def.
     intros p' ph'; intros.
-    rewrite pm_ph_signal_rw with (ph:=ph) in H2; auto.
+    rewrite ph_signal_rw with (ph:=ph) in H2; auto.
     rewrite Map_PHID_Facts.add_mapsto_iff in H2.
     destruct H2.
     - destruct H2; subst.
@@ -512,7 +512,7 @@ Module Phasermap.
     destruct H0.
     apply pm_welformed_def.
     intros p' ph'; intros.
-    rewrite pm_ph_drop_rw with (ph:=ph) in H2; auto.
+    rewrite ph_drop_rw with (ph:=ph) in H2; auto.
     rewrite Map_PHID_Facts.add_mapsto_iff in H2.
     destruct H2.
     - destruct H2; subst.
@@ -536,7 +536,7 @@ Module Phasermap.
     unfold signal_all.
     apply pm_welformed_def.
     intros.
-    rewrite pm_foreach_mapsto_rw in H0.
+    rewrite foreach_mapsto_rw in H0.
     destruct H0 as (ph', (Heq, mt)).
     subst.
     rename ph' into ph.
@@ -554,7 +554,7 @@ Module Phasermap.
     unfold wait_all.
     apply pm_welformed_def.
     intros.
-    rewrite pm_foreach_mapsto_rw in H1.
+    rewrite foreach_mapsto_rw in H1.
     destruct H1 as (ph', (Heq, mt)).
     subst.
     rename ph' into ph.
@@ -580,7 +580,7 @@ Module Phasermap.
     unfold drop_all.
     apply pm_welformed_def.
     intros.
-    rewrite pm_foreach_mapsto_rw in H0.
+    rewrite foreach_mapsto_rw in H0.
     destruct H0 as (ph', (Heq, mt)).
     subst.
     assert (Phaser.WellFormed ph') by (inversion H; eauto).
@@ -595,7 +595,7 @@ Module Phasermap.
     Phaser.WellFormed (async_1 ps t p ph).
   Proof.
     intros.
-    destruct (pm_async_1_rw ps t p ph) as [(r,(i,R))|?]. {
+    destruct (async_1_rw ps t p ph) as [(r,(i,R))|?]. {
       rewrite R; clear R.
       assert (Hx: RegisterPre {| Phaser.get_task := (get_new_task ps); get_mode := r |} t ph). {
         inversion H.
@@ -620,7 +620,7 @@ Module Phasermap.
     intros.
     apply pm_welformed_def.
     intros.
-    apply pm_async_mapsto_rw in H1.
+    apply async_mapsto_rw in H1.
     destruct H1 as (ph', (R, mt)).
     rewrite R in *; clear R.
     assert (Phaser.WellFormed ph') by (inversion H; eauto).

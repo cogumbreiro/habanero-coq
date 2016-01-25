@@ -191,7 +191,7 @@ Proof.
   destruct o as [v|].
   - apply Map_TID_Facts.find_mapsto_iff in Heqo.
     assert (R:=Heqo).
-    apply ph_wait_rw in R; rewrite R in *.
+    apply wait_rw in R; rewrite R in *.
     eauto using ph_diff_add_wait.
  - unfold wait, Phaser.update in *.
    rewrite Heqo in *.
@@ -1303,13 +1303,13 @@ Section Async.
   Proof.
     intros.
     unfold m' in *.
-    apply pm_async_mapsto_rw in H.
+    apply async_mapsto_rw in H.
     destruct H as (ph', (R, mt)).
     rewrite R in *; clear R.
-    destruct (pm_async_1_rw ps t pi ph').
+    destruct (async_1_rw ps t pi ph').
     - destruct e as (r, (i, R)).
       rewrite R in *; clear R.
-      apply ph_register_inv_mapsto in H0.
+      apply register_inv_mapsto in H0.
       destruct H0 as [mt2|(?, (v', (mt2, R)))].
       + right; eauto.
       + left.
@@ -1335,7 +1335,7 @@ Section Async.
   Proof.
     intros.
     unfold m' in *.
-    rewrite pm_async_mapsto_rw in H.
+    rewrite async_mapsto_rw in H.
     destruct H as  (ph', (R, mt)).
     rewrite R in *; clear R.
     unfold chg_tid.
@@ -1347,12 +1347,12 @@ Section Async.
         inversion mt.
         assumption.
       }
-      apply pm_async_1_mapsto_eq with (r:=r) in H0; auto.
+      apply async_1_mapsto_eq with (r:=r) in H0; auto.
       destruct H0 as (v1', (mt1, R1)).
       subst.
       eauto.
     }
-    apply pm_async_1_mapsto_neq in H0; auto; clear n.
+    apply async_1_mapsto_neq in H0; auto; clear n.
     eauto.
   Qed.
 
@@ -1387,7 +1387,7 @@ Section Async.
     inversion H.
     assert (mt: exists r, Map_PHID.MapsTo p0 r (get_args ps)). {
       inversion pre.
-      rewrite pm_async_mapsto_rw in H0.
+      rewrite async_mapsto_rw in H0.
       destruct H0 as  (ph', (R, mt)).
       apply H2 in mt.
       inversion mt.

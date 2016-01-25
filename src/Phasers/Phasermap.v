@@ -215,7 +215,7 @@ Inductive Reduces m t o : phasermap -> Prop :=
 
 Section Facts.
 
-  Lemma pm_update_rw:
+  Let update_rw:
     forall p f ph m,
     Map_PHID.MapsTo p ph m ->
     update p f m = Map_PHID.add p (f ph) m.
@@ -234,27 +234,27 @@ Section Facts.
       eauto using Map_PHID_Extra.mapsto_to_in.
   Qed.
 
-  Lemma pm_ph_signal_rw:
+  Lemma ph_signal_rw:
     forall p t ph m,
     Map_PHID.MapsTo p ph m ->
     ph_signal p t m = Map_PHID.add p (Phaser.signal t ph) m.
   Proof.
     intros.
     unfold ph_signal.
-    rewrite pm_update_rw with (ph:=ph); auto.
+    rewrite update_rw with (ph:=ph); auto.
   Qed.
 
-  Lemma pm_ph_drop_rw:
+  Lemma ph_drop_rw:
     forall p t ph m,
     Map_PHID.MapsTo p ph m ->
     ph_drop p t m = Map_PHID.add p (Phaser.drop t ph) m.
   Proof.
     intros.
     unfold ph_drop.
-    rewrite pm_update_rw with (ph:=ph); auto.
+    rewrite update_rw with (ph:=ph); auto.
   Qed.
 
-  Lemma pm_foreach_mapsto_rw:
+  Lemma foreach_mapsto_rw:
     forall p ph f m,
     Map_PHID.MapsTo p ph (foreach f m) <->
     exists ph', ph = f ph' /\ Map_PHID.MapsTo p ph' m.
@@ -279,7 +279,7 @@ Section Facts.
       eauto using Map_PHID_Extra.mapsto_to_in.
   Qed.
 
-  Lemma pm_async_1_rw:
+  Lemma async_1_rw:
     forall ps t p ph,
       { exists r, Map_PHID.MapsTo p r (get_args ps) /\ async_1 ps t p ph = register (mk_registry (get_new_task ps) r) t ph }
       +
@@ -298,7 +298,7 @@ Section Facts.
       eauto.
   Qed.
 
-  Lemma pm_async_1_mapsto_neq:
+  Lemma async_1_mapsto_neq:
     forall t' v ps t p ph,
     t' <> (get_new_task ps) ->
     Map_TID.MapsTo t' v (async_1 ps t p ph) ->
@@ -311,10 +311,10 @@ Section Facts.
       assumption.
     }
     rewrite R in *; clear R.
-    eauto using ph_register_mapsto_neq.
+    eauto using register_mapsto_neq.
   Qed.
 
-  Lemma pm_async_1_mapsto_eq:
+  Lemma async_1_mapsto_eq:
     forall v ps t p ph r,
     Map_TID.In t ph ->
     Map_PHID.MapsTo p r (get_args ps) ->
@@ -331,10 +331,10 @@ Section Facts.
     }
     rewrite R in *; clear R.
     assert (r' = r) by eauto using Map_PHID_Facts.MapsTo_fun; subst; clear H2.
-    eauto using ph_register_mapsto_eq.
+    eauto using register_mapsto_eq.
   Qed.
 
-  Lemma pm_async_1_mapsto:
+  Lemma async_1_mapsto:
     forall p ph ps t' t v,
     Map_TID.MapsTo t' v (async_1 ps t p ph) ->
     Map_TID.MapsTo t' v ph \/
@@ -342,9 +342,9 @@ Section Facts.
     v = Taskview.set_mode v' r).
   Proof.
     intros.
-    destruct (pm_async_1_rw ps t p ph) as [(r,(i,R))|(R1,R2)]. {
+    destruct (async_1_rw ps t p ph) as [(r,(i,R))|(R1,R2)]. {
       rewrite R in *; clear R.
-      apply ph_register_inv_mapsto in H.
+      apply register_inv_mapsto in H.
       destruct H; auto.
       destruct H as (?, (v', (mt2, ?))).
       subst.
@@ -356,7 +356,7 @@ Section Facts.
     auto.
   Qed.
 
-  Lemma pm_async_mapsto_rw:
+  Lemma async_mapsto_rw:
     forall p ph ps t m,
     Map_PHID.MapsTo p ph (async ps t m) <->
     exists ph', ph = async_1 ps t p ph' /\ Map_PHID.MapsTo p ph' m.
@@ -377,7 +377,7 @@ Section Facts.
     Map_PHID.MapsTo p ph (async ps t m).
   Proof.
     intros.
-    apply pm_async_mapsto_rw.
+    apply async_mapsto_rw.
     exists ph.
     intuition.
     symmetry.
@@ -391,7 +391,7 @@ Section Facts.
     Map_PHID.MapsTo p ph m.
   Proof.
     intros.
-    apply pm_async_mapsto_rw in H0.
+    apply async_mapsto_rw in H0.
     destruct H0 as (ph', (R, mt)).
     rewrite R in *.
     apply async_simpl_notin with (ph:=ph') (t:=t) in H.

@@ -178,7 +178,7 @@ Section Facts.
     Facilitates ph' ph'.
   Proof.
     intros.
-    assert (Hin : Map_TID.In t ph) by eauto using ph_in.
+    assert (Hin : Map_TID.In t ph) by eauto using register_inv_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
     assert (Taskview.Reduces v o' (eval o' v)) by
@@ -323,7 +323,7 @@ Section Facts.
     destruct R.
     simpl in *.
     assert (R:=H0).
-    apply ph_register_rw with (r:=r) in R; auto.
+    apply register_rw with (r:=r) in R; auto.
     rewrite R; clear R.
     apply well_ordered_def.
     apply ph_rel_def.
@@ -369,7 +369,7 @@ Section Facts.
     Facilitates ph' ph.
   Proof.
     intros.
-    assert (Hin : Map_TID.In t ph) by eauto using ph_in.
+    assert (Hin : Map_TID.In t ph) by eauto using register_inv_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
     assert (Taskview.Reduces v o' (Taskview.eval o' v)) by
@@ -409,7 +409,7 @@ Section Facts.
     - destruct R; simpl in *.
       destruct H.
       assert (R:=H0).
-      apply ph_register_rw with (r:=r) in R; auto.
+      apply register_rw with (r:=r) in R; auto.
       rewrite R; clear R.
       apply ph_rel_def; intros.
       apply Map_TID_Facts.add_mapsto_iff in H2;
@@ -466,20 +466,20 @@ Section Facts.
       Map_TID.MapsTo t v ph2.
     Proof.
       intros.
-      assert (Hin : Map_TID.In t' ph1) by eauto using ph_in.
+      assert (Hin : Map_TID.In t' ph1) by eauto using register_inv_in.
       apply Map_TID_Extra.in_to_mapsto in Hin.
       destruct Hin as (v', Hmt').
       assert (R:=Hmt').
       destruct H1.
       destruct o; simpl in *.
-      - apply ph_signal_rw in R. rewrite R.
+      - apply signal_rw in R. rewrite R.
         auto using Map_TID.add_2.
-      - apply ph_wait_rw in R; rewrite R.
+      - apply wait_rw in R; rewrite R.
         auto using Map_TID.add_2.
       - inversion H1; destruct H2; subst; simpl in *; unfold drop in *.
         auto using Map_TID.remove_2.
       - destruct H1.
-        apply ph_register_rw with (r:=r) in R. rewrite R.
+        apply register_rw with (r:=r) in R. rewrite R.
         apply Map_TID.add_2; auto.
         intuition.
         subst.
@@ -495,24 +495,24 @@ Section Facts.
       Map_TID.MapsTo t v ph1 \/ exists r, o = REGISTER r /\ t = (get_task r).
     Proof.
       intros.
-      assert (Hin : Map_TID.In t' ph1) by eauto using ph_in.
+      assert (Hin : Map_TID.In t' ph1) by eauto using register_inv_in.
       apply Map_TID_Extra.in_to_mapsto in Hin.
       destruct Hin as (v', Hmt').
       destruct H1.
       assert (R:=Hmt').
       destruct o; simpl in *;  destruct H1.
       - left.
-        apply ph_signal_rw in R.
+        apply signal_rw in R.
         rewrite R in H.
         eauto using Map_TID.add_3.
-      - apply ph_wait_rw in R; rewrite R in H.
+      - apply wait_rw in R; rewrite R in H.
         left; eauto using Map_TID.add_3.
       - unfold drop in *.
         left; eauto using Map_TID.remove_3.
       - destruct (TID.eq_dec t (get_task r)).
         + eauto.
         + left.
-          apply ph_register_rw with (r:=r) in R; auto; rewrite R in *.
+          apply register_rw with (r:=r) in R; auto; rewrite R in *.
           rewrite Map_TID_Facts.add_mapsto_iff in H.
           destruct H.
           * destruct H.
@@ -537,15 +537,15 @@ Section Facts.
         - right.
           exists Taskview.SIGNAL.
           intuition.
-          apply ph_signal_rw in rw; auto; rewrite rw.
+          apply signal_rw in rw; auto; rewrite rw.
           auto using Map_TID.add_1.
         - right; exists Taskview.WAIT; intuition.
-          apply ph_wait_rw in rw; rewrite rw.
+          apply wait_rw in rw; rewrite rw.
           auto using Map_TID.add_1.
         - left.
           inversion H0.
         - left.
-          apply ph_register_rw with (r:=r) in rw.
+          apply register_rw with (r:=r) in rw.
           rewrite rw in *.
           apply Map_TID.add_2; auto.
           inversion H1.
@@ -572,7 +572,7 @@ Section Facts.
     destruct (TID.eq_dec t tz). {
       subst.
       rename H1 into r.
-      assert (i: Map_TID.In tz y) by (inversion r; eauto using ph_in).
+      assert (i: Map_TID.In tz y) by (inversion r; eauto using register_inv_in).
       apply Map_TID_Extra.in_to_mapsto in i.
       destruct i as (v, mt).
       assert (R:=r).
@@ -602,7 +602,7 @@ Section Facts.
     simpl in *.
     destruct H1.
     assert (R:=H4).
-    apply ph_register_rw with (r:=r) in R; auto; rewrite R in *; clear R.
+    apply register_rw with (r:=r) in R; auto; rewrite R in *; clear R.
     assert (vz = set_mode v (get_mode r)). {
       apply Map_TID_Facts.add_mapsto_iff in H2.
       destruct H2.
@@ -785,7 +785,7 @@ Section Facts.
     inversion H0; clear H0.
     apply ph_rel_def.
     intros.
-    apply ph_register_inv_mapsto in H4 as [?|(?,(v',(?,?)))]. {
+    apply register_inv_mapsto in H4 as [?|(?,(v',(?,?)))]. {
       eauto using well_ordered_to_facilitates.
     }
     subst.

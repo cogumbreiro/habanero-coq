@@ -1,97 +1,138 @@
 Require Import Coq.Lists.SetoidList.
 
 Require Import HJ.Vars.
-Require Import HJ.AsyncFinish.Lang.
-Require Import HJ.AsyncFinish.Typesystem.
-Import Lang.Semantics.
-(*
-Lemma is_map_cons:
-  forall t l a,
-  IsMap l -> 
-  ~ In t (Node l) ->
-  IsMap ((t,a) :: l).
-Proof.
-  intros.
-  unfold IsMap in *.
-  apply NoDupA_cons.
-*)
 
-Lemma remove_notin:
-  forall t l,
-  ~ In t (Node l) ->
-  remove_child l t = l.
-Proof.
-  intros.
-  simpl.
-  induction l.
-  - auto.
-  - simpl.
+Require Import HJ.Finish.Syntax.
+Require Import HJ.Finish.Semantics.
+Require Import HJ.Finish.IEF.
+Require Import HJ.Finish.Rel.
+
+Import Rel.Notations.
+
+Section Sem.
+
+  Lemma lt_remove_1:
+    forall x y t,
+    x < remove y t ->
+    x < y.
+  Proof.
+    intros.
+    unfold remove in *.
+    destruct y.
+    induction l; auto.
     destruct a as (t', a).
+    simpl in *.
     destruct (TID.eq_dec t t').
-    + subst.
-      contradiction H.
-      apply in_eq.
-    + assert (Heq: (remove_child l t) = l). {
-        apply IHl.
+    - auto using lt_cons.
+    - apply lt_inv_cons in H.
+      destruct H as [?|[(f',(?,?))|?]]; subst.
+      + auto using lt_eq.
+      + assert (f' < Node ((t', Blocked f') :: l))
+        by auto using lt_eq.
+        eauto using lt_trans.
+      + auto using lt_cons.
+  Qed.
+
+  Lemma le_inv_put_ready:
+    forall x y t,
+    x <= put y (t, Ready) ->
+    x < y \/ x = put y (t, Ready).
+  Proof.
+    intros.
+    unfold put in *.
+    apply le_inv_cons_ready in H.
+    destruct H.
+    - simpl in *.
+      left.
+      rewrite get_tasks_rw in *.
+      eauto using lt_remove_1.
+    - simpl in *.
+      subst.
+      intuition.
+  Qed.
+
+End Sem.
+
+Section Props.
+
+  Variable le_strengthen_2:
+    forall x y t,
+    Rel.Le x (remove y t) ->
+    Rel.Le x y.
+
+  Variable le_inv_put:
+    forall x y z t,
+    Rel.Le x (put y (t, Blocked z)) ->
+    Rel.Le x y \/ Rel.Le x z.
+
+  Variable le_inv_singleton:
+    forall x t l,
+    Rel.Le x (Node ((t, Ready) :: l)) ->
+    x = (Node ((t, Ready) :: l)) \/ Rel.Le x (Node l).
+
+  Let ief_put_ready:
+    forall x y f,
+    IEF x (put f (y, Ready)) ->
+    x = y \/ IEF x f.
+  Proof.
+    intros.
+    inversion H.
+    - destruct (TID.eq_dec y x). {
+        subst.
         intuition.
-        auto using in_cons_rhs.
       }
-      repeat rewrite Heq.
-      trivial.
-Qed.
+      apply put_3 with (x:=y) (e':=Ready) in H0; auto using ief_ready.
+    - rename x0 into f'.
+      right.
+      apply ief_blocked.
+  Qed.
 
-Require Import HJ.AsyncFinish.LangExtra.
+  Let sr_ief_fun_begin_async:
+    forall f t t' f',
+    IEFFun f ->
+    Reduce f t (BEGIN_ASYNC t') f' ->
+    IEFFun f'.
+  Proof.
+    intros.
+    inversion H0.
+    - subst.
+      apply ief_fun_def.
+      intros x y t''; intros.
+      apply le_inv_put_ready in H1.
+      apply le_inv_put_ready in H5.
+      destruct H1, H5.
+      + assert (x <= f) by auto using lt_to_le.
+        assert (y <= f) by auto using lt_to_le.
+        destruct H; eauto.
+      + subst. 
+        assert (x <= f) by auto using lt_to_le; clear H1.
+        
+  Qed.
 
-Lemma notin_remove:
-  forall t l t' ,
-  ~ In t (Node l) ->
-  ~ In t (Node (remove_child l t')).
-Proof.
-  intros.
-  rewrite notin_spec in *.
-  induction l.
-  - auto.
-  - destruct a as (t'', a).
-    simpl remove_child.
-    apply notin_inv in H.
-    destruct H as (?, (?, ?)).
-    destruct (TID.eq_dec t' t'').
-    + subst.
-      auto.
-    + auto using notin_cons.
-Qed.
-
-Theorem subject_reduction:
-  forall f t,
-  Valid f ->
-  Valid (remove f t).
-Proof.
-  intros.
-  unfold remove.
-  destruct f.
-  induction l.
-  - auto.
-  - destruct a as (t', a).
-    simpl.
-    destruct (TID.eq_dec t t').
-    + subst.
-      inversion H; auto.
-    + assert (Valid (Node (remove_child l t))). { inversion H; auto. }
-      clear IHl.
-      inversion H.
-      * subst.
-        auto using valid_cons_ready, notin_remove.
-      * subst.
-        auto using valid_cons_blocked, notin_remove.
-Qed.
-
-Theorem subject_reduction:
-  forall f t o f',
-  Valid f ->
-  Reduce f t o f' ->
-  Valid f'.
-Proof.
-  intros.
-  inversion H0.
-  - subst.
-Admitted.
+  Lemma sr_ief_fun:
+    forall f t o f',
+    IEFFun f ->
+    Reduce f t o f' ->
+    IEFFun f'.
+  Proof.
+    intros.
+    inversion H0; subst.
+    - destruct H.
+      apply le_inv_cons_ready in H1.
+      apply le_inv_cons_ready in H3.
+      destruct H1, H3.
+      + 
+    apply 
+      eauto.
+    - destruct H; eauto.
+    - destruct (TID.eq_dec t t1). {
+        subst.
+        apply le_inv_put in H1.
+        apply le_inv_put in H3.
+        destruct H1, H3.
+        - destruct H; eauto.
+        - 
+      }
+      destruct H.
+      
+  Qed.
