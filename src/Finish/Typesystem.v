@@ -26,24 +26,6 @@ Proof.
   auto using is_map_def.
 Qed.
 
-Import Syntax.Notations.
-
-Inductive Valid: finish -> Prop :=
-  | valid_nil:
-    Valid []
-  | valid_cons_ready:
-    forall t l,
-    Valid (Node l) ->
-    ~ In t (Node l) ->
-    Valid (Node ((!t)::l))
-  | valid_cons_blocked:
-    forall t f l,
-    Valid f ->
-    Valid (Node l) ->
-    ~ In t (Node l) ->
-    Valid (Node ((t <| f)::l)).
-
-
 Lemma child_fun:
   forall t f a a',
   IsMap f ->
@@ -74,6 +56,59 @@ Proof.
     apply is_map_inv_cons in H.
     auto.
 Qed.
+
+Import Syntax.Notations.
+Import FinishNotations.
+
+(** Well-formed tasks. *)
+
+Inductive WFTasks (f:finish) : Prop :=
+  wf_tasks_def:
+    (forall x, x <= f -> IsMap x) ->
+    WFTasks f.
+
+
+Lemma wf_tasks_le:
+  forall x y,
+  WFTasks y ->
+  x <= y ->
+  WFTasks x.
+Proof.
+  intros.
+  apply wf_tasks_def.
+  intros f; intros.
+  assert (f <= y) by eauto using le_trans.
+  inversion H; eauto.
+Qed.
+
+Lemma wf_tasks_child_fun:
+  forall t f a a',
+  WFTasks f ->
+  Child (t, a) f ->
+  Child (t, a') f ->
+  a = a'.
+Proof.
+  intros.
+  assert (f <= f) by eauto using le_refl.
+  assert (IsMap f) by (destruct H; eauto).
+  eauto using child_fun.
+Qed.
+
+Inductive Valid: finish -> Prop :=
+  | valid_nil:
+    Valid []
+  | valid_cons_ready:
+    forall t l,
+    Valid (Node l) ->
+    ~ In t (Node l) ->
+    Valid (Node ((!t)::l))
+  | valid_cons_blocked:
+    forall t f l,
+    Valid f ->
+    Valid (Node l) ->
+    ~ In t (Node l) ->
+    Valid (Node ((t <| f)::l)).
+
 
 Require Import HJ.Finish.LangExtra.
 
@@ -147,7 +182,6 @@ Inductive CheckLeaf (f:finish) (t:tid) : op -> Prop :=
     Child (t <| f') f ->
     CheckLeaf f t END_FINISH.
 
-Import FinishNotations.
 
 Inductive Check (f:finish) (t:tid) (o:op): Prop :=
   check_def:
