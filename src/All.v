@@ -490,8 +490,8 @@ Module Progress.
 
   Notation ROOT := (get_finish s).
 
-  Variable finish_t_spec_1: IEFFun ROOT.
   Variable finish_t_spec_2: UniqueIEF ROOT.
+  Variable finish_t_spec_1: IEFFun ROOT.
 
   Variable get_fstate_spec:
     forall x l,
@@ -688,7 +688,7 @@ Module Progress.
     intros.
     unfold to_p_reqs in *.
     unfold to_p_reqs_aux in *.
-    apply Map_TID_Extra.omap_spec_2 in H1; auto using tid_eq_rw.
+    apply Map_TID_Extra.omap_2 in H1; auto using tid_eq_rw.
   Qed.
 
   Variable Hn: ~ Map_TID.Empty reqs.
@@ -718,7 +718,7 @@ Module Progress.
           destruct Hx as (x, Hx).
           exists x.
           unfold to_p_reqs.
-          eauto using tid_eq_rw, Map_TID_Extra.in_omap_1.
+          eauto using tid_eq_rw, Map_TID_Extra.omap_1.
         }
         destruct Hx as (x, Hx).
         eauto using Map_TID_Extra.mapsto_to_in.
@@ -774,7 +774,7 @@ Module Progress.
           destruct Hx as (x, Hx).
           exists x.
           unfold to_p_reqs.
-          eauto using tid_eq_rw, Map_TID_Extra.in_omap_1.
+          eauto using tid_eq_rw, Map_TID_Extra.omap_1.
         }
         rewrite Map_TID_Extra.nonempty_in.
         destruct Hx as (x, Hx).
@@ -790,7 +790,7 @@ Module Progress.
           destruct Hx as (x, Hx).
           exists x.
           unfold to_p_reqs.
-          eauto using tid_eq_rw, Map_TID_Extra.in_omap_1.
+          eauto using tid_eq_rw, Map_TID_Extra.omap_1.
         }
         destruct Hx as (x, mt).
         exists x.
