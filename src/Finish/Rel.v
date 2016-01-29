@@ -83,6 +83,15 @@ Proof.
   - eauto using rt_trans.
 Qed.
 
+Lemma lt_sub:
+  forall x y,
+  Sub x y ->
+  x < y.
+Proof.
+  intros.
+  intuition.
+Qed.
+
 Lemma lt_to_le:
   forall f f',
   f < f' ->
@@ -93,6 +102,14 @@ Proof.
   induction H0.
   - auto using rt_step.
   - eauto using rt_trans.
+Qed.
+
+Lemma le_sub:
+  forall x y,
+  Sub x y ->
+  x <= y.
+Proof.
+  intros; auto using lt_sub, lt_to_le.
 Qed.
 
 Lemma gt_to_ge:

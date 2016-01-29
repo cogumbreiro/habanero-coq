@@ -18,16 +18,27 @@ Section IEF.
       IEF t f.
 
   (** [IEF] behaves as a function in the whole tree [f]. *)
+
   Inductive IEFFun f : Prop :=
     ief_fun_def:
       (forall x y t, x <= f -> IEF t x -> y <= f -> IEF t y -> x = y) ->
       IEFFun f.
 
   (** No ancestors *)
+
   Inductive UniqueIEF f : Prop :=
     unique_child_def:
       (forall x t y, x <= f -> IEF t x -> y < x -> ~ In t y) ->
       UniqueIEF f.
+
+  Lemma ief_in:
+    forall t f,
+    IEF t f ->
+    In t f.
+  Proof.
+    intros.
+    inversion H; eauto using in_child.
+  Qed.
 
   Lemma leaf_to_ief:
     forall f,

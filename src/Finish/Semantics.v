@@ -26,6 +26,25 @@ Proof.
   eauto using in_def, lt_to_le, le_trans.
 Qed.
 
+Lemma notin_lt:
+  forall t x y,
+  ~ In t x ->
+  y < x ->
+  ~ In t y.
+Proof.
+  intros.
+  unfold not; intros.
+  destruct H1.
+  apply le_inv in H2.
+  destruct H2.
+  -  assert (f' < x) by eauto using lt_trans.
+    contradiction H.
+    eauto using in_def, lt_to_le.
+  - subst.
+    contradiction H.
+    eauto using in_def, lt_to_le.
+Qed.
+
 Lemma notin_le:
   forall t x y,
   ~ In t x ->
@@ -59,6 +78,39 @@ Proof.
   - eauto using lt_to_le, in_def, lt_cons.
   - subst.
     eauto using in_def, le_refl, registered_cons.
+Qed.
+
+Lemma in_child:
+  forall t a f,
+  Child (t, a) f ->
+  In t f.
+Proof.
+  intros.
+  eauto using in_def, registered_def, le_refl.
+Qed.
+
+Lemma in_lt:
+  forall x y t,
+  In t x ->
+  x < y ->
+  In t y.
+Proof.
+  intros.
+  inversion H.
+  assert (x <= y) by eauto using lt_to_le.
+  assert (f' <= y) by eauto using le_trans.
+  eauto using in_def.
+Qed.
+
+Lemma in_le:
+  forall x y t,
+  In t x ->
+  x <= y ->
+  In t y.
+Proof.
+  intros.
+  apply le_inv in H0.
+  destruct H0; subst; eauto using in_lt.
 Qed.
 
 Lemma in_absurd_nil:
@@ -255,6 +307,29 @@ Proof.
     trivial.
   - rewrite get_tasks_rw in *.
     eauto using remove_3.
+Qed.
+
+Lemma put_sub:
+  forall x y t,
+  Sub x (put y (t, Blocked x)).
+Proof.
+  intros.
+  eauto using sub_def, put_1.
+Qed.
+
+Lemma put_lt:
+  forall x y t,
+  x < put y (t, Blocked x).
+Proof.
+  intros.
+  auto using lt_sub, put_sub.
+Qed.
+
+Lemma put_le:
+  forall x y t,
+  x <= put y (t, Blocked x).
+Proof.
+  intros; auto using put_lt, lt_to_le.
 Qed.
 
 (**
