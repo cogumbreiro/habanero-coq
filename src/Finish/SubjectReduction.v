@@ -10,6 +10,7 @@ Require Import HJ.Finish.Rel.
 Import Rel.Notations.
 
 Section Sem.
+
   Lemma lt_remove_1:
     forall x y t,
     x < remove y t ->
@@ -95,6 +96,19 @@ Section Sem.
     - intuition.
   Qed.
 
+  Lemma ief_inv_cons_nil:
+    forall t t' a,
+    IEF t (Node ((t', a) :: nil)) ->
+    t' = t.
+  Proof.
+    intros.
+    inversion H.
+    - apply child_inv_cons_nil in H0.
+      inversion H0; trivial.
+    - apply child_inv_cons_nil in H0.
+      inversion H0; trivial.
+  Qed.
+
   Lemma ief_put_3:
     forall t f t' a,
     IEF t (put f (t', a)) ->
@@ -122,6 +136,47 @@ Section Sem.
       eauto using ief_blocked.
   Qed.
 
+  Require Import HJ.Finish.Typesystem.
+
+  Lemma ief_inv_registered:
+    forall t f,
+    IEF t f ->
+    Registered t f.
+  Proof.
+    intros.
+    inversion H;
+    eauto using registered_def.
+  Qed.
+
+  Lemma ief_put_absurd_1:
+   forall t x y,
+     WFTasks (put y (t, Blocked x)) ->
+     IEF t x ->
+     ~ IEF t (put y (t, Blocked x)).
+  Proof.
+    intros.
+    assert (Hc: Child (t, Blocked x) (put y (t, Blocked x))). {
+      eauto using child_eq.
+    }
+    assert (Hlt: x < put y (t, Blocked x)). {
+      eauto using lt_child.
+    }
+    unfold not; intros.
+    inversion H1.
+    - assert (Ha : Ready = Blocked x) by eauto using wf_tasks_child_fun.
+      inversion Ha.
+    - assert (Ha : Blocked x0 = Blocked x) by eauto using wf_tasks_child_fun.
+      inversion Ha; subst; clear Ha.
+      contradiction H3.
+      eauto using ief_inv_registered.
+  Qed.
+
+(*
+  Lemma ief_put_neq:
+    forall 
+    IEF t1 
+    IEF t1 (put x (t2, Blocked y))
+*)
 End Sem.
 
 Section Props.
@@ -170,27 +225,56 @@ Section Props.
   Lemma ief_put:
     forall x y f a,
     IEF x (put f (y, a)) ->
-    x = y \/ IEF x f.
+    x = y \/ (x <> y /\ IEF x f).
   Proof.
     intros.
-    inversion H.
-    - destruct (TID.eq_dec y x). {
+    destruct (TID.eq_dec y x). {
         subst.
         intuition.
-      }
-      eauto using put_3, ief_ready.
-    - rename x0 into f'.
-      destruct (TID.eq_dec x y). {
+    }
+    right.
+    inversion H.
+    - eauto using put_3, ief_ready.
+    - eauto using put_3, ief_blocked.
+  Qed.
+
+  Lemma child_inv_put:
+    forall t f a b,
+    WFTasks (put f (t, b)) ->
+    Child (t, a) (put f (t, b)) ->
+    a = b.
+  Proof.
+    intros.
+    assert (Child (t, b) (put f (t, b))) by eauto using put_1.
+    eauto using wf_tasks_child_fun.
+  Qed.
+
+  Lemma ief_put_inv_blocked:
+    forall t t' x y,
+    WFTasks (put x (t, Blocked y)) ->
+    IEF t' (put x (t, Blocked y)) ->
+    (t' = t /\ ~ Registered t y) \/ (t' <> t /\ IEF t' x).
+  Proof.
+    intros.
+    assert (Hx := H0).
+    apply ief_put in H0.
+    destruct H0 as [?|(?,?)].
+    - subst.
+      inversion Hx.
+      + apply child_inv_put in H0; auto.
+        inversion H0.
+      + apply child_inv_put in H0; auto.
+        inversion H0; subst.
         intuition.
-      }
-      eauto using ief_blocked, put_3.
+    - intuition.
   Qed.
 
   Variable f:finish.
   Variable WF2: WFTasks f.
   Variable WF3: UniqueIEF f.
+  Variable WF4: IEFFun f.
 
-  Let unique_ief_put_ready_1:
+  Lemma unique_ief_put_ready_1:
     forall t,
     ~ In t f ->
     UniqueIEF (put f (t, Ready)).
@@ -204,7 +288,7 @@ Section Props.
       eauto using lt_to_le.
     - subst.
       apply ief_put in H1.
-      destruct H1.
+      destruct H1 as [?|(_,?)].
       + subst.
         eauto using notin_lt, lt_put_1.
       + apply lt_put_1 in H2.
@@ -212,7 +296,98 @@ Section Props.
         eauto using le_refl.
   Qed.
 
-  Let unique_ief_begin_finish:
+  Let ief_in_ex:
+    forall x y t,
+    x < y ->
+    IEF t x ->
+    In t x.
+  Proof.
+    eauto using in_trans, ief_in.
+  Qed.
+
+  Lemma ief_to_in:
+    forall y t,
+    y < f ->
+    IEF t y ->
+    In t f.
+  Proof.
+    eauto using in_trans, ief_in.
+  Qed.
+
+  Lemma ief_notin_sub:
+    forall x t,
+    x < f ->
+    IEF t f ->
+    ~ In t x.
+  Proof.
+    intros.
+    destruct WF3 as (Hx).
+    eauto using le_refl.
+  Qed.
+
+  Lemma ief_dup:
+    forall x t t1,
+    x < f ->
+    IEF t1 x ->
+    IEF t1 (put f (t, Ready)) ->
+    In t f.
+  Proof.
+    intros.
+    eauto.
+    apply ief_put in H1.
+    destruct H1 as [?|(_,?)].
+    + subst.
+      eauto using ief_to_in.
+    + assert (i: ~ In t1 x) by eauto using ief_notin_sub.
+      contradiction i.
+      eauto using ief_in.
+  Qed.
+
+  Lemma lt_ief_in:
+    forall x t,
+    x < f ->
+    IEF t x ->
+    In t f.
+  Proof.
+    eauto using ief_dup, ief_to_in.
+  Qed.
+
+  Lemma ief_fun_put_ready_1:
+    forall t,
+    ~ In t f ->
+    IEFFun (put f (t, Ready)).
+  Proof.
+    intros.
+    apply ief_fun_def.
+    intros x y t1; intros.
+    apply le_inv_put_ready in H0.
+    apply le_inv_put_ready in H2.
+    destruct H0, H2; subst; auto.
+    - destruct WF4; eauto using lt_to_le.
+    - contradiction H; eauto using ief_dup.
+    - contradiction H; eauto using ief_dup.
+  Qed.
+
+  Lemma unique_ief_fun_put_ready_1:
+    forall t,
+    ~ In t f ->
+    IEFFun (put f (t, Ready)) /\ UniqueIEF (put f (t, Ready)).
+  Proof.
+    intros.
+    split; auto using ief_fun_put_ready_1, unique_ief_put_ready_1.
+  Qed.
+
+  Lemma ief_child_put_ready:
+    forall t y,
+    Child (t, Blocked (Node nil)) f ->
+    y < put f (t, Ready) ->
+    ~ In t y.
+  Proof.
+    destruct WF3 as (Hx).
+    eauto using lt_put_1, le_refl, ief_blocked, registered_absurd_nil.
+  Qed.
+
+  Lemma unique_ief_begin_finish:
     forall t,
     Child (t, Blocked (Node nil)) f ->
     UniqueIEF (put f (t, Ready)).
@@ -226,19 +401,69 @@ Section Props.
       eauto using lt_to_le.
     - subst.
       apply ief_put in H1.
-      destruct H1.
+      destruct H1 as [?|(_,?)].
       + subst.
-        assert (IEF t f). {
-          eauto using ief_blocked, registered_absurd_nil.
-        }
-        destruct WF3 as (Hx).
+        eauto using ief_child_put_ready.
+      + destruct WF3 as (Hx).
         eauto using lt_put_1, le_refl.
-      + apply lt_put_1 in H2.
-        destruct WF3 as (Hx).
-        eauto using le_refl.
   Qed.
 
-  Let unique_ief_remove:
+  Lemma abs_ief_1:
+    forall t y,
+    y < f ->
+    IEF t y ->
+    IEF t f ->
+    False.
+  Proof.
+    intros.
+    assert (Hi: ~ In t0 y) by (eapply ief_notin_sub; eauto).
+    contradiction Hi.
+    auto using ief_in.
+  Qed.
+
+  Lemma abs_ief_2:
+    forall t x,
+    Child (t, Blocked (Node nil)) f ->
+    x < f ->
+    IEF t x ->
+    False.
+  Proof.
+    eauto using ief_blocked, registered_absurd_nil, abs_ief_1.
+  Qed.
+
+  Lemma abs_ief_3:
+    forall t x t1,
+    Child (t, Blocked (Node nil)) f ->
+    x < f ->
+    IEF t1 x ->
+    IEF t1 (put f (t, Ready)) ->
+    False.
+  Proof.
+    intros.
+    apply ief_put in H2.
+    destruct H2; subst.
+    + eauto using abs_ief_2.
+    + destruct H2 as (_,?).
+      eauto using abs_ief_1.
+  Qed.
+
+  Lemma ief_fun_begin_finish:
+    forall t,
+    Child (t, Blocked (Node nil)) f ->
+    IEFFun (put f (t, Ready)).
+  Proof.
+    intros.
+    apply ief_fun_def.
+    intros x y t1; intros.
+    apply le_inv_put_ready in H0;
+    apply le_inv_put_ready in H2.
+    destruct H0, H2; subst; auto.
+    - destruct WF4; eauto using lt_to_le.
+    - assert (X: False) by eauto using abs_ief_3; inversion X.
+    - assert (X: False) by eauto using abs_ief_3; inversion X.
+  Qed.
+
+  Lemma unique_ief_remove:
     forall t,
     UniqueIEF (remove f t).
   Proof.
@@ -256,13 +481,72 @@ Section Props.
       destruct WF3 as (Hx).
       eauto using lt_to_le, le_refl.
   Qed.
+
+  Lemma ief_fun_remove:
+    forall t,
+    IEFFun (remove f t).
+  Proof.
+    intros.
+    apply ief_fun_def.
+    intros.
+    apply le_inv in H.
+    apply le_inv in H1.
+    destruct H, H1; (try apply lt_remove_1 in H); (try apply lt_remove_1 in H1).
+    - destruct WF4 as (Hx).
+      eauto using lt_to_le.
+    - subst.
+      apply ief_remove_3 in H2.
+      assert (Hi: ~ In t0 x) by eauto using ief_notin_sub.
+      contradiction Hi; eauto.
+    - subst.
+      apply ief_remove_3 in H0.
+      assert (Hi: ~ In t0 y) by eauto using ief_notin_sub.
+      contradiction Hi; eauto.
+    - subst; trivial.
+  Qed.
+
   Variable wf_task_put_blocked:
     forall x y t,
     WFTasks x ->
     WFTasks y ->
     WFTasks (put x (t, Blocked y)).
 
-  Let unique_ief_put_child:
+  Lemma wf_tasks_begin_finish:
+    forall t,
+    WFTasks (Node ((t, Ready) :: nil)).
+  Proof.
+    intros.
+    apply wf_tasks_def.
+    intros.
+    apply le_inv_cons_ready in H.
+    destruct H.
+    * apply lt_absurd_nil in H.
+      inversion H.
+    * subst.
+      apply is_map_def.
+      apply NoDupA_cons. {
+        unfold not.
+        intros.
+        inversion H.
+      }
+      apply NoDupA_nil.
+  Qed.
+
+  Lemma le_inv_node_ready:
+    forall t y,
+    y <= Node ((t, Ready) :: nil) ->
+    y = Node ((t, Ready) :: nil).
+  Proof.
+    intros.
+    apply le_inv_cons_ready in H.
+    destruct H.
+    * apply lt_absurd_nil in H.
+      inversion H.
+    * subst.
+      trivial.
+  Qed.
+
+  Lemma unique_ief_put_child:
     forall t,
     UniqueIEF (put f (t, Blocked (Node ((t, Ready) :: nil)))).
   Proof.
@@ -287,36 +571,12 @@ Section Props.
       assert (IEF t' f /\ t' <> t). {
         destruct (TID.eq_dec t' t). {
           subst.
-          assert (Hx: WFTasks (Node ((t, Ready) :: nil))). {
-            apply wf_tasks_def.
-            intros.
-            apply le_inv_cons_ready in H.
-            destruct H.
-            * apply lt_absurd_nil in H.
-              inversion H.
-            * subst.
-              apply is_map_def.
-              apply NoDupA_cons. {
-                unfold not.
-                intros.
-                inversion H.
-              }
-              apply NoDupA_nil.
+          assert (Hx: ~ IEF t (put f (t, Blocked (Node ((t, Ready) :: nil))))). {
+            eauto using ief_put_absurd_1,
+              wf_tasks_begin_finish, wf_task_put_blocked,
+              ief_ready, child_eq.
           }
-          inversion H0.
-          - apply wf_tasks_child_absurd_neq in H.
-            + inversion H.
-            + apply wf_task_put_blocked; auto.
-          - assert (x = Node ((t,Ready)::nil)). {
-              assert (Child (t, Blocked (Node ((t,Ready)::nil))) (put f (t, Blocked (Node ((t, Ready) :: nil)))))
-              by eauto using put_1.
-              apply wf_tasks_child_fun with (a:=Blocked x) in H3; auto.
-              inversion H3.
-              trivial.
-            }
-            subst.
-            contradiction H2.
-            apply registered_eq.
+          contradiction Hx; trivial.
         }
         eauto using ief_put_3.
       }
@@ -325,32 +585,102 @@ Section Props.
       destruct H1.
       + destruct WF3.
         assert (f <= f) by eauto using le_refl.
-        apply (H3 f t' y); auto.
-      + apply le_inv_cons_ready in H1.
-        destruct H1.
-        * apply lt_absurd_nil in H1.
-          inversion H1.
-        * subst.
-          unfold not.
-          intros.
-          apply in_inv_cons in H1.
-          destruct H1 as [?|[(?,(?,?))|?]]. {
-            contradiction.
-          }
-          {
-            inversion H1.
-          }
-          apply in_absurd_nil in H1.
+        apply (H3 f t' y); eauto using lt_remove_1.
+      + apply le_inv_node_ready in H1; subst.
+        unfold not.
+        intros.
+        apply in_inv_cons in H1.
+        destruct H1 as [?|[(?,(?,?))|?]].
+        * contradiction.
+        * inversion H1.
+        * apply in_absurd_nil in H1.
           assumption.
   Qed.
 
-  Let sr_ief_fun_begin_async:
+
+Ltac resolve_log :=
+  subst; auto;
+  repeat (match goal with
+           | [ H : False |- _ ] => destruct H (* resolve absurd cases *)
+           | [ H : _ /\ _ |- _ ] => destruct H (* break conjuctions *)
+           | [ H : _ \/ _ |- _ ] => destruct H (* break disjunctions *)
+         end; subst; auto).
+
+
+  Ltac break_ief_put_blocked :=
+  try match goal with
+  | [ H: IEF _ (put f (_, Blocked _)) |- _ ] => (apply ief_put_inv_blocked in H; auto); resolve_log
+  end.
+
+  Ltac abs_registered_eq :=
+  match goal with
+  | [ H: ~ Registered ?t (Node ((?t, _) :: _)) |- _ ] =>
+    contradiction H;
+    apply registered_eq
+  end.
+
+  Ltac simpl_le_cons_ready :=
+  match goal with
+  | [ H: _ <= Node ((_, Ready) :: nil) |- _ ] =>
+    apply le_inv_node_ready in H; subst
+  end.
+
+  Ltac simpl_ief_cons_ready :=
+   match goal with
+   | [ H: IEF ?t1 (Node ((?t2, _) :: nil)) |- _ ] =>
+     apply ief_inv_cons_nil in H; subst
+   end.
+    
+
+  Lemma ief_fun_put_child:
+    forall t,
+    Child (t, Ready) f ->
+    IEFFun (put f (t, Blocked (Node ((t, Ready) :: nil)))).
+  Proof.
+    intros.
+    apply ief_fun_def.
+    intros.
+    assert (WFTasks (put f (t, Blocked (Node ((t, Ready) :: nil))))). {
+      eauto using wf_tasks_begin_finish, wf_task_put_blocked.
+    }
+    apply le_inv_put_blocked in H0.
+    apply le_inv_put_blocked in H2.
+    destruct H0, H2; resolve_log; break_ief_put_blocked;
+      try abs_registered_eq; try simpl_le_cons_ready; try simpl_ief_cons_ready.
+    - eapply ief_notin_sub in H2; eauto.
+      inversion H2.
+    - contradiction H1; trivial.
+    - eapply abs_ief_both in H3; eauto.
+      inversion H3.
+    - contradiction H2.
+      trivial.
+    - apply lt_remove_1 in H0.
+      apply lt_remove_1 in H2.
+      destruct WF4; eauto using lt_to_le.
+    - assert (IEF t0 f) by eauto using ief_ready.
+      eapply abs_ief_both in H3; eauto.
+      inversion H3.
+    - assert (Hi: IEF t0 f) by eauto using ief_ready.
+      eapply abs_ief_both in Hi; eauto.
+      inversion Hi.
+    - simpl_le_cons_ready.
+      trivial.
+  Qed.
+
+  Variable unique_ief_le:
+    forall x y, UniqueIEF y -> x <= y -> UniqueIEF x.
+
+  Lemma sr_unique_ief:
     forall t o f',
     Reduce f t o f' ->
     UniqueIEF f'.
   Proof.
     intros.
-    induction H; eauto.
+    induction H; eauto using unique_ief_put_ready_1, unique_ief_begin_finish, unique_ief_remove, unique_ief_put_child.
+    assert (f' <= f) by eauto using lt_child, lt_to_le.
+    assert (WFTasks f')  by eauto using wf_tasks_le.
+    assert (UniqueIEF f')  by eauto using unique_ief_le.
+    assert (UniqueIEF f'') by eauto.
   Qed.
 
 (*

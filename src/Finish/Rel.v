@@ -223,6 +223,15 @@ Proof.
   eauto using sub_def, child_eq.
 Qed.
 
+Lemma lt_child:
+  forall t x y,
+  Child (t, Blocked x) y ->
+  x < y.
+Proof.
+  intros.
+  apply sub_def in H.
+  intuition.
+Qed.
 
 Lemma lt_eq:
   forall (f:finish) (t:tid) (l:list l_task),
