@@ -1,49 +1,18 @@
-# Coq Formalization of Habanero-Java
+# Formalization of Phase Ordering
 
-Formalization of the
-[Habanero-Java](https://wiki.rice.edu/confluence/display/HABANERO/Habanero-Java)
-programming model.
-We focus primarily on the formalization of [safety](https://en.wikipedia.org/wiki/Type_safety)
-properties, such as deadlock freedom and race freedom.
-The overarching goal of the project is to provide theoretical framework,
-read a Coq library, for the verification of synchronization mechanisms.
+## Abstract
 
-# Publications page
-
-**[[PLACES'16] Formalization of Phase Ordering](https://github.com/cogumbreiro/hj-coq/wiki/PLACES%2716)**
+Phasers pose an interesting synchronization mechanism that generalizes many collective
+synchronization patterns seen in parallel programming languages, including barriers, clocks, and
+point-to-point synchronization using latches or semaphores. This work characterizes scheduling constraints
+on phaser operations, by relating the execution state of two tasks that operate on the same phaser.
+We propose a formalization of Habanero phasers, May-Happen-In-Parallel, and Happens-Before
+relations for phaser operations, and show that these relations conform with the semantics. Our
+formalization and proofs are fully mechanized using the Coq proof assistant, and are available online.
 
 
-# Overview
+# Resources
 
-We are currently working on:
-
-* deadlock-free subset of phaser operations
-* async-finish 
-
-# Using HJ-Coq
-
-We use [OPAM](https://opam.ocaml.org/) and [Coq Shell](https://github.com/coq/opam-coq-shell)
-for the development.
-
-This project depends on [Aniceto](https://bitbucket.org/cogumbreiro/aniceto-coq),
-so you need to install it first:
-```
-git clone https://bitbucket.org/cogumbreiro/aniceto-coq
-```
-
-To setup the requirements of this software do:
-```
-source configure.sh # to install dependencies and setup the environment
-```
-
-# Setting up CoqIDE in MacOS X
-
-To setup CoqIDE in MacOS you need to set the path of `coqtop` to be aware
-of your OPAM installation.
-
-Navigate to `CoqIDE -> Externals -> coqtop` and set the output of the
-following command:
-
-```
-which coqtop
-```
+* [Browse documentation](http://cogumbreiro.github.io/places16/coqdoc/toc.html)
+* [Download source-code (zip)](https://github.com/cogumbreiro/hj-coq/archive/places16.zip)
+* [Browse source-tree](https://github.com/cogumbreiro/hj-coq/tree/places16)
