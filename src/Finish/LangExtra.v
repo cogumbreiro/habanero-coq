@@ -163,18 +163,94 @@ Proof.
     inversion H0.
 Qed.
 
-(*
-Fixpoint disjoint (t:tid) (f:finish) : bool :=
-  match f with
-    | Node l =>
-      (fix disjoint_alt (l:list (tid*finish)) : bool :=
-       match l with
-       | (t',f) :: l =>
-         if TID.eq_dec t t then false
-         else andb (disjoint t f) (disjoint_alt l)
-       | nil => true
-       end
-     ) l 
-   | Running => true
-  end.
-*)
+
+Section Sem.
+  Require Import Finish.Lang.
+  Import Rel.Notations.
+
+  Lemma lt_remove_1:
+    forall x y t,
+    x < remove y t ->
+    x < y.
+  Proof.
+    intros.
+    unfold remove in *.
+    destruct y.
+    induction l; auto.
+    destruct a as (t', a).
+    simpl in *.
+    destruct (TID.eq_dec t t').
+    - auto using lt_cons.
+    - apply lt_inv_cons in H.
+      destruct H as [?|[(f',(?,?))|?]]; subst.
+      + auto using lt_eq.
+      + assert (f' < Node ((t', Blocked f') :: l))
+        by auto using lt_eq.
+        eauto using lt_trans.
+      + auto using lt_cons.
+  Qed.
+
+  Lemma lt_put_1:
+    forall x y t,
+    x < put y (t, Ready) ->
+    x < y.
+  Proof.
+    intros.
+    unfold put in *.
+    simpl in *.
+    apply lt_inv_cons_ready in H.
+    rewrite get_tasks_rw in *.
+    eauto using lt_remove_1.
+  Qed.
+
+  Lemma le_inv_put_ready:
+    forall x y t,
+    x <= put y (t, Ready) ->
+    x < y \/ x = put y (t, Ready).
+  Proof.
+    intros.
+    unfold put in *.
+    apply le_inv_cons_ready in H.
+    destruct H.
+    - simpl in *.
+      left.
+      rewrite get_tasks_rw in *.
+      eauto using lt_remove_1.
+    - simpl in *.
+      subst.
+      intuition.
+  Qed.
+
+  Lemma lt_inv_put_blocked:
+    forall x y z t,
+    x < put y (t, Blocked z) ->
+    x < y \/ x <= z.
+  Proof.
+    intros.
+    unfold put in *.
+    apply lt_inv_cons in H.
+    destruct H as [?|[(f',(?,?))|?]].
+    + inversion H; subst.
+      simpl in *; intuition.
+    + inversion H; subst.
+      assert (x <= f') by auto using lt_to_le.
+      intuition.
+    + simpl in *.
+      rewrite get_tasks_rw in *.
+      eauto using lt_remove_1.
+  Qed.
+
+  Lemma le_inv_put_blocked:
+    forall x y z t,
+    x <= put y (t, Blocked z) ->
+    x = put y (t, Blocked z) \/ x < y \/ x <= z.
+  Proof.
+    intros.
+    unfold put in *.
+    apply le_inv in H.
+    destruct H.
+    - eauto using lt_inv_put_blocked.
+    - intuition.
+  Qed.
+
+End Sem.
