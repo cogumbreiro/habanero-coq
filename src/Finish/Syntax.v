@@ -204,6 +204,19 @@ Proof.
   intuition.
 Qed.
 
+Lemma ina_to_registered:
+  forall t a l,
+  InA (Map_TID.eq_key (elt:=task)) (t,a) l ->
+  Registered t (Node l).
+Proof.
+  intros.
+  apply InA_alt in H.
+  destruct H as ((t', a'), (He, Hi)).
+  apply Map_TID_Extra.eq_key_unfold in He; auto.
+  subst.
+  eauto using registered_def, child_def.
+Qed.
+
 Lemma child_neq:
   forall p p' l,
   p <> p' ->
