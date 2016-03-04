@@ -78,7 +78,7 @@ Section Props.
     - inversion H0; eauto.
   Qed.
 
-  Lemma wf_tasks_put_nil_cons_ready:
+  Lemma wf_tasks_begin_finish:
     forall f t t',
     WFTasks f ->
     WFTasks (put f (t, Blocked (Node ((t', Ready) :: nil)))).
@@ -113,7 +113,7 @@ Section Props.
     induction H0; subst.
     - auto using wf_tasks_put_ready.
     - auto using wf_tasks_remove.
-    - auto using wf_tasks_put_nil_cons_ready.
+    - auto using wf_tasks_begin_finish.
     - auto using wf_tasks_put_ready.
     - apply wf_tasks_put_blocked; auto.
       eauto using lt_child, lt_to_le, wf_tasks_le.
@@ -416,35 +416,6 @@ Section Props.
   Proof.
     eauto using unique_ief_end_async, ief_fun_end_async.
   Qed.
-  
-(*
-  Variable wf_task_put_blocked:
-    forall x y t,
-    WFTasks x ->
-    WFTasks y ->
-    WFTasks (put x (t, Blocked y)).
-
-  Lemma wf_tasks_begin_finish:
-    forall t,
-    WFTasks (Node ((t, Ready) :: nil)).
-  Proof.
-    intros.
-    apply wf_tasks_def.
-    intros.
-    apply le_inv_cons_ready in H.
-    destruct H.
-    * apply lt_absurd_nil in H.
-      inversion H.
-    * subst.
-      apply is_map_def.
-      apply NoDupA_cons. {
-        unfold not.
-        intros.
-        inversion H.
-      }
-      apply NoDupA_nil.
-  Qed.
-*)
 
   Lemma unique_ief_begin_finish:
     forall t,
@@ -473,7 +444,7 @@ Section Props.
           subst.
           assert (Hx: ~ IEF t (put f (t, Blocked (Node ((t, Ready) :: nil))))). {
             eauto using ief_put_absurd_1,
-              wf_tasks_begin_finish, wf_task_put_blocked,
+              wf_tasks_begin_finish, 
               ief_ready, child_eq.
           }
           contradiction Hx; trivial.
@@ -542,7 +513,7 @@ Ltac resolve_log :=
     apply ief_fun_def.
     intros.
     assert (WFTasks (put f (t, Blocked (Node ((t, Ready) :: nil))))). {
-      eauto using wf_tasks_begin_finish, wf_task_put_blocked.
+      eauto using wf_tasks_begin_finish, wf_tasks_put_blocked.
     }
     apply le_inv_put_blocked in H0.
     apply le_inv_put_blocked in H2.
@@ -592,141 +563,4 @@ Ltac resolve_log :=
     - 
   Qed.
 
-(*
-  Let sr_ief_sub_red:
-    forall x t t' o y,
-    Disjoint f o ->
-    Child (t', Blocked x) f ->
-    Reduce x t o y ->
-    UniqueIEF y ->
-    WFTasks (put f (t', Blocked y)) ->
-    UniqueIEF (put f (t', Blocked y)).
-  Proof.
-    intros.
-    apply unique_child_def; intros f1 b f2; intros.
-    apply le_inv_put_blocked in H4.
-    destruct H4.
-    - subst.
-      apply ief_put in H5; eauto.
-      apply lt_inv_put_blocked in H6.
-      destruct H5, H6.
-      + subst.
-        
-        
-        destruct H6.
-        * 
-          assert 
-          Check (Hx).
-        assert (y <= put f (t', Blocked y)) by eauto using put_le.
-        Check (Hx y).
-      apply ief_put_ready in H4.
-    destruct H2 as (Hx).
-  Qed.
-    
-    
-
-  Let sr_ief_fun_begin_async:
-    forall t t' f',
-    Reduce f t (BEGIN_ASYNC t') f' ->
-    UniqueIEF f'.
-  Proof.
-    intros.
-    apply unique_child_def.
-    intros ? t1; intros.
-    inversion H; subst.
-    - apply le_inv_put_ready in H0.
-      destruct H0.
-      + assert (y < f) by eauto using lt_trans.
-        destruct WF3 as (Hx).
-        assert (Hy: x <= f) by eauto using lt_to_le.
-        eauto.
-      + subst.
-        apply lt_put_1 in H2.
-        destruct WF3 as (Hx).
-        apply ief_put_ready in H1; eauto.
-        destruct H1.
-        * subst.
-          assert (y <= f) by eauto using lt_to_le.
-          eauto using notin_le.
-        * eauto using le_refl.
-    - subst.
-      apply le_inv_put_blocked in H0.
-      destruct H0 as [?|[?|?]].
-      + subst.
-        destruct WF3 as (Hx).
-        Check (Hx (put f (t'0, Blocked f'')) t1).
-
-        apply lt_inv_put_blocked in H2.
-        destruct H2.
-        * destruct WF3 as (Hx).
-          Check (Hx (put f (t'0, Blocked f''))).
-          eauto using lt_to_le.
-      + subst.
-        apply lt_inv in H2.
-        destruct WF3 as (Hx).
-  Qed.
-
-  Variable WF1: IEFFun f.
-
-  Let sr_ief_fun_begin_async:
-    forall t t' f',
-    Reduce f t (BEGIN_ASYNC t') f' ->
-    IEFFun f'.
-  Proof.
-    intros.
-    inversion H.
-    - subst.
-      apply ief_fun_def.
-      intros x y t''; intros.
-      apply le_inv_put_ready in H0.
-      apply le_inv_put_ready in H4.
-      destruct H0, H4.
-      + assert (x <= f) by auto using lt_to_le.
-        assert (y <= f) by auto using lt_to_le.
-        destruct WF1; eauto.
-      + subst.
-        destruct (TID.eq_dec t'' t'). {
-          subst.
-          contradiction H2.
-          assert (In t' x) by eauto using ief_in.
-          eauto using in_lt.
-        }
-        apply ief_put_3 in H5; auto.
-        assert (X: t'' = t' \/ IEF t'' f). {
-          assert (WFTasks (put f (t', Ready))) by eauto using sr_wf_task.
-          apply ief_put_ready; auto.
-        }
-        destruct X.
-        * subst.
-          assert (x <= f) by auto using lt_to_le; clear H1.
-        eauto.
-        
-  Qed.
-
-  Lemma sr_ief_fun:
-    forall f t o f',
-    IEFFun f ->
-    Reduce f t o f' ->
-    IEFFun f'.
-  Proof.
-    intros.
-    inversion H0; subst.
-    - destruct H.
-      apply le_inv_cons_ready in H1.
-      apply le_inv_cons_ready in H3.
-      destruct H1, H3.
-      + 
-    apply 
-      eauto.
-    - destruct H; eauto.
-    - destruct (TID.eq_dec t t1). {
-        subst.
-        apply le_inv_put in H1.
-        apply le_inv_put in H3.
-        destruct H1, H3.
-        - destruct H; eauto.
-        - 
-      }
-      destruct H.
-      
-  Qed.
+End Props.
