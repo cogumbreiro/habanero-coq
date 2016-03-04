@@ -3,6 +3,8 @@ Require Import Coq.Lists.SetoidList.
 Require Import HJ.Vars.
 Require Import HJ.Finish.Lang.
 
+Section Defs.
+
 Inductive IsMap : finish -> Prop :=
   is_map_def:
     forall l,
@@ -13,6 +15,18 @@ Lemma is_map_nil:
   IsMap (Node nil).
 Proof.
   auto using NoDupA_nil, is_map_def.
+Qed.
+
+Lemma is_map_nil_cons:
+  forall t a,
+  IsMap (Node ((t, a) :: nil)).
+Proof.
+  intros.
+  apply is_map_def.
+  apply NoDupA_cons.
+  - intuition.
+    inversion H.
+  - auto using NoDupA_nil.
 Qed.
 
 Lemma is_map_inv_cons:
@@ -57,6 +71,112 @@ Proof.
     auto.
 Qed.
 
+  Lemma in_a_remove:
+    forall t a x,
+    ~ InA (Map_TID.eq_key (elt:=task)) (t, a) (get_tasks (remove x t)).
+  Proof.
+    intros.
+    intuition.
+    apply ina_to_registered in H.
+    rewrite get_tasks_rw in *.
+    apply remove_1 in H.
+    assumption.
+  Qed.
+
+  Let in_a_remove_child:
+    forall t t' a l,
+    InA (Map_TID.eq_key (elt:=task)) (t', a) (remove_child l t) ->
+    InA (Map_TID.eq_key (elt:=task)) (t', a) l.
+  Proof.
+    intros.
+    induction l; auto.
+    inversion H; clear H.
+    - destruct a0 as (t'', a').
+      destruct y as (ty, ay).
+      destruct (TID.eq_dec t t'').
+      + subst.
+        rewrite  <- H0 in *.
+        auto using InA_cons_hd.
+      + inversion H0; subst.
+        apply Map_TID_Extra.eq_key_unfold in H1; auto.
+    - destruct a0 as (t'', a').
+      destruct y as (ty, ay).
+      apply InA_cons_tl.
+      destruct (TID.eq_dec t t'').
+      + subst.
+        assert (InA (Map_TID.eq_key (elt:=task)) (t', a) (remove_child l t'')). {
+          assert (InA (Map_TID.eq_key (elt:=task)) (t', a) ((ty,ay)::l0)). {
+            eauto using InA_cons_tl.
+          }
+          rewrite <- H0.
+          assumption.
+        }
+        auto.
+      + inversion H0.
+        subst.
+        auto.
+  Qed.
+
+  Let no_dup_a_remove_child:
+    forall l t,
+    NoDupA (Map_TID.eq_key (elt:=task)) l ->
+    NoDupA (Map_TID.eq_key (elt:=task)) (remove_child l t).
+  Proof.
+    intros.
+    induction l; auto.
+    simpl.
+    destruct a as (t', a).
+    inversion H; subst.
+    destruct (TID.eq_dec t t').
+    - subst.
+      auto.
+    - apply NoDupA_cons; auto.
+      unfold not; intros.
+      contradiction H2.
+      eauto using in_a_remove_child.
+  Qed.
+
+  Lemma is_map_remove:
+    forall t f,
+    IsMap f ->
+    IsMap (remove f t).
+  Proof.
+    intros.
+    destruct f.
+    apply is_map_def; intros.
+    inversion H; subst.
+    auto.
+  Qed.
+
+  Lemma is_map_put:
+    forall t a x,
+    IsMap x ->
+    IsMap (put x (t, a)).
+  Proof.
+    intros.
+    apply is_map_def; intros.
+    apply NoDupA_cons.
+    - simpl.
+      auto using in_a_remove.
+    - apply is_map_remove with (t:=t) in H.
+      inversion H; subst; simpl.
+      rewrite <- H0.
+      simpl.
+      auto.
+  Qed.
+
+  Lemma reduces_preserves_is_map:
+    forall x t o y,
+    IsMap x ->
+    Reduce x t o y ->
+    IsMap y.
+  Proof.
+    intros.
+    inversion H0; subst; auto using is_map_put.
+    auto using is_map_remove.
+  Qed.
+End Defs.
+
 Import Syntax.Notations.
 Import FinishNotations.
 
@@ -92,6 +212,16 @@ Proof.
   assert (f <= f) by eauto using le_refl.
   assert (IsMap f) by (destruct H; eauto).
   eauto using child_fun.
+Qed.
+
+Lemma wf_tasks_to_is_map:
+  forall f,
+  WFTasks f ->
+  IsMap f.
+Proof.
+  intros.
+  inversion H.
+  eauto using le_refl.
 Qed.
 
 Inductive Valid: finish -> Prop :=
