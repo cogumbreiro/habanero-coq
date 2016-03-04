@@ -10,7 +10,7 @@ read a Coq library, for the verification of synchronization mechanisms.
 
 # Publications page
 
-**[[PLACES'16] Formalization of Phase Ordering](https://github.com/cogumbreiro/hj-coq/wiki/PLACES%2716)**
+[**Formalization of phase ordering. Tiago Cogumbreiro, Jun Shirako, and Vivek Sarkar. In Proceedings of PLACES'16, 2016. To appear.**](https://github.com/cogumbreiro/habanero-coq/blob/places16/README.md)
 
 
 # Overview
