@@ -111,6 +111,87 @@ Section IEF.
 
 End IEF.
 
+Section Sem.
+  Require Import Finish.LangExtra.
+  Import Rel.Notations.
+
+  Lemma ief_inv_cons_nil:
+    forall t t' a,
+    IEF t (Node ((t', a) :: nil)) ->
+    t' = t.
+  Proof.
+    intros.
+    inversion H.
+    - apply child_inv_cons_nil in H0.
+      inversion H0; trivial.
+    - apply child_inv_cons_nil in H0.
+      inversion H0; trivial.
+  Qed.
+
+  Lemma ief_put_3:
+    forall t f t' a,
+    IEF t (put f (t', a)) ->
+    t <> t' ->
+    IEF t f.
+  Proof.
+    intros.
+    inversion H.
+    - apply put_3 in H1; auto.
+      eauto using ief_ready.
+    - apply put_3 in H1; auto.
+      eauto using ief_blocked.
+  Qed.
+
+  Lemma ief_remove_3:
+    forall t f t',
+    IEF t (remove f t') ->
+    IEF t f.
+  Proof.
+    intros.
+    inversion H.
+    - apply remove_3 in H0.
+      auto using ief_ready.
+    - apply remove_3 in H0; auto.
+      eauto using ief_blocked.
+  Qed.
+
+  Require Import HJ.Finish.Typesystem.
+
+  Lemma ief_inv_registered:
+    forall t f,
+    IEF t f ->
+    Registered t f.
+  Proof.
+    intros.
+    inversion H;
+    eauto using registered_def.
+  Qed.
+
+  Lemma ief_put_absurd_1:
+   forall t x y,
+     WFTasks (put y (t, Blocked x)) ->
+     IEF t x ->
+     ~ IEF t (put y (t, Blocked x)).
+  Proof.
+    intros.
+    assert (Hc: Child (t, Blocked x) (put y (t, Blocked x))). {
+      eauto using child_eq.
+    }
+    assert (Hlt: x < put y (t, Blocked x)). {
+      eauto using lt_child.
+    }
+    unfold not; intros.
+    inversion H1.
+    - assert (Ha : Ready = Blocked x) by eauto using wf_tasks_child_fun.
+      inversion Ha.
+    - assert (Ha : Blocked x0 = Blocked x) by eauto using wf_tasks_child_fun.
+      inversion Ha; subst; clear Ha.
+      contradiction H3.
+      eauto using ief_inv_registered.
+  Qed.
+
+End Sem.
+
 Section LeToFid.
   Set Arguments Implicit.
   Require Finish.Find.
@@ -149,3 +230,6 @@ Section LeToFid.
       eauto using le_trans.
   Qed.
 End LeToFid.
+
+
+
