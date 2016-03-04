@@ -320,6 +320,20 @@ Proof.
   - assumption.
 Qed.
 
+  Lemma le_inv_node_ready:
+    forall t y,
+    y <= Node ((t, Ready) :: nil) ->
+    y = Node ((t, Ready) :: nil).
+  Proof.
+    intros.
+    apply le_inv_cons_ready in H.
+    destruct H.
+    * apply lt_absurd_nil in H.
+      inversion H.
+    * subst.
+      trivial.
+  Qed.
+
 Lemma sub_cons:
   forall f l p,
   Sub f (Node l) ->
