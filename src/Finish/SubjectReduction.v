@@ -543,6 +543,55 @@ Ltac resolve_log :=
   Variable ief_fun_le:
     forall x y, IEFFun y -> x <= y -> IEFFun x.
 
+  Variable registered_dec:
+    forall t f,
+    { Registered t f } + {~ Registered t f}.
+
+  Lemma registered_to_ief:
+    forall x t,
+    Registered t x ->
+    IEF t x \/ exists y, y < x /\ IEF t y.
+  Proof.
+    intros.
+    induction x using finish_ind_strong.
+    - apply registered_absurd_nil in H.
+      inversion H.
+    - apply registered_inv_cons in H.
+      destruct H.
+      rewrite <- H in *; clear H.
+      + eauto using ief_ready, child_eq.
+      + apply IHx in H; clear IHx.
+        destruct H.
+        * eauto using ief_cons.
+        * destruct H as (y, (Hl, Hi)).
+          right.
+          exists y.
+          assert (y < Node ((t0, Ready) :: l)) by eauto using lt_cons.
+          intuition.
+    - apply registered_inv_cons in H.
+      destruct H.
+      + rewrite <- H in *; clear H.
+        destruct (registered_dec t x). {
+          apply IHx in r; clear IHx.
+          destruct r as [?| (y, (?,?))].
+          - right.
+            exists x.
+            eauto using lt_eq.
+          - right.
+            exists y.
+            eauto using lt_trans, lt_eq.
+        }
+        eauto using ief_blocked, child_eq.
+      + apply IHx0 in H; clear IHx0 IHx.
+        destruct H.
+        * eauto using ief_cons.
+        * destruct H as (y, (Hi,He)).
+          right.
+          exists y.
+          split; auto.
+          auto using lt_cons.
+  Qed.
+
   Lemma sr_unique_ief:
     forall t o f',
     Reduce f t o f' ->
@@ -560,7 +609,20 @@ Ltac resolve_log :=
     assert (X: UniqueIEF f'' /\ IEFFun f'') by eauto.
     destruct X as (X, Y).
     split.
-    - 
+    - apply unique_child_def; intros z t'' ? ? ? ?.
+      apply le_inv_put_blocked in H6.
+      destruct H6 as [?|[?|?]].
+      + subst.
+        apply ief_put in H7.
+        destruct H7 as [?|(?,?)].
+        * subst.
+        apply lt_inv_put_blocked in H8.
+        destruct H8. {
+          apply child_to_ief in H0.
+          destruct H0 as [?|[?|?]].
+          - inversion WF3; eauto using le_refl.
+          - 
+        }
   Qed.
 
 End Props.
