@@ -71,6 +71,35 @@ Proof.
     auto.
 Qed.
 
+
+  Lemma is_map_inv_cons_alt:
+    forall t t' a a' l,
+    IsMap (Node ((t', a') :: l)) ->
+    Child (t, a) (Node ((t', a') :: l)) ->
+    (t' = t /\ a' = a /\ ~ Registered t (Node l)) \/ (t <> t' /\ ~ Registered t' (Node l) /\ Child (t, a) (Node l)).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    inversion H2; clear H2; subst.
+    destruct H0.
+    simpl in *.
+    destruct H.
+    - left.
+      inversion H; subst.
+      try (repeat split; auto).
+      eauto using not_in_a_to_not_registered.
+    - right.
+      destruct (TID.eq_dec t t').
+      + subst.
+        contradiction H3.
+        rewrite InA_alt.
+        exists (t', a).
+        split; auto.
+        apply Map_TID_Extra.eq_key_unfold; auto.
+      + split; auto.
+        split; eauto using child_def, not_in_a_to_not_registered.
+  Qed.
+
   Lemma in_a_remove:
     forall t a x,
     ~ InA (Map_TID.eq_key (elt:=task)) (t, a) (get_tasks (remove x t)).
