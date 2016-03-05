@@ -31,6 +31,15 @@ Section IEF.
       (forall x t y, x <= f -> IEF t x -> y < x -> ~ In t y) ->
       UniqueIEF f.
 
+  Lemma ief_cons:
+    forall t t' a l,
+    IEF t (Node l) ->
+    IEF t (Node ((t', a) :: l)).
+  Proof.
+    intros.
+    inversion H; eauto using ief_ready, ief_blocked, child_cons.
+  Qed.
+
   Lemma ief_in:
     forall t f,
     IEF t f ->
