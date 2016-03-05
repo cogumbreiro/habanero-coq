@@ -188,10 +188,10 @@ Proof.
   - eauto using registered_def.
 Qed.
 
-Lemma ina_eq_key_subst:
+Lemma ina_eq_key_subst {T}:
   forall t f f' l, 
-  InA (Map_TID.eq_key (elt:=finish)) (t, f) l ->
-  InA (Map_TID.eq_key (elt:=finish)) (t, f') l.
+  InA (Map_TID.eq_key (elt:=T)) (t, f) l ->
+  InA (Map_TID.eq_key (elt:=T)) (t, f') l.
 Proof.
   intros.
   apply InA_alt.
@@ -216,6 +216,19 @@ Proof.
   subst.
   eauto using registered_def, child_def.
 Qed.
+
+  Lemma not_in_a_to_not_registered:
+    forall t a l,
+    ~ InA (Map_TID.eq_key (elt:=task)) (t, a) l ->
+    ~ Registered t (Node l).
+  Proof.
+    intros.
+    unfold not; intros.
+    inversion H0.
+    apply child_to_ina in H1.
+    contradiction H.
+    eauto using ina_eq_key_subst.
+  Qed.
 
 Lemma child_neq:
   forall p p' l,
