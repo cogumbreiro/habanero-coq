@@ -230,6 +230,7 @@ Qed.
     eauto using ina_eq_key_subst.
   Qed.
 
+
 Lemma child_neq:
   forall p p' l,
   p <> p' ->
@@ -259,6 +260,226 @@ Proof.
   - contradiction H; assumption.
   - assumption.
 Qed.
+
+Let eq_key_dec:
+  forall x y,
+  { Map_TID.eq_key (elt:=task) x y } + { ~ Map_TID.eq_key (elt:=task) x y}.
+Proof.
+  intros.
+  destruct (TID.eq_dec (fst x) (fst y)). {
+    left.
+    destruct x, y.
+    simpl in *; subst.
+    apply Map_TID_Extra.eq_key_unfold.
+    trivial.
+  }
+  destruct x as (x1,x2).
+  destruct y as (y1,y2).
+  simpl in *.
+  right.
+  intuition.
+Qed.
+
+Lemma registered_dec:
+  forall t f,
+  { Registered t f } + {~ Registered t f}.
+Proof.
+  intros.
+  destruct (InA_dec eq_key_dec (t,Ready) (get_tasks f)).
+  - apply InA_alt in i.
+    left.
+    destruct i as ((k,v), (?,?)).
+    apply Map_TID_Extra.eq_key_unfold in H.
+    subst.
+    eauto using registered_def, child_def.
+  - right.
+    apply not_in_a_to_not_registered in n.
+    rewrite get_tasks_rw in *.
+    trivial.
+Qed.
+
+Section FINDA.
+  Variable A B : Type.
+(*
+  Variable eqA : A -> A -> Prop.
+  Hypothesis eqA_equiv : Equivalence eqA.
+  Hypothesis eqA_dec : forall x y : A, {eqA x y}+{~(eqA x y)}.
+*)
+(*
+  Variable f: A -> A -> bool.
+  Hypothesis f_spec:
+    forall x y,
+    f x y = true ->
+    eqA x y.
+*)
+  Lemma find_a_some:
+    forall (f:A->bool) l e,
+    @findA A B f l = Some e ->
+    exists k, f k = true /\ List.In (k, e) l.
+  Proof.
+    intros.
+    induction l.
+    - inversion H.
+    - simpl in *.
+      destruct a as (x,y).
+      remember (f x).
+      symmetry in Heqb.
+      destruct b.
+      + inversion H.
+        subst.
+        exists x.
+        intuition.
+      + apply IHl in H; clear IHl.
+        destruct H as  (k, (He, Hi)).
+        exists k.
+        intuition.
+  Qed.
+
+  Lemma find_a_none:
+    forall (f:A->bool) l e,
+    @findA A B f l = None ->
+    forall k,
+    List.In (k, e) l ->
+    f k = false.
+  Proof.
+    intros.
+    induction l. {
+      inversion H0.
+    }
+    inversion H0.
+    - subst.
+      simpl in *.
+      remember (f k).
+      destruct b; auto.
+      inversion H.
+    - destruct a as (k', e').
+      simpl in H.
+      remember (f k').
+      destruct b. {
+       inversion H.
+      }
+      eauto.
+  Qed.
+
+End FINDA.
+
+Require Import Aniceto.EqDec.
+
+  Let tid_eqb x y := if TID.eq_dec x y then true else false.
+
+  Let tid_eqb_true:
+    forall t t',
+    tid_eqb t t' = true ->
+    t = t'.
+  Proof.
+    intros.
+    unfold tid_eqb in *.
+    destruct TID.eq_dec; auto.
+    inversion H.
+  Qed.
+
+  Let tid_eqb_false:
+    forall t t',
+    tid_eqb t t' = false ->
+    t <> t'.
+  Proof.
+    intros.
+    unfold tid_eqb in *.
+    destruct TID.eq_dec; auto.
+    inversion H.
+  Qed.
+
+  Require Import Coq.Lists.SetoidList.
+
+  Definition lookup t f : option task :=
+    match f with
+    Node l =>
+      match findA (tid_eqb t) l with
+      | Some a => Some a
+      | None => None
+      end
+    end.
+
+  Lemma lookup_to_child:
+    forall t f a,
+    lookup t f = Some a ->
+    Child (t,a) f.
+  Proof.
+    intros.
+    destruct f.
+    simpl in *.
+    remember (findA _ _).
+    symmetry in Heqo.
+    destruct o.
+    - inversion H.
+      subst.
+      apply find_a_some in Heqo.
+      destruct Heqo as (t', (Hf, Hin)).
+      apply tid_eqb_true in Hf.
+      subst.
+      auto using child_def.
+    - inversion H.
+  Qed.
+
+  Lemma registered_to_lookup:
+    forall t f,
+    Registered t f ->
+    exists a, lookup t f = Some a.
+  Proof.
+    intros.
+    remember (lookup t f).
+    destruct o; eauto.
+    destruct f.
+    simpl in *.
+    remember (findA _ _).
+    destruct o; eauto.
+    symmetry in Heqo0.
+    inversion H.
+    apply find_a_none with (k:=t) (e:=a) in Heqo0.
+    - apply tid_eqb_false in Heqo0.
+      contradiction Heqo0.
+      trivial.
+    - inversion H0.
+      auto.
+  Qed.
+
+  Lemma lookup_none_to_not_registered:
+    forall t f,
+    lookup t f = None ->
+    ~ Registered t f.
+  Proof.
+    unfold not; intros.
+    inversion H0.
+    apply registered_to_lookup in H0.
+    destruct H0 as (a', Hl).
+    rewrite H in Hl.
+    inversion Hl.
+  Qed.
+
+  Definition ChildOf t f := { a : task | Child (t,a) f }.
+
+  Definition Unregistered t f := { _:unit | ~ Registered t f }.
+
+  (** Dependently-typed lookup *)
+
+  Definition lookup_ex:
+    forall t f,
+    (ChildOf t f) + (Unregistered t f).
+  Proof.
+    intros.
+    remember (lookup t f).
+    symmetry in Heqo.
+    destruct o as [a|].
+    - apply lookup_to_child in Heqo.
+      left.
+      apply exist with (x:=a); auto.
+    - right.
+      apply lookup_none_to_not_registered in Heqo.
+      unfold Unregistered.
+      eapply exist.
+      refine tt.
+      auto.
+  Defined.
 
 Inductive Sub (f:finish) (f':finish) : Prop :=
   sub_def:
