@@ -171,7 +171,7 @@ Proof.
   intros.
   apply Map_TID_Extra.in_to_mapsto in H1.
   destruct H1 as (v, mt).
-  destruct (wait_cap_so_dec (mode v)).
+  destruct (can_wait_so_dec (mode v)).
   - 
     apply sync_wait with (v:=v); auto.
     apply await_def.
@@ -192,7 +192,7 @@ Proof.
       }
       contradiction.
     + intuition.
-    + apply so_to_not_wait_cap in H3; contradiction.
+    + apply so_to_not_can_wait in H3; contradiction.
     + intros.
       intuition. 
   - eauto using sync_so.
@@ -229,10 +229,10 @@ Proof.
     inversion H2.
     eauto.
   }
-  destruct (wait_cap_so_dec (mode v)). {
+  destruct (can_wait_so_dec (mode v)). {
     apply try_wait_pre_can_wait.
     apply wait_pre with (v:=v); eauto using smallest_to_sync.
-    inversion w;
+    inversion c;
     symmetry in H2.
     - apply Taskview.wait_pre_sw; auto.
       apply Taskview.tv_wellformed_inv_sw in H2; auto.

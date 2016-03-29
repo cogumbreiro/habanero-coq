@@ -224,7 +224,7 @@ Section Facts.
             }
             {
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-              destruct (Regmode.signal_cap_wo_dec (mode v1)). {
+              destruct (Regmode.can_signal_wo_dec (mode v1)). {
                 apply tv_nhb_ge.
                 assert (signal_phase v1 >= S (wait_phase v)) by (inversion H12; eauto).
                 rewrite wait_wait_phase.

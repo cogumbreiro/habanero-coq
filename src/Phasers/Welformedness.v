@@ -160,7 +160,7 @@ Module Taskview.
     intuition.
   Qed.
 
-  Lemma reduces_wait_inv_wait_cap:
+  Lemma reduces_wait_inv_can_wait:
     forall v v',
     WellFormed v ->
     mode v = SIGNAL_WAIT ->

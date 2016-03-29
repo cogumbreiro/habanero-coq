@@ -34,18 +34,18 @@ End Notations.
   Two important notions used throught the formalization are wait-/signal-capabilities.
 *)
 
-Inductive WaitCap : regmode -> Prop :=
-  | wait_cap_sw:
-    WaitCap SIGNAL_WAIT
-  | wait_cap_wo:
-    WaitCap WAIT_ONLY.
+Inductive CanWait : regmode -> Prop :=
+  | can_wait_sw:
+    CanWait SIGNAL_WAIT
+  | can_wait_wo:
+    CanWait WAIT_ONLY.
 
-Hint Constructors WaitCap.
+Hint Constructors CanWait.
 
 Inductive SignalCap : regmode -> Prop :=
-  | signal_cap_sw:
+  | can_signal_sw:
     SignalCap SIGNAL_WAIT
-  | signal_cap_so:
+  | can_signal_so:
     SignalCap SIGNAL_ONLY.
 
 Hint Constructors SignalCap.
@@ -69,28 +69,28 @@ Section Facts.
 
   (** Checking for the wait capability is a decidable property. *)
 
-  Lemma wait_cap_dec:
+  Lemma can_wait_dec:
     forall r,
-    { WaitCap r } + { ~ WaitCap r }.
+    { CanWait r } + { ~ CanWait r }.
   Proof.
     intros.
     destruct r; auto.
     right; intuition; inversion H.
   Qed.
 
-  Lemma neq_so_to_wait_cap:
+  Lemma neq_so_to_can_wait:
     forall r,
     r <> SIGNAL_ONLY ->
-    WaitCap r.
+    CanWait r.
   Proof.
     intros.
     destruct r; auto.
     contradiction H; trivial.
   Qed.
 
-  Lemma wait_cap_to_neq_so:
+  Lemma can_wait_to_neq_so:
     forall r,
-    WaitCap r ->
+    CanWait r ->
     r <> SIGNAL_ONLY.
   Proof.
     intros.
@@ -100,17 +100,17 @@ Section Facts.
       inversion H0.
   Qed.
 
-  Lemma wait_cap_rw:
+  Lemma can_wait_rw:
     forall r,
-    WaitCap r <-> r <> SIGNAL_ONLY.
+    CanWait r <-> r <> SIGNAL_ONLY.
   Proof.
     intros.
-    split; auto using wait_cap_to_neq_so, neq_so_to_wait_cap.
+    split; auto using can_wait_to_neq_so, neq_so_to_can_wait.
   Qed.
 
-  Lemma not_wait_cap_to_so:
+  Lemma not_can_wait_to_so:
     forall r,
-    ~ WaitCap r ->
+    ~ CanWait r ->
     r = SIGNAL_ONLY.
   Proof.
     intros.
@@ -120,10 +120,10 @@ Section Facts.
     auto.
   Qed.
 
-  Lemma so_to_not_wait_cap:
+  Lemma so_to_not_can_wait:
     forall r,
     r = SIGNAL_ONLY ->
-    ~ WaitCap r.
+    ~ CanWait r.
   Proof.
     intros.
     intuition.
@@ -132,16 +132,16 @@ Section Facts.
     inversion H.
   Qed.
 
-  Lemma wait_cap_so_dec:
+  Lemma can_wait_so_dec:
     forall r,
-    { WaitCap r } + { r = SIGNAL_ONLY }.
+    { CanWait r } + { r = SIGNAL_ONLY }.
   Proof.
     intros.
-    destruct (wait_cap_dec r);
-    auto using not_wait_cap_to_so.
+    destruct (can_wait_dec r);
+    auto using not_can_wait_to_so.
   Qed.
 
-  Lemma signal_cap_dec:
+  Lemma can_signal_dec:
     forall r,
     { SignalCap r } + { ~ SignalCap r }.
   Proof.
@@ -150,7 +150,7 @@ Section Facts.
     right; intuition; inversion H.
   Qed.
 
-  Lemma neq_wo_to_signal_cap:
+  Lemma neq_wo_to_can_signal:
     forall r,
     r <> WAIT_ONLY ->
     SignalCap r.
@@ -158,7 +158,7 @@ Section Facts.
     destruct r; intuition.
   Qed.
 
-  Lemma signal_cap_to_neq_wo:
+  Lemma can_signal_to_neq_wo:
     forall r,
     SignalCap r ->
     r <> WAIT_ONLY.
@@ -170,15 +170,15 @@ Section Facts.
       inversion H0.
   Qed.
 
-  Lemma signal_cap_rw:
+  Lemma can_signal_rw:
     forall r,
     SignalCap r <-> r <> WAIT_ONLY.
   Proof.
     intros.
-    split; auto using signal_cap_to_neq_wo, neq_wo_to_signal_cap.
+    split; auto using can_signal_to_neq_wo, neq_wo_to_can_signal.
   Qed.
 
-  Lemma not_signal_cap_to_wo:
+  Lemma not_can_signal_to_wo:
     forall r,
     ~ SignalCap r ->
     r = WAIT_ONLY.
@@ -190,19 +190,19 @@ Section Facts.
     auto.
   Qed.
 
-  Lemma signal_cap_wo_dec:
+  Lemma can_signal_wo_dec:
     forall r,
     { SignalCap r } + { r = WAIT_ONLY }.
   Proof.
     intros.
-    destruct (signal_cap_dec r);
-    auto using not_signal_cap_to_wo.
+    destruct (can_signal_dec r);
+    auto using not_can_signal_to_wo.
   Qed.
 
-  Lemma signal_cap_and_wait_cap_to_sw:
+  Lemma can_signal_and_can_wait_to_sw:
     forall r,
     SignalCap r ->
-    WaitCap r ->
+    CanWait r ->
     r = SIGNAL_WAIT.
   Proof.
     intros.
@@ -210,9 +210,9 @@ Section Facts.
     inversion H0.
   Qed.
 
-  Lemma signal_cap_wait_cap_to_sw:
+  Lemma can_signal_can_wait_to_sw:
     forall r,
-    WaitCap r ->
+    CanWait r ->
     SignalCap r ->
     r = SIGNAL_WAIT.
   Proof.

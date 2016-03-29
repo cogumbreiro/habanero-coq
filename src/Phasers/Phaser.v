@@ -119,7 +119,7 @@ Section Defs.
     | sync_wait:
       forall ph t v,
       MapsTo t v ph ->
-      WaitCap (mode v) ->
+      CanWait (mode v) ->
       Await ph (S (wait_phase v)) ->
       Sync ph t.
 

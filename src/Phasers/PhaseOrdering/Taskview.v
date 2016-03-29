@@ -20,7 +20,7 @@ Section Defs.
     tv_hb_def:
       signal_phase v1 < wait_phase v2 ->
       SignalCap (mode v1) ->
-      WaitCap (mode v2) ->
+      CanWait (mode v2) ->
       HappensBefore v1 v2.
 
   (** The negation of [HappensBefore] is [Facilitates]. *)
@@ -89,8 +89,8 @@ Section Facts.
     { v1 < v2 } + { ~ v1 < v2 }.
   Proof.
     intros.
-    destruct (wait_cap_dec (mode v2)). {
-      destruct (signal_cap_dec (mode v1)). {
+    destruct (can_wait_dec (mode v2)). {
+      destruct (can_signal_dec (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           left; auto using tv_hb_def.
         }
@@ -134,7 +134,7 @@ Section Facts.
     { auto using tv_nhb_wo. }
     assert (HappensBefore v1 v2). {
       assert (signal_phase v1 < wait_phase v2) % nat by intuition.
-      auto using tv_hb_def, neq_wo_to_signal_cap, neq_so_to_wait_cap.
+      auto using tv_hb_def, neq_wo_to_can_signal, neq_so_to_can_wait.
     }
     contradiction.
   Qed.
@@ -151,8 +151,8 @@ Section Facts.
     ~ v1 >= v2 -> v1 < v2.
   Proof.
     intros.
-    destruct (wait_cap_dec (mode v2)). {
-      destruct (signal_cap_dec (mode v1)). {
+    destruct (can_wait_dec (mode v2)). {
+      destruct (can_signal_dec (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           auto using tv_hb_def.
         }
@@ -163,11 +163,11 @@ Section Facts.
         contradiction.
       }
       assert (Facilitates v1 v2) by
-        auto using tv_nhb_wo, not_signal_cap_to_wo.
+        auto using tv_nhb_wo, not_can_signal_to_wo.
       contradiction.
     }
     assert (Facilitates v1 v2) by
-      auto using tv_nhb_so, not_wait_cap_to_so.
+      auto using tv_nhb_so, not_can_wait_to_so.
     contradiction.
   Qed.
 
@@ -242,7 +242,7 @@ Section Facts.
   Proof.
     intros.
     inversion G1; subst; clear G1.
-    - destruct (signal_cap_wo_dec (mode v1)). {
+    - destruct (can_signal_wo_dec (mode v1)). {
         apply tv_nhb_ge.
         simpl.
         apply L1 in s; clear L1.
@@ -323,16 +323,16 @@ Section Facts.
         inversion H3.
       }
       intuition.
-    - assert (WaitCap (mode x)). {
+    - assert (CanWait (mode x)). {
         rewrite H4.
-        auto using wait_cap_sw.
+        auto using can_wait_sw.
       }
       assert (o' = SIGNAL) by eauto using reduces_wait_inv_sw; subst.
-      assert (R: signal_phase y = wait_phase y) by eauto using reduces_wait_inv_wait_cap.
+      assert (R: signal_phase y = wait_phase y) by eauto using reduces_wait_inv_can_wait.
       inversion H2; subst.
       inversion H3; subst.
       rewrite wait_preserves_signal_phase in *.
-      rewrite signal_wait_cap_signal_phase in *; auto.
+      rewrite signal_can_wait_signal_phase in *; auto.
       rewrite wait_wait_phase in *.
       intuition.
   Qed.
@@ -409,7 +409,7 @@ Section Facts.
     inversion H0.
     inversion H1.
     apply tv_hb_def; auto.
-    assert (mode y = SIGNAL_WAIT) by eauto using signal_cap_wait_cap_to_sw.
+    assert (mode y = SIGNAL_WAIT) by eauto using can_signal_can_wait_to_sw.
     assert (wait_phase y <= signal_phase y)%nat. {
       apply tv_wellformed_inv_sw in H8; auto.
       destruct H8; intuition.
@@ -497,11 +497,11 @@ Section Facts.
       simpl in *.
       intuition.
     - rewrite H1.
-      apply signal_cap_sw.
+      apply can_signal_sw.
     - rewrite wait_preserves_mode.
       rewrite signal_preserves_mode.
       rewrite H1.
-      apply wait_cap_sw.
+      apply can_wait_sw.
   Qed.
 End Facts.
 

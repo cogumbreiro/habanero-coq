@@ -291,7 +291,7 @@ Section Facts.
   Proof.
     intros.
     unfold wait.
-    destruct (signal_cap_wo_dec (mode v)).
+    destruct (can_signal_wo_dec (mode v)).
     - destruct (mode v);
       inversion s;
       rewrite wait_phase_set_wait_phase;
@@ -300,7 +300,7 @@ Section Facts.
       trivial.
   Qed.
 
-  Lemma signal_wait_cap_signal_phase:
+  Lemma signal_can_wait_signal_phase:
     forall v,
     SignalPre v ->
     mode v = SIGNAL_WAIT ->
