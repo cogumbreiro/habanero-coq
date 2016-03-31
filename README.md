@@ -15,5 +15,5 @@ formalization and proofs are fully mechanized using the Coq proof assistant, and
 
 * [Paper pre-print](https://github.com/cogumbreiro/habanero-coq/raw/places16/preprint.pdf)
 * [Browse documentation](http://cogumbreiro.github.io/places16/coqdoc/toc.html)
-* [Download source-code (zip)](https://github.com/cogumbreiro/hj-coq/archive/places16.zip)
-* [Browse source-tree](https://github.com/cogumbreiro/hj-coq/tree/places16)
+* [Download source-code (zip)](https://github.com/cogumbreiro/habanero-coq/archive/places16.zip)
+* [Browse source-tree](https://github.com/cogumbreiro/habanero-coq/tree/places16)
