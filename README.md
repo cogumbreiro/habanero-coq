@@ -1,7 +1,7 @@
-# Coq Formalization of Habanero-Java
+# Coq Formalization of the Habanero programming model
 
 Formalization of the
-[Habanero-Java](https://wiki.rice.edu/confluence/display/HABANERO/Habanero-Java)
+[Habanero programming model](https://wiki.rice.edu/confluence/display/HABANERO/Habanero-Java)
 programming model.
 We focus primarily on the formalization of [safety](https://en.wikipedia.org/wiki/Type_safety)
 properties, such as deadlock freedom and race freedom.
@@ -20,7 +20,7 @@ We are currently working on:
 * deadlock-free subset of phaser operations
 * async-finish 
 
-# Using HJ-Coq
+# Using Habanero-Coq
 
 We use [OPAM](https://opam.ocaml.org/) and [Coq Shell](https://github.com/coq/opam-coq-shell)
 for the development.
