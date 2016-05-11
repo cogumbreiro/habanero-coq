@@ -691,7 +691,7 @@ Section Facts.
         rewrite <- clos_rt_rtn1_iff in H2.
         eauto using ph_s_reduces_trans_refl_welformed.
       }
-      apply ph_s_reduces_preserves_ge_left with (y); auto.
+      eauto using ph_s_reduces_preserves_ge_left.
   Qed.
 
   (* 
