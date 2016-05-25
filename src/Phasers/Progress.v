@@ -174,7 +174,7 @@ Proof.
   destruct (can_wait_so_dec (mode v)).
   - 
     apply sync_wait with (v:=v); auto.
-    apply await_def.
+    apply phase_def.
     intros t' v' Hmt'; intros.
     (* show that: n <= WP(v') *)
     assert (Hle : wait_phase v <= wait_phase v')

@@ -83,20 +83,19 @@ Section Defs.
   (** * Wait *)
 
   (**
-    Predicate [Await] holds when all tasks registered in phaser [ph] 
-    with a signal capability have a signal phase of at least [n].
-    By only awaiting tasks with a signal capability, predicate [Await]
-    _disregards_ any task registered with a [WAIT_ONLY] mode, regardless
-    of its signal phase.
+    Predicate [Phase ph n] holds when phase [n] is visible in phaser [ph].
+    This means that all signalers have signaled at least [n] times.
+    Predicate [Phase] _disregards_ any task registered with a [WAIT_ONLY] mode,
+    regardless of its signal phase.
    *)
 
-  Inductive Await ph n : Prop :=
-    await_def:
+  Inductive Phase ph n : Prop :=
+    phase_def:
       (forall t v,
         MapsTo t v ph ->
         SignalCap (mode v) ->
         signal_phase v >= n) ->
-      Await ph n.
+      Phase ph n.
 
   (**
     Predicate [Sync] defines what happens when a
@@ -120,7 +119,7 @@ Section Defs.
       forall ph t v,
       MapsTo t v ph ->
       CanWait (mode v) ->
-      Await ph (S (wait_phase v)) ->
+      Phase ph (S (wait_phase v)) ->
       Sync ph t.
 
   (**
