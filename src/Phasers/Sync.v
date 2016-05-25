@@ -5,6 +5,8 @@ Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Taskview.
 Require Import HJ.Phasers.Phaser.
 
+(** Show that [Await ph n] is a stable property. *)
+
 Section ReducesPreservesAwait.
   Import Welformedness.Taskview.
   Import Welformedness.Phaser.
@@ -13,7 +15,7 @@ Section ReducesPreservesAwait.
   Variable wf: WellFormed ph.
   Variable W: Await ph n.
 
-  Lemma ph_signal_preserves_await:
+  Let ph_signal_preserves_await:
     forall t,
     SignalPre t ph ->
     Await (signal t ph) n.
@@ -37,7 +39,7 @@ Section ReducesPreservesAwait.
       inversion W; eauto.
   Qed.
 
-  Lemma ph_wait_preserves_await:
+  Let ph_wait_preserves_await:
     forall t,
     WaitPre t ph ->
     Await (wait t ph) n.
@@ -58,7 +60,7 @@ Section ReducesPreservesAwait.
       inversion W; eauto.
   Qed.
 
-  Lemma ph_drop_preserves_await:
+  Let ph_drop_preserves_await:
     forall t,
     DropPre t ph ->
     Await (drop t ph) n.
@@ -71,7 +73,7 @@ Section ReducesPreservesAwait.
     inversion W; eauto.
   Qed.
 
-  Lemma ph_register_preserves_await:
+  Let ph_register_preserves_await:
     forall r t,
     RegisterPre r t ph ->
     Await (register r t ph) n.
@@ -100,9 +102,8 @@ Section ReducesPreservesAwait.
       * subst.
         auto using can_signal_sw.
   Qed.
-    
 
-  Lemma ph_reduces_preserves_await:
+  Theorem ph_reduces_preserves_await:
     forall ph' t o,
     Reduces ph t o ph' ->
     Await ph' n.
@@ -114,9 +115,9 @@ Section ReducesPreservesAwait.
     - auto using ph_drop_preserves_await.
     - auto using ph_register_preserves_await.
   Qed.
-  End ReducesPreservesAwait.
+End ReducesPreservesAwait.
 
-  Section PhReducesAwaitEnabled.
+Section PhReducesAwaitEnabled.
     Import Welformedness.Phaser.
     Variable ph1 ph2 ph1': phaser.
     Variable wf1: WellFormed ph1.
@@ -151,7 +152,7 @@ Section ReducesPreservesAwait.
     - assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
       eauto using sync_wait, ph_reduces_preserves_await.
   Qed.
-  End PhReducesAwaitEnabled.
+End PhReducesAwaitEnabled.
 
 (*
   Section PhReducesEnabled.
