@@ -1,6 +1,6 @@
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Phaser.
-Require Import HJ.Phasers.Welformedness.
+Require Import HJ.Phasers.WellFormed.
 Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Taskview.
 Require Import HJ.Phasers.Phaser.
@@ -8,8 +8,8 @@ Require Import HJ.Phasers.Phaser.
 (** Show that [Await ph n] is a stable property. *)
 
 Section ReducesPreservesAwait.
-  Import Welformedness.Taskview.
-  Import Welformedness.Phaser.
+  Import WellFormed.Taskview.
+  Import WellFormed.Phaser.
   Variable ph: phaser.
   Variable n: nat.
   Variable wf: WellFormed ph.
@@ -118,7 +118,7 @@ Section ReducesPreservesAwait.
 End ReducesPreservesAwait.
 
 Section PhReducesAwaitEnabled.
-    Import Welformedness.Phaser.
+    Import WellFormed.Phaser.
     Variable ph1 ph2 ph1': phaser.
     Variable wf1: WellFormed ph1.
     Variable t t': tid.

@@ -155,7 +155,7 @@ Definition AllSignalled : Prop  :=
 
 Variable AS : AllSignalled.
 
-Require Import HJ.Phasers.Welformedness.
+Require Import HJ.Phasers.WellFormed.
 
 Import Phasermap.
 
@@ -290,7 +290,7 @@ Variable reqs_spec_3:
   Map_TID.MapsTo t i reqs ->
   Check pm t i.
 
-Require Import HJ.Phasers.Welformedness.
+Require Import HJ.Phasers.WellFormed.
 
 Variable WF: Phasermap.WellFormed pm.
 Let tids := pm_tids pm.  
@@ -504,9 +504,9 @@ Qed.
 End PROGRESS.
 Module ProgressSpec.
   Require Import HJ.Phasers.SubjectReduction.
-  Require Import HJ.Phasers.Welformedness.
+  Require Import HJ.Phasers.WellFormed.
   Require Import HJ.Phasers.Typesystem.
-  Import Welformedness.Phasermap.
+  Import WellFormed.Phasermap.
   
   Section ValidPRequest.
     Set Implicit Arguments.

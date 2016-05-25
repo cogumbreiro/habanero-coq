@@ -5,10 +5,10 @@ Require Import HJ.Vars.
 Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Taskview.
 Require Import HJ.Phasers.Phaser.
-Require Import HJ.Phasers.Welformedness.
+Require Import HJ.Phasers.WellFormed.
 Require Import HJ.Phasers.PhaseOrdering.Taskview.
-Import Welformedness.Taskview.
-Import Welformedness.Phaser.
+Import WellFormed.Taskview.
+Import WellFormed.Phaser.
 Import PhaseOrdering.Taskview.
 
 Set Implict Arguments.

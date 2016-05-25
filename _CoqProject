@@ -6,7 +6,7 @@ src/Phasers/Taskview.v
 src/Phasers/Phaser.v
 src/Phasers/Phasermap.v
 src/Phasers/Lang.v
-src/Phasers/Welformedness.v
+src/Phasers/WellFormed.v
 src/Phasers/PhaseOrdering/Taskview.v
 src/Phasers/PhaseOrdering/Phaser.v
 src/Phasers/PhaseDiff.v

@@ -2,7 +2,7 @@ Require Import Coq.Arith.Compare_dec.
 Require Import Coq.Arith.Peano_dec.
 
 Require Import HJ.Vars.
-Require Import HJ.Phasers.Welformedness.
+Require Import HJ.Phasers.WellFormed.
 
 Set Implict Arguments.
 
@@ -11,7 +11,7 @@ Set Implict Arguments.
 Section Defs.
   Require Import HJ.Phasers.Regmode.
   Require Import HJ.Phasers.Taskview.
-  Import Welformedness.Taskview.
+  Import WellFormed.Taskview.
 
   (** Taskview [v1] happened before [v2] when [v1] 
     signalled fewer times than [v2] observed. *)
@@ -53,7 +53,7 @@ End Notations.
 Section Facts.    
   Open Scope phaser_scope.
   Import Notations.
-  Import Welformedness.Taskview.
+  Import WellFormed.Taskview.
 
   Lemma le_spec:
     forall v1 v2,
