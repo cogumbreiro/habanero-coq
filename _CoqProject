@@ -17,6 +17,7 @@ src/Phasers/LEDec.v
 src/Phasers/TransDiff.v
 src/Phasers/SubjectReduction.v
 src/Phasers/Typesystem.v
+src/Phasers/Sync.v
 #src/ReverseSemaphore.v
 src/Finish/Lang.v
 src/Finish/LangDec.v
