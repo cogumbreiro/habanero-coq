@@ -39,6 +39,24 @@ Section Defs.
   Definition MayHappenParallel v1 v2 := Facilitates v2 v1.
 
   Definition BlockedBy v1 v2 := HappensBefore v2 v1.
+
+  Definition get_wait_phase v :=
+  match (mode v) with
+  | SIGNAL_ONLY => 0
+  | _ => wait_phase v
+  end.
+
+  Definition get_signal_phase v :=
+  match (mode v) with
+  | WAIT_ONLY => 0
+  | _ => signal_phase v
+  end.
+
+  Definition union v1 v2 :=
+  {| mode := union (mode v1) (mode v2);
+     signal_phase := max (get_signal_phase v1) (get_signal_phase v2);
+     wait_phase:=max (get_wait_phase v1) (get_wait_phase v2) |}.
+
 End Defs.
 
 
@@ -469,6 +487,162 @@ Section Facts.
       inversion H4.
     - rewrite H1 in *.
       inversion H5.
+  Qed.
+
+  Let wait_phase_fst_can_wait:
+    forall v1 v2,
+    CanWait (mode v1) ->
+    (wait_phase v1 <= wait_phase (union v1 v2))%nat.
+  Proof.
+    intros.
+    inversion H; subst; clear H; unfold union; simpl;
+    unfold get_wait_phase;
+    rewrite <- H1;
+    auto using Max.le_max_l, Max.le_max_r.
+  Qed.
+
+  Let wait_phase_snd_can_wait:
+    forall v1 v2,
+    CanWait (mode v2) ->
+    (wait_phase v2 <= wait_phase (union v1 v2))%nat.
+  Proof.
+    intros.
+    inversion H; subst; clear H; unfold union; simpl;
+    unfold get_wait_phase;
+    rewrite <- H1;
+    auto using Max.le_max_l, Max.le_max_r.
+  Qed.
+
+  Let can_wait_union_fst:
+    forall r1 r2,
+    CanWait r1 ->
+    CanWait (Regmode.union r1 r2).
+  Proof.
+    intros.
+    inversion H;simpl; auto using can_wait_sw, can_wait_wo.
+    destruct r2; auto.
+  Qed.
+
+  Let can_wait_union_snd:
+    forall r1 r2,
+    CanWait r2 ->
+    CanWait (Regmode.union r1 r2).
+  Proof.
+    intros.
+    destruct r1; auto.
+    inversion H;simpl; auto using can_wait_sw, can_wait_wo.
+  Qed.
+
+  Lemma union_lt_fst:
+    forall v1 v2 v,
+    v < v1 ->
+    v < (union v1 v2).
+  Proof.
+    intros.
+    inversion H; subst.
+    apply tv_hb_def.
+    - assert (wait_phase v1 <= wait_phase (union v1 v2))%nat by eauto.
+      omega.
+    - assumption.
+    - unfold union; simpl.
+      auto.
+  Qed.
+
+  Lemma union_lt_snd:
+    forall v1 v2 v,
+    v < v2 ->
+    v < (union v1 v2).
+  Proof.
+    intros.
+    inversion H; subst.
+    apply tv_hb_def.
+    - assert (wait_phase v2 <= wait_phase (union v1 v2))%nat by eauto.
+      omega.
+    - assumption.
+    - unfold union; simpl.
+      auto.
+  Qed.
+
+  Let can_wait_inv_union:
+    forall r1 r2,
+    CanWait (Regmode.union r1 r2) ->
+    CanWait r1 \/ CanWait r2.
+  Proof.
+    unfold Regmode.union; intros.
+    destruct r1; auto.
+    destruct r2; auto.
+  Qed.
+
+  Lemma union_lt:
+    forall v v1 v2,
+    v < union v1 v2 ->
+    v < v1 \/ v < v2.
+  Proof.
+    unfold union, get_wait_phase, get_signal_phase; intros.
+    inversion H; simpl in *; clear H.
+    apply can_wait_inv_union in H2.
+    destruct (regmode_eq_dec (mode v1) SIGNAL_ONLY). {
+      rewrite e in *.
+      destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY). {
+        rewrite e0 in *.
+        destruct H2 as [N|N]; inversion N.
+      }
+      destruct H2 as [N|N]. {
+        inversion N.
+      }
+      simpl in *.
+      assert (signal_phase v < wait_phase v2) % nat. {
+        destruct (mode v2); auto.
+        omega.
+      }
+      auto using tv_hb_def.
+    }
+    assert (R: match mode v1 with
+        | SIGNAL_ONLY => 0
+        | WAIT_ONLY => wait_phase v1
+        | SIGNAL_WAIT => wait_phase v1
+        end = wait_phase v1). {
+      destruct (mode v1); auto.
+      contradiction n; auto.
+    }
+    rewrite R in *; clear R.
+    destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY). {
+      rewrite e in *.
+      rewrite Max.max_0_r in *.
+      destruct H2. {
+        auto using tv_hb_def.
+      }
+      inversion H.
+    }
+    assert (R: match mode v2 with
+        | SIGNAL_ONLY => 0
+        | WAIT_ONLY => wait_phase v2
+        | SIGNAL_WAIT => wait_phase v2
+        end = wait_phase v2). {
+      destruct (mode v2); auto.
+      contradiction n0; auto.
+    }
+    rewrite R in *; clear R.
+    destruct (Max.max_dec (wait_phase v1) (wait_phase v2)). {
+      rewrite e in *.
+      apply neq_so_to_can_wait in n.
+      auto using tv_hb_def.
+    }
+    rewrite e in *.
+    apply neq_so_to_can_wait in n0.
+    auto using tv_hb_def.
+  Qed.
+
+  Theorem tv_hb_union_spec:
+    forall v v1 v2,
+    v < union v1 v2 <->
+    (v < v1 \/ v < v2).
+  Proof.
+    intros.
+    split; intros.
+    - auto using union_lt.
+    - destruct H;
+      auto using union_lt_snd, union_lt_fst.
   Qed.
 
   Example tv_ex_1:

@@ -26,6 +26,13 @@ Inductive r_le : regmode -> regmode -> Prop :=
     forall m,
     r_le m SIGNAL_WAIT.
 
+  Definition union r1 r2 :=
+  match r1, r2 with
+  | WAIT_ONLY, WAIT_ONLY => WAIT_ONLY
+  | SIGNAL_ONLY, SIGNAL_ONLY => SIGNAL_ONLY
+  | _, _ => SIGNAL_WAIT
+  end.
+
 Module Notations.
   Infix "<=" := (r_le) : reg_scope.
 End Notations.
