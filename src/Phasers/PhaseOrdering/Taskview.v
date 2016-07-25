@@ -187,7 +187,7 @@ Section Facts.
     auto using tv_not_lt_to_ge.
   Qed.
 
-  Lemma tv_welformed_to_ge_refl:
+  Lemma tv_well_formed_to_ge_refl:
     forall v,
     WellFormed v ->
     v >= v.
@@ -265,7 +265,7 @@ Section Facts.
     intros.
     inversion H0.
     subst.
-    apply signal_preserves_lhs; auto using tv_welformed_to_ge_refl.
+    apply signal_preserves_lhs; auto using tv_well_formed_to_ge_refl.
   Qed.
 
   Let tv_wait_ge_lhs:
@@ -395,7 +395,7 @@ Section Facts.
   Proof.
     intros.
     rewrite tv_not_lt_rw_tv_ge.
-    auto using tv_welformed_to_ge_refl.
+    auto using tv_well_formed_to_ge_refl.
   Qed.
 
   Theorem tv_lt_trans:
@@ -411,7 +411,7 @@ Section Facts.
     apply tv_hb_def; auto.
     assert (mode y = SIGNAL_WAIT) by eauto using can_signal_can_wait_to_sw.
     assert (wait_phase y <= signal_phase y)%nat. {
-      apply tv_wellformed_inv_sw in H8; auto.
+      apply tv_well_formed_inv_sw in H8; auto.
       destruct H8; intuition.
     }
     intuition.
@@ -439,9 +439,9 @@ Section Facts.
         symmetry in H1.
         apply tv_nhb_ge.
         assert (wait_phase x <= signal_phase x) % nat by
-        auto using welformed_wait_phase_le_signal_phase.
+        auto using well_formed_wait_phase_le_signal_phase.
         assert (wait_phase y <= signal_phase y) % nat by
-        auto using welformed_wait_phase_le_signal_phase.
+        auto using well_formed_wait_phase_le_signal_phase.
         intuition.
       }
       subst.

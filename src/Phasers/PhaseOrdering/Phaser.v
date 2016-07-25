@@ -195,11 +195,11 @@ Section Facts.
         destruct H5 as [(?,?)|(?,?)].
         * subst.
           eauto using
-            tv_reduces_preserves_welformed,
-            ph_welformed_to_tv_welformed,
-            tv_welformed_to_ge_refl.
+            tv_reduces_preserves_well_formed,
+            ph_well_formed_to_tv_well_formed,
+            tv_well_formed_to_ge_refl.
         * apply tv_lhs_eval_ge with (v2:=v2) in H3;
-          eauto using ph_welformed_to_tv_welformed, well_ordered_to_facilitates.
+          eauto using ph_well_formed_to_tv_well_formed, well_ordered_to_facilitates.
       + apply Map_TID_Facts.add_mapsto_iff in H5.
         destruct H5 as [(?,?)|(?,?)].
         * subst.
@@ -649,7 +649,7 @@ Section Facts.
     - destruct r; eauto using ph_reduces_drop_preserves_ge_left.
   Qed.
   
-  Lemma ph_s_reduces_trans_refl_welformed:
+  Lemma ph_s_reduces_trans_refl_well_formed:
     forall x y,
     WellFormed x ->
     clos_refl_trans phaser SReduces x y ->
@@ -658,7 +658,7 @@ Section Facts.
     intros.
     induction H0; auto.
     destruct H0.
-    eauto using ph_reduces_preserves_welformed.
+    eauto using ph_reduces_preserves_well_formed.
   Qed.
 
   Lemma ph_s_reduces_trans_refl_ge_refl:
@@ -672,7 +672,7 @@ Section Facts.
     induction H1; auto.
     - destruct H1.
       eauto using ph_ge_refl_preserves_reduce.
-    - assert (WellFormed y) by eauto using ph_s_reduces_trans_refl_welformed.
+    - assert (WellFormed y) by eauto using ph_s_reduces_trans_refl_well_formed.
       eauto.
   Qed.
 
@@ -689,7 +689,7 @@ Section Facts.
     - inversion H0; auto.
     - assert (WellFormed y). {
         rewrite <- clos_rt_rtn1_iff in H2.
-        eauto using ph_s_reduces_trans_refl_welformed.
+        eauto using ph_s_reduces_trans_refl_well_formed.
       }
       eauto using ph_s_reduces_preserves_ge_left.
   Qed.
