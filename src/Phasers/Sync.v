@@ -13,15 +13,15 @@ Section ReducesPreservesAwait.
   Variable ph: phaser.
   Variable n: nat.
   Variable wf: WellFormed ph.
-  Variable W: Await ph n.
+  Variable W: Phase ph n.
 
   Let ph_signal_preserves_await:
     forall t,
     SignalPre t ph ->
-    Await (signal t ph) n.
+    Phase (signal t ph) n.
   Proof.
     intros.
-    apply await_def.
+    apply phase_def.
     intros ? ? mt1 Hs.
     apply signal_mapsto_inv in mt1.
     destruct mt1.
@@ -42,10 +42,10 @@ Section ReducesPreservesAwait.
   Let ph_wait_preserves_await:
     forall t,
     WaitPre t ph ->
-    Await (wait t ph) n.
+    Phase (wait t ph) n.
   Proof.
     intros.
-    apply await_def.
+    apply phase_def.
     intros ? ? mt1 Hs.
     apply wait_mapsto_inv in mt1.
     destruct mt1.
@@ -63,10 +63,10 @@ Section ReducesPreservesAwait.
   Let ph_drop_preserves_await:
     forall t,
     DropPre t ph ->
-    Await (drop t ph) n.
+    Phase (drop t ph) n.
   Proof.
     intros.
-    apply await_def.
+    apply phase_def.
     intros ? ? mt1 Hs.
     apply drop_mapsto_inv in mt1.
     destruct mt1.
@@ -76,10 +76,10 @@ Section ReducesPreservesAwait.
   Let ph_register_preserves_await:
     forall r t,
     RegisterPre r t ph ->
-    Await (register r t ph) n.
+    Phase (register r t ph) n.
   Proof.
     intros.
-    apply await_def.
+    apply phase_def.
     intros ? ? mt1 Hs.
     apply register_inv_mapsto in mt1.
     destruct mt1.
@@ -106,7 +106,7 @@ Section ReducesPreservesAwait.
   Theorem ph_reduces_preserves_await:
     forall ph' t o,
     Reduces ph t o ph' ->
-    Await ph' n.
+    Phase ph' n.
   Proof.
     intros.
     destruct o; inversion H; simpl in *; subst.
