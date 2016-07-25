@@ -90,6 +90,12 @@ Section Defs.
 
   Definition wait v := set_wait_phase v (S (wait_phase v)).
 
+  Definition try_wait v :=
+  match mode v with
+  | SIGNAL_ONLY => v
+  | _ => wait v
+  end.
+
 
   (** * Small-step operational semantics*)
 
@@ -242,6 +248,17 @@ Section Facts.
   Proof.
     intros.
     simpl_taskview v; inversion H.
+  Qed.
+
+  Lemma try_signal_signal_phase_so:
+    forall v,
+    mode v = SIGNAL_ONLY ->
+    signal_phase (try_signal v) = S (signal_phase v).
+  Proof.
+    intros.
+    unfold try_signal.
+    rewrite H in *.
+    trivial.
   Qed.
 
   Lemma signal_phase_set_signal_phase:

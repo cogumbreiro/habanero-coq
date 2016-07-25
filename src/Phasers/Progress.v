@@ -545,7 +545,7 @@ Module ProgressSpec.
     intros.
     destruct (@progress_aux m r) as (t, (i, (pm, (mt, R)))).
     assert (V: Valid pm) by eauto using subject_reduction, pm_t_spec_1.
-    assert (W: WellFormed pm) by eauto using pm_reduces_preserves_welformed, pm_t_spec_2.
+    assert (W: WellFormed pm) by eauto using pm_reduces_preserves_well_formed, pm_t_spec_2.
     remember ({| pm_t_value := pm; pm_t_spec_1 := V; pm_t_spec_2:= W |}) as m'.
     exists t.
     exists i.

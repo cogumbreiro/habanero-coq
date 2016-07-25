@@ -20,7 +20,6 @@ Section Defs.
     tv_hb_def:
       signal_phase v1 < wait_phase v2 ->
       SignalCap (mode v1) ->
-      CanWait (mode v2) ->
       HappensBefore v1 v2.
 
   (** The negation of [HappensBefore] is [Facilitates]. *)
@@ -29,9 +28,6 @@ Section Defs.
     | tv_nhb_ge:
        signal_phase v1 >= wait_phase v2 ->
        Facilitates v1 v2
-    | tv_nhb_so:
-      mode v2 = SIGNAL_ONLY ->
-      Facilitates v1 v2
     | tv_nhb_wo:
       mode v1 = WAIT_ONLY ->
       Facilitates v1 v2.
@@ -76,8 +72,6 @@ Section Facts.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
     { left; auto using tv_nhb_ge. }
-    destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY).
-    { left; auto using tv_nhb_so. }
     destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
     { left; auto using tv_nhb_wo. }
     right.
@@ -89,12 +83,9 @@ Section Facts.
     { v1 < v2 } + { ~ v1 < v2 }.
   Proof.
     intros.
-    destruct (can_wait_dec (mode v2)). {
-      destruct (can_signal_dec (mode v1)). {
-        destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
-          left; auto using tv_hb_def.
-        }
-        right; intuition.
+    destruct (can_signal_dec (mode v1)). {
+      destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
+        left; auto using tv_hb_def.
       }
       right; intuition.
     }
@@ -106,9 +97,12 @@ Section Facts.
     v1 >= v2 -> ~ v1 < v2.
   Proof.
     intros.
-    intuition.
-    - destruct H0; inversion H3.
-    - destruct H2; inversion H3.
+    unfold not; intros.
+    inversion H0; subst; clear H0.
+    inversion H; subst; clear H.
+    - omega.
+    - rewrite H0 in *.
+      inversion H2.
   Qed.
 
   Lemma tv_hb_to_not_ge:
@@ -117,8 +111,8 @@ Section Facts.
   Proof.
     intros.
     intuition.
-    - destruct H; inversion H3.
-    - inversion H2; rewrite H3 in *; inversion H4.
+    - rewrite H in *.
+      inversion H2.
   Qed.
 
   Lemma tv_not_lt_to_ge:
@@ -128,8 +122,6 @@ Section Facts.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
     { auto using tv_nhb_ge. }
-    destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY).
-    { auto using tv_nhb_so. }
     destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
     { auto using tv_nhb_wo. }
     assert (HappensBefore v1 v2). {
@@ -151,23 +143,18 @@ Section Facts.
     ~ v1 >= v2 -> v1 < v2.
   Proof.
     intros.
-    destruct (can_wait_dec (mode v2)). {
-      destruct (can_signal_dec (mode v1)). {
-        destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
-          auto using tv_hb_def.
-        }
-        assert (Facilitates v1 v2). {
-          assert (signal_phase v1 >= wait_phase v2) % nat by intuition.
-          auto using tv_nhb_ge.
-        }
-        contradiction.
+    destruct (can_signal_dec (mode v1)). {
+      destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
+        auto using tv_hb_def.
       }
-      assert (Facilitates v1 v2) by
-        auto using tv_nhb_wo, not_can_signal_to_wo.
+      assert (Facilitates v1 v2). {
+        assert (signal_phase v1 >= wait_phase v2) % nat by intuition.
+        auto using tv_nhb_ge.
+      }
       contradiction.
     }
     assert (Facilitates v1 v2) by
-      auto using tv_nhb_so, not_can_wait_to_so.
+    auto using tv_nhb_wo, not_can_signal_to_wo.
     contradiction.
   Qed.
 
@@ -186,20 +173,27 @@ Section Facts.
     destruct (tv_hb_dec v1 v2);
     auto using tv_not_lt_to_ge.
   Qed.
-
+(*
   Lemma tv_welformed_to_ge_refl:
     forall v,
     WellFormed v ->
     v >= v.
   Proof.
     intros.
+    inversion H; subst; clear H.
+    - apply tv_nhb_ge.
+      intuition.
+    - apply tv_nhb_ge.
+      intuition.
+    - apply tv_nhb_ge.
+      intuition.
     inversion H;
       try (apply tv_nhb_ge;
       intuition || fail).
-    - auto using tv_nhb_so.
+    - auto using tv_nhb_wo.
     - auto using tv_nhb_wo.
   Qed.
-
+*)
   Let signal_preserves_lhs:
     forall v,
     WellFormed v ->
@@ -211,7 +205,6 @@ Section Facts.
     inversion H0; subst.
     - apply tv_nhb_ge.
       simpl; intuition.
-    - auto using tv_nhb_so.
     - rewrite <- signal_preserves_mode in *.
       auto using tv_nhb_wo.
   Qed.
@@ -222,12 +215,9 @@ Section Facts.
     v1 >= (Taskview.signal v2).
   Proof.
     intros.
-    inversion H; subst.
+    inversion H; subst; clear H.
     - apply tv_nhb_ge.
       rewrite signal_preserves_wait_phase.
-      assumption.
-    - apply tv_nhb_so.
-      rewrite signal_preserves_mode.
       assumption.
     - auto using tv_nhb_wo.
   Qed.
@@ -249,9 +239,6 @@ Section Facts.
         intuition.
       }
       auto using tv_nhb_wo.
-    - apply tv_nhb_so.
-      rewrite wait_preserves_mode.
-      assumption.
     - auto using tv_nhb_wo.
   Qed.
   End wait_preserves_rhs.
@@ -259,13 +246,13 @@ Section Facts.
   Let tv_signal_ge_lhs:
     forall v v',
     WellFormed v ->
+    v >= v ->
     Reduces v SIGNAL v' ->
     Facilitates v' v.
   Proof.
     intros.
-    inversion H0.
-    subst.
-    apply signal_preserves_lhs; auto using tv_welformed_to_ge_refl.
+    inversion H1; subst.
+    auto using signal_preserves_lhs.
   Qed.
 
   Let tv_wait_ge_lhs:
@@ -285,12 +272,13 @@ Section Facts.
 
   Let tv_nhb_reduces:
     forall v o v',
+    v >= v ->
     WellFormed v ->
     Reduces v o v' ->
     Facilitates v' v.
   Proof.
     intros.
-    inversion H0; subst.
+    inversion H1; subst.
     - auto using tv_signal_ge_lhs.
     - auto using tv_wait_ge_lhs.
   Qed.
@@ -300,6 +288,8 @@ Section Facts.
     WellFormed x ->
     WellFormed y ->
     WellFormed z ->
+    x >= x ->
+    y >= y ->
     Reduces x o y ->
     Reduces y o' z ->
     mode x = SIGNAL_WAIT ->
@@ -307,30 +297,29 @@ Section Facts.
   Proof.
     intros.
     assert (Facilitates z y) by eauto using tv_nhb_reduces.
-    assert (Facilitates y x) by eauto using tv_nhb_reduces.
+    assert (Facilitates y x) by (eapply tv_nhb_reduces; eauto).
     destruct o.
-    - inversion H2.
+    - inversion H4.
       assert (o' = WAIT) by eauto using reduces_signal_inv_sw; subst.
-      apply reduces_rw_signal in H2.
-      apply reduces_rw_wait in H3.
+      apply reduces_rw_signal in H4.
+      apply reduces_rw_wait in H5.
       subst.
       rewrite wait_preserves_signal_phase.
       simpl.
       assert (wait_phase x = signal_phase x). {
-        inversion H7.
-        - trivial.
-        - rewrite H4 in H3.
-        inversion H3.
+        inversion H9; subst; auto.
+        rewrite H5 in *.
+        inversion H6.
       }
       intuition.
     - assert (CanWait (mode x)). {
-        rewrite H4.
+        rewrite H6.
         auto using can_wait_sw.
       }
       assert (o' = SIGNAL) by eauto using reduces_wait_inv_sw; subst.
       assert (R: signal_phase y = wait_phase y) by eauto using reduces_wait_inv_can_wait.
-      inversion H2; subst.
-      inversion H3; subst.
+      inversion H4; subst.
+      inversion H5; subst.
       rewrite wait_preserves_signal_phase in *.
       rewrite signal_can_wait_signal_phase in *; auto.
       rewrite wait_wait_phase in *.
@@ -363,7 +352,6 @@ Section Facts.
       apply reduces_spec in H1.
       subst.
       auto using tv_eval_preserves_le.
-    - auto using tv_nhb_so.
     - apply reduces_preserves_mode in H1.
       rewrite H2 in H1.
       auto using tv_nhb_wo.
@@ -382,7 +370,6 @@ Section Facts.
       destruct o; simpl in *.
       + intuition.
       + assumption.
-    - auto using tv_nhb_so.
     - apply tv_nhb_wo.
       rewrite eval_preserves_mode.
       assumption.
