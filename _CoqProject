@@ -9,6 +9,7 @@ src/Phasers/Lang.v
 src/Phasers/WellFormed.v
 src/Phasers/PhaseOrdering/Taskview.v
 src/Phasers/PhaseOrdering/Phaser.v
+src/Phasers/PhaseOrdering/CG.v
 src/Phasers/PhaseDiff.v
 src/Phasers/Rel.v
 src/Phasers/TransClosure.v
@@ -32,5 +33,7 @@ src/Finish/Typesystem.v
 src/Finish/Progress.v
 #
 src/Common.v
+src/Bijection.v
+src/Node.v
 #src/All.v
 
