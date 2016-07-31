@@ -154,7 +154,8 @@ let js_of_edges (es:ex_edge Cg.list) =
         ("to", Js.Unsafe.inject (int_of_nat n2));
         ("label", Js.Unsafe.inject (js (string_of_op o)));
         ("dashes", Js.Unsafe.inject (if is_sync o then Js._true else Js._false));
-        ("arrows", Js.Unsafe.inject (js "to"))
+        ("arrows", Js.Unsafe.inject (js "to"));
+        ("smooth", Js.Unsafe.js_expr (Printf.sprintf "{enabled: %s}" (if is_sync o then "true" else "false")))
         |]
     in
     js_array_from_list (List.map to_js (as_list es))
@@ -168,14 +169,19 @@ let js_of_cg cg =
 
 let draw_graph container g =
     let opts = Js.Unsafe.js_expr 
- "{
-    edges: { width: 2 },
+ "
+{
+  edges: {
+    width: 2,
+    smooth: {
+        enabled: false,
+    },
+  },
   layout:{
     randomSeed: 0,
   },
   physics: {
-    enabled: true,
-    solver: 'barnesHut'
+    enabled: false,
   }
 }"
     in
@@ -188,24 +194,6 @@ let parse_cg container t =
     | Cg.None -> Js._false
     | Cg.Some cg -> draw_graph container (js_of_cg cg)
     ;;
-(*
-let print_cg t = match Cg.build t with
-    | Cg.None -> ""
-    | Cg.Some (Cg.Pair (vs, es)) -> string_of_graph es
-    ;;
-
-let to_dot t =
-    let lines = [
-        "digraph G {";
-        print_cg t;
-        "}"
-    ] in
-    String.concat "\n" lines
-
-let convert_dot s =
-    Js.Unsafe.fun_call (Js.Unsafe.js_expr "vis.network.convertDot")
-    [|Js.Unsafe.inject s|]
-*)
 
 let onload _ =
     let txt =
