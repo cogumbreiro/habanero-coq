@@ -1,0 +1,10 @@
+#!/usr/bin/env nodejs
+var fs = require('fs');
+var ResourceEmbedder = require('resource-embedder');
+
+var embedder = new ResourceEmbedder('./index.html');
+
+embedder.get(function (markup) {
+  fs.writeFileSync('./cg.html', markup);
+});
+
