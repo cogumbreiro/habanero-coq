@@ -91,13 +91,6 @@ let is_sync (o:Cg.op) =
     | _ -> false
 
 
-let string_of_edge e =
-    match e with
-    | Cg.Pair (o, Cg.Pair (v1, v2)) ->
-        let n1 = (int_of_nat v1) in
-        let n2 = (int_of_nat v2) in
-        Printf.sprintf "%d -> %d %s" n1 n2 (string_of_op o);;
-
 let rec as_list l : 'a list =
     match l with
     | Cg.Cons (x, l) ->
@@ -109,9 +102,6 @@ let rec from_list l =
     | [] -> Cg.Nil
     | x::xs -> Cg.Cons (x,from_list xs)
     ;;
-
-let string_of_graph es =
-    concat "\n" (List.map string_of_edge (filter_duplicates (as_list es)))
 
 let trace_of_string s =
     let to_evt x : Cg.event list = match (event_of_string x) with
