@@ -185,13 +185,13 @@ let draw_graph container g =
   }
 }"
     in
-    Js.Unsafe.new_obj (Js.Unsafe.variable "vis.Network")
-    [| Js.Unsafe.inject container;  Js.Unsafe.inject g; opts|];
-    Js._false 
+    let _ = Js.Unsafe.new_obj (Js.Unsafe.variable "vis.Network")
+    [| Js.Unsafe.inject container;  Js.Unsafe.inject g; opts|] in
+    ()
 
 let parse_cg container t =
     match Cg.build t with
-    | Cg.None -> Js._false
+    | Cg.None -> ()
     | Cg.Some cg -> draw_graph container (js_of_cg cg)
     ;;
 
@@ -204,6 +204,7 @@ let onload _ =
         (fun () -> assert false)
         (fun div -> div)
     in
+    let last_trace = ref (trace_of_string "") in
     let graph =
         Js.Opt.get (Html.document##getElementById(Js.string "graph_out"))
         (fun () -> assert false) in
@@ -211,7 +212,13 @@ let onload _ =
         fun _ ->
         let trace_txt = Js.to_string (txt##value) in
         let t = trace_of_string trace_txt in
-        parse_cg graph t
+        (match !last_trace = t, Cg.build t with
+        | false, Cg.Some cg ->
+            last_trace := t;
+            draw_graph graph (js_of_cg cg)
+        | _ -> ()
+        );
+        Js._false
     );
     Js._false
 
