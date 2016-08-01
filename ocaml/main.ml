@@ -144,7 +144,13 @@ let js_of_vertices (vs:Cg.tid Cg.list) =
     in
     js_array_from_list (convert 0 (rev (as_list vs)))
 
+let js_of_bool b = if b then Js._true else Js._false
+
 let js_of_edges (es:ex_edge Cg.list) =
+    let is_enabled b =
+        Js.Unsafe.obj [| ("enabled", Js.Unsafe.inject (js_of_bool b)) |]
+    in
+    
     let to_js (e:ex_edge) =
         match e with
         | Cg.Pair (o, Cg.Pair(n1,n2)) ->
@@ -153,9 +159,9 @@ let js_of_edges (es:ex_edge Cg.list) =
         ("from", Js.Unsafe.inject (int_of_nat n1));
         ("to", Js.Unsafe.inject (int_of_nat n2));
         ("label", Js.Unsafe.inject (js (string_of_op o)));
-        ("dashes", Js.Unsafe.inject (if is_sync o then Js._true else Js._false));
+        ("dashes", Js.Unsafe.inject (js_of_bool (is_sync o)));
         ("arrows", Js.Unsafe.inject (js "to"));
-        ("smooth", Js.Unsafe.js_expr (Printf.sprintf "{enabled: %s}" (if is_sync o then "true" else "false")))
+        ("smooth", Js.Unsafe.inject (is_enabled (is_sync o)))
         |]
     in
     js_array_from_list (List.map to_js (as_list es))
@@ -174,14 +180,14 @@ let draw_graph container g =
   edges: {
     width: 2,
     smooth: {
-        enabled: false,
-    },
+        enabled: false
+    }
   },
-  layout:{
-    randomSeed: 0,
+  layout: {
+    randomSeed: 0
   },
   physics: {
-    enabled: false,
+    enabled: false
   }
 }"
     in
