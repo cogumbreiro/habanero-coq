@@ -208,8 +208,7 @@ let onload _ =
     let graph =
         Js.Opt.get (Html.document##getElementById(Js.string "graph_out"))
         (fun () -> assert false) in
-    txt##onkeyup <- Html.handler (
-        fun _ ->
+    let handler = (fun _ ->
         let trace_txt = Js.to_string (txt##value) in
         let t = trace_of_string trace_txt in
         (match !last_trace = t, Cg.build t with
@@ -218,8 +217,10 @@ let onload _ =
             draw_graph graph (js_of_cg cg)
         | _ -> ()
         );
-        Js._false
-    );
+        Js._false)
+    in
+    txt##onkeyup <- Html.handler handler;
+    let _ = handler () in
     Js._false
 
 let _ =
