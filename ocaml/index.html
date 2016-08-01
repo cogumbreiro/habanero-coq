@@ -78,11 +78,17 @@ $().ready(function() {
   <div id="MySplitter">
   <div id="LeftPane">
   <textarea id="trace_in" class="ui-widget-content">
-1: ASYNC 2
-2: SIGNAL 1
-1: SIGNAL 1
-2: WAIT 1
-1: WAIT 1</textarea></div>
+1: async 2
+1: async 3
+3: signal 1
+1: signal 1
+3: wait 1
+2: wait 1
+1: signal 2
+3: signal 2
+2: wait 2
+3: wait 2
+</textarea></div>
 
   <div id="RightPane">
   <div id="graph_out" />
