@@ -4,38 +4,89 @@
 	  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <title>Safe information flow analysis</title>
+    <title>Computation Graph</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
     <style type="text/css">
+body {
+	padding: 0;
+	margin: 0;
+}
+
+#MySplitter {
+	height: 100%;
+	width: 100%;
+	height: 100vh;
+	width: 100vw;
+}
+
+#LeftPane {
+    border: 0; padding:0; margin: 0;
+	background: #efe;
+	overflow: auto;
+}
+
+#RightPane {
+	overflow: auto;
+}
+
+#MySplitter .vsplitbar {
+	width: 0.5em;
+	background: #aaa;
+}
+
+#MySplitter .vsplitbar:hover {
+	background: #e77;
+}
+
 #trace_in {
-    width: 20vw;
-    height: 95vh;
-    float: left;
+    padding: 1em;
+    margin: 0;
+    border: 0;
     background: url(http://i.stack.imgur.com/ynxjD.png) repeat-y;
     font: normal 14px mono;
     line-height: 25px;
+    width: 100%;
+    height: 100%;
 }
 
 #graph_out {
     border: 0;
     background: white;
-    margin-left: 21vw;
-    width: 75vw;
-    height: 95vh;
+    width: 100%;
+    height: 100%;
 }
     </style>
     <script type="text/javascript" src="http://visjs.org/dist/vis.js" data-embed></script>
+    <script type="text/javascript" src="http://methvin.com/jquery/jquery.js" data-embed></script>
+    <script type="text/javascript" src="http://methvin.com/splitter/jquery.cookie.js" data-embed></script>
+    <script type="text/javascript" src="http://methvin.com/splitter/splitter.js" data-embed></script>
     <script type="text/javascript" src="cg.js" data-embed></script>
+<script type="text/javascript">
+
+$().ready(function() {
+	$("#MySplitter").splitter({
+		type: "v",
+		sizeLeft: 150,
+		dock: true,
+		resizeToWidth: true
+	});
+});
+</script>
   </head>
-  <body>
+  <body id="main">
+  <div id="MySplitter">
+  <div id="LeftPane">
   <textarea id="trace_in" class="ui-widget-content">
 1: ASYNC 2
 2: SIGNAL 1
 1: SIGNAL 1
 2: WAIT 1
-1: WAIT 1</textarea>
+1: WAIT 1</textarea></div>
 
+  <div id="RightPane">
   <div id="graph_out" />
+  </div>
+  </div>
   </body>
 </html>
