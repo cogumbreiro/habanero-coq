@@ -8,34 +8,34 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
     <style type="text/css">
-    textarea {
-     background: url(http://i.stack.imgur.com/ynxjD.png) repeat-y;
-     width: 600px;
-     height: 300px;
-     font: normal 14px verdana;
-     line-height: 25px;
-     padding: 2px 10px;
-     border: solid 1px #ddd;
-    }
+#trace_in {
+    width: 20vw;
+    height: 95vh;
+    float: left;
+    background: url(http://i.stack.imgur.com/ynxjD.png) repeat-y;
+    font: normal 14px mono;
+    line-height: 25px;
+}
 
-    #graph_out {
-      width: 100%;
-      border: 1px solid lightgray;
-      height: calc(100vh - 400px);
-    }
+#graph_out {
+    border: 0;
+    background: white;
+    margin-left: 21vw;
+    width: 75vw;
+    height: 95vh;
+}
     </style>
     <script type="text/javascript" src="http://visjs.org/dist/vis.js" data-embed></script>
     <script type="text/javascript" src="cg.js" data-embed></script>
   </head>
   <body>
-  <textarea id="trace_in">
+  <textarea id="trace_in" class="ui-widget-content">
 1: ASYNC 2
 2: SIGNAL 1
 1: SIGNAL 1
 2: WAIT 1
-1: WAIT 1
-  </textarea>
-  <br />
+1: WAIT 1</textarea>
+
   <div id="graph_out" />
   </body>
 </html>
