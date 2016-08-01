@@ -73,14 +73,22 @@ let filter_duplicates lst =
   in
   loop lst
 
+let is_op (o:Cg.op) =
+    match o with
+    | Cg.ASYNC _ -> true
+    | Cg.ASYNC_PHASED _ -> true
+    | Cg.SIGNAL _ -> true
+    | Cg.WAIT _ -> true
+    | Cg.DROP _ -> true
+    | _ -> false
+
 let string_of_op (o:Cg.op) =
     match o with
     | Cg.ASYNC _ -> "async"
     | Cg.ASYNC_PHASED _ -> "phased"
-    | Cg.SIGNAL _ -> ""
-    | Cg.WAIT _ -> ""
-    | Cg.DROP _ -> ""
-    | Cg.PREC -> "signal"
+    | Cg.SIGNAL _ -> "signal"
+    | Cg.WAIT _ -> "wait"
+    | Cg.DROP _ -> "drop"
     | _ -> ""
 
 let is_sync (o:Cg.op) =
@@ -119,11 +127,23 @@ type edge = (Cg.node, Cg.node) Cg.prod
 
 type ex_edge = (Cg.op, edge) Cg.prod
 
-let js_of_vertices (vs:Cg.tid Cg.list) =
+let rec js_of_vertex (idx:int) (es:ex_edge Cg.list) =
+    try (
+        match (List.find (fun e ->
+            match e with
+            | Cg.Pair (o, Cg.Pair(n,_)) -> (idx = int_of_nat n) && (is_op o)
+            
+        ) (as_list es)) with
+        | Cg.Pair (o, _) ->
+        string_of_op o
+    ) with
+    | _ -> string_of_int idx
+
+let js_of_vertices (vs:Cg.tid Cg.list) (es:ex_edge Cg.list) =
     let to_js (idx:int) (tid:int) =
         Js.Unsafe.obj [|
         ("id", Js.Unsafe.inject idx);
-        ("label", Js.Unsafe.inject idx);
+        ("label", Js.Unsafe.inject (js (js_of_vertex idx es)));
         ("group", Js.Unsafe.inject tid)
         |]
     in
@@ -148,7 +168,7 @@ let js_of_edges (es:ex_edge Cg.list) =
         Js.Unsafe.obj [|
         ("from", Js.Unsafe.inject (int_of_nat n1));
         ("to", Js.Unsafe.inject (int_of_nat n2));
-        ("label", Js.Unsafe.inject (js (string_of_op o)));
+(*        ("label", Js.Unsafe.inject (js (string_of_op o)));*)
         ("dashes", Js.Unsafe.inject (js_of_bool (is_sync o)));
         ("arrows", Js.Unsafe.inject (js "to"));
         ("smooth", Js.Unsafe.inject (is_enabled (is_sync o)))
@@ -160,7 +180,7 @@ let js_of_cg cg =
     match cg with
     | Cg.Pair (vs, es) ->
     Js.Unsafe.obj [|
-        ("nodes", Js.Unsafe.inject (js_of_vertices vs));
+        ("nodes", Js.Unsafe.inject (js_of_vertices vs es));
         ("edges", Js.Unsafe.inject (js_of_edges es)) |]
 
 let draw_graph container g =
@@ -168,7 +188,7 @@ let draw_graph container g =
  "
 {
   edges: {
-    width: 2,
+    width: 1,
     smooth: {
         enabled: false
     }
