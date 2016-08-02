@@ -148,14 +148,14 @@ Section Facts.
     auto using not_can_wait_to_so.
   Qed.
 
-  Lemma can_signal_dec:
+  Lemma can_signal:
     forall r,
     { CanSignal r } + { ~ CanSignal r }.
   Proof.
     intros.
     destruct r; auto.
     right; intuition; inversion H.
-  Qed.
+  Defined.
 
   Lemma neq_wo_to_can_signal:
     forall r,
@@ -202,9 +202,9 @@ Section Facts.
     { CanSignal r } + { r = WAIT_ONLY }.
   Proof.
     intros.
-    destruct (can_signal_dec r);
+    destruct (can_signal r);
     auto using not_can_signal_to_wo.
-  Qed.
+  Defined.
 
   Lemma can_signal_and_can_wait_to_sw:
     forall r,

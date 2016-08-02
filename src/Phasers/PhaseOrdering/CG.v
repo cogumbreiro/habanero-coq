@@ -291,7 +291,7 @@ Section Defs.
   let (x, o) := e in
   match o with
   | ASYNC_PHASED y r =>
-    if can_signal_dec r then copy vs x y wp
+    if can_signal r then copy vs x y wp
     else None
   | SIGNAL => inc vs wp x
   | DROP => Some (drop x wp)

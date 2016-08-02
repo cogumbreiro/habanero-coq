@@ -108,7 +108,7 @@ Section Facts.
   Proof.
     intros.
     destruct (can_wait_dec (mode v2)). {
-      destruct (can_signal_dec (mode v1)). {
+      destruct (can_signal (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           left; auto using tv_hb_def.
         }
@@ -170,7 +170,7 @@ Section Facts.
   Proof.
     intros.
     destruct (can_wait_dec (mode v2)). {
-      destruct (can_signal_dec (mode v1)). {
+      destruct (can_signal (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           auto using tv_hb_def.
         }
