@@ -139,12 +139,12 @@ let js_of_edges (cg:Cg.computation_graph) =
     let es = List.map (to_js SYNC) (as_list (Cg.s_edges cg)) in
     js_array_from_list (ec @ ej @ es)
 
-let js_of_cg cg =
-    match cg with
-    | Cg.Pair (vs, es) ->
+let js_of_cg bcg =
+    match bcg with
+    | Cg.Pair (b, cg) ->
     Js.Unsafe.obj [|
-        ("nodes", Js.Unsafe.inject (js_of_vertices vs es));
-        ("edges", Js.Unsafe.inject (js_of_edges es)) |]
+        ("nodes", Js.Unsafe.inject (js_of_vertices (Cg.get_nodes b)));
+        ("edges", Js.Unsafe.inject (js_of_edges cg)) |]
 
 let draw_graph container g =
     let opts = Js.Unsafe.js_expr 
