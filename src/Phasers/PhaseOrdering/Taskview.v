@@ -19,7 +19,7 @@ Section Defs.
   Inductive HappensBefore v1 v2 : Prop :=
     tv_hb_def:
       signal_phase v1 < wait_phase v2 ->
-      SignalCap (mode v1) ->
+      CanSignal (mode v1) ->
       CanWait (mode v2) ->
       HappensBefore v1 v2.
 
@@ -253,7 +253,7 @@ Section Facts.
   Section wait_preserves_rhs.
   Variable v1 v2: taskview.
   Variable G1: v1 >= v2.
-  Variable L1: SignalCap (mode v1) -> (signal_phase v1 >= S (wait_phase v2) )%nat.
+  Variable L1: CanSignal (mode v1) -> (signal_phase v1 >= S (wait_phase v2) )%nat.
   Variable L2: WaitPre v2.
   Lemma wait_preserves_rhs:
     v1 >= (wait v2).
@@ -263,7 +263,7 @@ Section Facts.
     - destruct (can_signal_wo_dec (mode v1)). {
         apply tv_nhb_ge.
         simpl.
-        apply L1 in s; clear L1.
+        apply L1 in c; clear L1.
         intuition.
       }
       auto using tv_nhb_wo.
