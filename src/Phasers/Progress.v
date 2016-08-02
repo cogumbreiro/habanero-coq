@@ -171,9 +171,8 @@ Proof.
   intros.
   apply Map_TID_Extra.in_to_mapsto in H1.
   destruct H1 as (v, mt).
-  destruct (can_wait_so_dec (mode v)).
-  - 
-    apply sync_wait with (v:=v); auto.
+  destruct (can_wait_so(mode v)).
+  - apply sync_wait with (v:=v); auto.
     apply phase_def.
     intros t' v' Hmt'; intros.
     (* show that: n <= WP(v') *)
@@ -229,7 +228,7 @@ Proof.
     inversion H2.
     eauto.
   }
-  destruct (can_wait_so_dec (mode v)). {
+  destruct (can_wait_so (mode v)). {
     apply try_wait_pre_can_wait.
     apply wait_pre with (v:=v); eauto using smallest_to_sync.
     inversion c;
@@ -372,7 +371,7 @@ Proof.
   destruct i;
   try (left; intuition; inversion H; assumption).
   right; auto.
-Qed.
+Defined.
 
 Let check_pm_inv_in:
   forall t i,

@@ -59,7 +59,7 @@ Module NODE <: UsualOrderedType.
     unfold Nat_as_OT.eq in *.
     subst.
     intuition.
-  Qed.
+  Defined.
 
   Lemma eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
   Proof.
@@ -73,7 +73,7 @@ Module NODE <: UsualOrderedType.
       intros.
       contradiction n1.
       inversion H; auto.
-  Qed.
+  Defined.
 End NODE.
 
 

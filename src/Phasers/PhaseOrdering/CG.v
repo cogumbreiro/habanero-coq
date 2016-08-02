@@ -256,7 +256,7 @@ Section Defs.
   let (x, o) := e in
   match o with
   | ASYNC_PHASED y r =>
-    if can_wait_dec r then copy vs x y wp
+    if can_wait r then copy vs x y wp
     else None
   | WAIT => inc vs wp x
   | DROP => Some (drop x wp)

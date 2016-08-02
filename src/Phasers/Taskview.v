@@ -291,7 +291,7 @@ Section Facts.
   Proof.
     intros.
     unfold wait.
-    destruct (can_signal_wo_dec (mode v)).
+    destruct (can_signal_wo (mode v)).
     - destruct (mode v);
       inversion c;
       rewrite wait_phase_set_wait_phase;

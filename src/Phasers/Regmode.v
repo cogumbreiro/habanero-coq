@@ -66,24 +66,24 @@ Section Facts.
 
   (** The equality of registration mode is decidable. *)
 
-  Lemma regmode_eq_dec:
+  Lemma regmode_eq:
     forall (m1 m2:regmode),
     { m1 = m2 } + { m1 <> m2 }.
   Proof.
     intros.
     destruct m1, m2; solve [ left; auto | right; intuition; inversion H]. 
-  Qed.
+  Defined.
 
   (** Checking for the wait capability is a decidable property. *)
 
-  Lemma can_wait_dec:
+  Lemma can_wait:
     forall r,
     { CanWait r } + { ~ CanWait r }.
   Proof.
     intros.
     destruct r; auto.
     right; intuition; inversion H.
-  Qed.
+  Defined.
 
   Lemma neq_so_to_can_wait:
     forall r,
@@ -139,14 +139,14 @@ Section Facts.
     inversion H.
   Qed.
 
-  Lemma can_wait_so_dec:
+  Lemma can_wait_so:
     forall r,
     { CanWait r } + { r = SIGNAL_ONLY }.
   Proof.
     intros.
-    destruct (can_wait_dec r);
+    destruct (can_wait r);
     auto using not_can_wait_to_so.
-  Qed.
+  Defined.
 
   Lemma can_signal:
     forall r,
@@ -197,7 +197,7 @@ Section Facts.
     auto.
   Qed.
 
-  Lemma can_signal_wo_dec:
+  Lemma can_signal_wo:
     forall r,
     { CanSignal r } + { r = WAIT_ONLY }.
   Proof.

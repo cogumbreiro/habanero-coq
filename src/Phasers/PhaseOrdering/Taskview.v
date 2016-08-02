@@ -94,20 +94,20 @@ Section Facts.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
     { left; auto using tv_nhb_ge. }
-    destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY).
+    destruct (regmode_eq (mode v2) SIGNAL_ONLY).
     { left; auto using tv_nhb_so. }
-    destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
+    destruct (regmode_eq (mode v1) WAIT_ONLY).
     { left; auto using tv_nhb_wo. }
     right.
     intuition.
-  Qed.
+  Defined.
 
   Lemma tv_hb_dec:
     forall v1 v2,
     { v1 < v2 } + { ~ v1 < v2 }.
   Proof.
     intros.
-    destruct (can_wait_dec (mode v2)). {
+    destruct (can_wait (mode v2)). {
       destruct (can_signal (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           left; auto using tv_hb_def.
@@ -117,7 +117,7 @@ Section Facts.
       right; intuition.
     }
     right; intuition.
-  Qed.
+  Defined.
 
   Lemma tv_nhb_to_not_lt:
     forall v1 v2,
@@ -146,9 +146,9 @@ Section Facts.
     intros.
     destruct (ge_dec (signal_phase v1) (wait_phase v2)).
     { auto using tv_nhb_ge. }
-    destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY).
+    destruct (regmode_eq (mode v2) SIGNAL_ONLY).
     { auto using tv_nhb_so. }
-    destruct (regmode_eq_dec (mode v1) WAIT_ONLY).
+    destruct (regmode_eq (mode v1) WAIT_ONLY).
     { auto using tv_nhb_wo. }
     assert (HappensBefore v1 v2). {
       assert (signal_phase v1 < wait_phase v2) % nat by intuition.
@@ -169,7 +169,7 @@ Section Facts.
     ~ v1 >= v2 -> v1 < v2.
   Proof.
     intros.
-    destruct (can_wait_dec (mode v2)). {
+    destruct (can_wait (mode v2)). {
       destruct (can_signal (mode v1)). {
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           auto using tv_hb_def.
@@ -203,7 +203,7 @@ Section Facts.
     intros.
     destruct (tv_hb_dec v1 v2);
     auto using tv_not_lt_to_ge.
-  Qed.
+  Defined.
 
   Lemma tv_well_formed_to_ge_refl:
     forall v,
@@ -260,7 +260,7 @@ Section Facts.
   Proof.
     intros.
     inversion G1; subst; clear G1.
-    - destruct (can_signal_wo_dec (mode v1)). {
+    - destruct (can_signal_wo (mode v1)). {
         apply tv_nhb_ge.
         simpl.
         apply L1 in c; clear L1.
@@ -581,9 +581,9 @@ Section Facts.
     unfold union, get_wait_phase, get_signal_phase; intros.
     inversion H; simpl in *; clear H.
     apply can_wait_inv_union in H2.
-    destruct (regmode_eq_dec (mode v1) SIGNAL_ONLY). {
+    destruct (regmode_eq (mode v1) SIGNAL_ONLY). {
       rewrite e in *.
-      destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY). {
+      destruct (regmode_eq (mode v2) SIGNAL_ONLY). {
         rewrite e0 in *.
         destruct H2 as [N|N]; inversion N.
       }
@@ -606,7 +606,7 @@ Section Facts.
       contradiction n; auto.
     }
     rewrite R in *; clear R.
-    destruct (regmode_eq_dec (mode v2) SIGNAL_ONLY). {
+    destruct (regmode_eq (mode v2) SIGNAL_ONLY). {
       rewrite e in *.
       rewrite Max.max_0_r in *.
       destruct H2. {
