@@ -178,7 +178,7 @@ Module Taskview.
   Lemma reduces_trans_inv:
     forall x y z o,
     WellFormed x ->
-    SignalCap (mode x) ->
+    CanSignal (mode x) ->
     Reduces x WAIT y ->
     Reduces y o z ->
     o = SIGNAL.

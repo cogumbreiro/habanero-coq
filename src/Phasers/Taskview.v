@@ -293,7 +293,7 @@ Section Facts.
     unfold wait.
     destruct (can_signal_wo_dec (mode v)).
     - destruct (mode v);
-      inversion s;
+      inversion c;
       rewrite wait_phase_set_wait_phase;
       trivial.
     - simpl.

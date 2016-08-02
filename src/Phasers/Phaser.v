@@ -93,7 +93,7 @@ Section Defs.
     phase_def:
       (forall t v,
         MapsTo t v ph ->
-        SignalCap (mode v) ->
+        CanSignal (mode v) ->
         signal_phase v >= n) ->
       Phase ph n.
 

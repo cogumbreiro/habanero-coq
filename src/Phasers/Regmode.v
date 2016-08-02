@@ -49,13 +49,13 @@ Inductive CanWait : regmode -> Prop :=
 
 Hint Constructors CanWait.
 
-Inductive SignalCap : regmode -> Prop :=
+Inductive CanSignal : regmode -> Prop :=
   | can_signal_sw:
-    SignalCap SIGNAL_WAIT
+    CanSignal SIGNAL_WAIT
   | can_signal_so:
-    SignalCap SIGNAL_ONLY.
+    CanSignal SIGNAL_ONLY.
 
-Hint Constructors SignalCap.
+Hint Constructors CanSignal.
 
 Section Facts.
   
@@ -150,7 +150,7 @@ Section Facts.
 
   Lemma can_signal_dec:
     forall r,
-    { SignalCap r } + { ~ SignalCap r }.
+    { CanSignal r } + { ~ CanSignal r }.
   Proof.
     intros.
     destruct r; auto.
@@ -160,14 +160,14 @@ Section Facts.
   Lemma neq_wo_to_can_signal:
     forall r,
     r <> WAIT_ONLY ->
-    SignalCap r.
+    CanSignal r.
   Proof.
     destruct r; intuition.
   Qed.
 
   Lemma can_signal_to_neq_wo:
     forall r,
-    SignalCap r ->
+    CanSignal r ->
     r <> WAIT_ONLY.
   Proof.
     intros.
@@ -179,7 +179,7 @@ Section Facts.
 
   Lemma can_signal_rw:
     forall r,
-    SignalCap r <-> r <> WAIT_ONLY.
+    CanSignal r <-> r <> WAIT_ONLY.
   Proof.
     intros.
     split; auto using can_signal_to_neq_wo, neq_wo_to_can_signal.
@@ -187,7 +187,7 @@ Section Facts.
 
   Lemma not_can_signal_to_wo:
     forall r,
-    ~ SignalCap r ->
+    ~ CanSignal r ->
     r = WAIT_ONLY.
   Proof.
     intros.
@@ -199,7 +199,7 @@ Section Facts.
 
   Lemma can_signal_wo_dec:
     forall r,
-    { SignalCap r } + { r = WAIT_ONLY }.
+    { CanSignal r } + { r = WAIT_ONLY }.
   Proof.
     intros.
     destruct (can_signal_dec r);
@@ -208,7 +208,7 @@ Section Facts.
 
   Lemma can_signal_and_can_wait_to_sw:
     forall r,
-    SignalCap r ->
+    CanSignal r ->
     CanWait r ->
     r = SIGNAL_WAIT.
   Proof.
@@ -220,7 +220,7 @@ Section Facts.
   Lemma can_signal_can_wait_to_sw:
     forall r,
     CanWait r ->
-    SignalCap r ->
+    CanSignal r ->
     r = SIGNAL_WAIT.
   Proof.
     intros.
