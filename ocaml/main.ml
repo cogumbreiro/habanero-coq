@@ -19,36 +19,32 @@ let rec nat_of_int x =
 
 (** May throw an exception *)
 
-let nat_of_string x =
-  nat_of_int (int_of_string (trim x))
-;;
+let nat_of_string x = nat_of_int (int_of_string (trim x)) ;;
+
+let reg_of_string s : Cg.regmode =
+    match String.uppercase (trim s) with
+    | "SIG_ONLY"  -> Cg.SIGNAL_ONLY
+    | "SIG_WAIT" -> Cg.SIGNAL_WAIT
+    | "WAIT_ONLY"  -> Cg.WAIT_ONLY
+    | _ -> raise (Failure "reg_of_string")
+    ;;
   
-let op_of_string s =
-    try (
-        let s = String.uppercase (trim s) in
-        match split s ' ' with
-        | "ASYNC" :: x :: [] -> Some (Cg.ASYNC (nat_of_string x))
-        | "PHASED" :: x :: [] -> Some (Cg.ASYNC_PHASED (nat_of_string x))
-        | "SIGNAL" :: ph :: [] -> Some (Cg.SIGNAL (nat_of_string ph))
-        | "WAIT" :: ph :: [] -> Some (Cg.WAIT (nat_of_string ph))
-        | "DROP" :: ph :: [] -> Some (Cg.DROP (nat_of_string ph))
-        | "CONTINUE" :: [] -> Some Cg.CONTINUE
-        | _ -> None
-    ) with | _ -> None
+let op_of_string s : Cg.op =
+    match split (String.uppercase (trim s)) ' ' with
+    | "ASYNC" :: x :: [] -> Cg.ASYNC (nat_of_string x)
+    | "PHASED" :: x :: r :: [] -> Cg.ASYNC_PHASED ((nat_of_string x), (reg_of_string r))
+    | "SIGNAL" :: [] -> Cg.SIGNAL
+    | "WAIT" :: [] -> Cg.WAIT
+    | "DROP" :: [] -> Cg.DROP
+    | "CONTINUE" :: [] -> Cg.CONTINUE
+    | _ -> raise (Failure "op_of_string")
     ;;
 
-
-let event_of_string s : Cg.event option =
+let event_of_string s : Cg.event =
     let s = trim s in
-    try (
-        match split s ':' with
-        | s::o::[] ->
-            (match op_of_string o with
-            | Some o -> Some (Cg.Pair (nat_of_string s, o))
-            | _ -> None)
-        | _ -> None
-    ) with
-    | _ -> None  
+    match split s ':' with
+    | s::o::[] -> Cg.Pair (nat_of_string s, op_of_string o)
+    | _ -> raise (Failure "op_of_string")
 
 let filter_duplicates lst =
   let rec is_member n mlst =
@@ -73,32 +69,6 @@ let filter_duplicates lst =
   in
   loop lst
 
-let is_op (o:Cg.op) =
-    match o with
-    | Cg.ASYNC _ -> true
-    | Cg.ASYNC_PHASED _ -> true
-    | Cg.SIGNAL _ -> true
-    | Cg.WAIT _ -> true
-    | Cg.DROP _ -> true
-    | _ -> false
-
-let string_of_op (o:Cg.op) =
-    match o with
-    | Cg.ASYNC _ -> "async"
-    | Cg.ASYNC_PHASED _ -> "phased"
-    | Cg.SIGNAL _ -> "signal"
-    | Cg.WAIT _ -> "wait"
-    | Cg.DROP _ -> "drop"
-    | _ -> ""
-
-let is_sync (o:Cg.op) =
-    match o with
-    | Cg.PREC -> true
-    | Cg.ASYNC _ -> true
-    | Cg.ASYNC_PHASED _ -> true
-    | _ -> false
-
-
 let rec as_list l : 'a list =
     match l with
     | Cg.Cons (x, l) ->
@@ -112,9 +82,9 @@ let rec from_list l =
     ;;
 
 let trace_of_string s =
-    let to_evt x : Cg.event list = match (event_of_string x) with
-        | Some x -> [x]
-        | _ -> []
+    let to_evt x : Cg.event list = 
+        try [event_of_string x]
+        with | Failure _ -> []
     in
     from_list (rev (flatten (List.map to_evt (split s '\n'))))
 
@@ -123,27 +93,15 @@ let js_array_from_list l =
     List.iteri (fun idx v -> Js.array_set arr idx v) l;
     arr
 
-type edge = (Cg.node, Cg.node) Cg.prod
+type edge = (Cg.nat, Cg.nat) Cg.prod
 
-type ex_edge = (Cg.op, edge) Cg.prod
+let rec js_of_vertex (idx:int) = js (string_of_int idx)
 
-let rec js_of_vertex (idx:int) (es:ex_edge Cg.list) =
-    try (
-        match (List.find (fun e ->
-            match e with
-            | Cg.Pair (o, Cg.Pair(n,_)) -> (idx = int_of_nat n) && (is_op o)
-            
-        ) (as_list es)) with
-        | Cg.Pair (o, _) ->
-        string_of_op o
-    ) with
-    | _ -> string_of_int idx
-
-let js_of_vertices (vs:Cg.tid Cg.list) (es:ex_edge Cg.list) =
+let js_of_vertices (vs:Cg.tid Cg.list) =
     let to_js (idx:int) (tid:int) =
         Js.Unsafe.obj [|
         ("id", Js.Unsafe.inject idx);
-        ("label", Js.Unsafe.inject (js (js_of_vertex idx es)));
+        ("label", Js.Unsafe.inject (js_of_vertex idx));
         ("group", Js.Unsafe.inject tid)
         |]
     in
@@ -156,25 +114,30 @@ let js_of_vertices (vs:Cg.tid Cg.list) (es:ex_edge Cg.list) =
 
 let js_of_bool b = if b then Js._true else Js._false
 
-let js_of_edges (es:ex_edge Cg.list) =
+type edge_type =
+| FORK
+| SYNC
+| CONTINUE
+
+let js_of_edges (cg:Cg.computation_graph) =
     let is_enabled b =
         Js.Unsafe.obj [| ("enabled", Js.Unsafe.inject (js_of_bool b)) |]
     in
-    
-    let to_js (e:ex_edge) =
+    let to_js (t:edge_type) (e:edge) =
         match e with
-        | Cg.Pair (o, Cg.Pair(n1,n2)) ->
-
+        | Cg.Pair(n1,n2) ->
         Js.Unsafe.obj [|
         ("from", Js.Unsafe.inject (int_of_nat n1));
         ("to", Js.Unsafe.inject (int_of_nat n2));
-(*        ("label", Js.Unsafe.inject (js (string_of_op o)));*)
-        ("dashes", Js.Unsafe.inject (js_of_bool (is_sync o)));
+        ("dashes", Js.Unsafe.inject (js_of_bool (t <> CONTINUE)));
         ("arrows", Js.Unsafe.inject (js "to"));
-        ("smooth", Js.Unsafe.inject (is_enabled (is_sync o)))
+        ("smooth", Js.Unsafe.inject (is_enabled (t <> CONTINUE)))
         |]
     in
-    js_array_from_list (List.map to_js (as_list es))
+    let ec = List.map (to_js CONTINUE) (as_list (Cg.c_edges cg)) in
+    let ej = List.map (to_js FORK) (as_list (Cg.f_edges cg)) in
+    let es = List.map (to_js SYNC) (as_list (Cg.s_edges cg)) in
+    js_array_from_list (ec @ ej @ es)
 
 let js_of_cg cg =
     match cg with
