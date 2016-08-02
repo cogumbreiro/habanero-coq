@@ -100,6 +100,12 @@ Section Defs.
 
   Definition phases := (Map_TID.t node * MN.t nat) % type.
 
+  Definition ph_empty : phases := (Map_TID.empty node, MN.empty nat).
+
+  Definition ph_make (x:tid) :=
+  let n := (fresh (A:=tid) nil) in
+  (Map_TID.add x n (Map_TID.empty node), MN.add n 0 (MN.empty nat)).
+
   Inductive GetPhase : tid -> nat -> phases -> Prop :=
   | get_phase_def:
     forall (n:node) x w ns phs,
@@ -339,6 +345,10 @@ Section Defs.
     get_wp: phases
   }.
 
+  Definition builder_empty := {| get_nodes := nil; get_sp:= ph_empty; get_wp := ph_empty |}.
+
+  Definition builder_make x := {| get_nodes := (x::nil); get_sp:= ph_make x; get_wp := ph_make x |}.
+
   Definition Phase n ph (sp:phases) := MN.MapsTo n ph (snd sp).
 
   (** Get all nodes that signaled phase [ph]. *)
@@ -395,6 +405,8 @@ Section Defs.
     f_edges : list edge;
     s_edges : list edge
   }.
+
+  Definition cg_empty : computation_graph := {| c_edges:= nil; f_edges:=nil; s_edges:=nil|}.
 
   Inductive AddEdges (b b':builder) (cg:computation_graph) (e:event) : computation_graph -> Prop :=
   | add_edges_def:
@@ -606,18 +618,19 @@ Section Defs.
     Build l vs es ->
     Add vs es e vs' es' -> 
     Build (e::l) vs' es'.
+*)
 
-  Fixpoint build l : option (list tid * list (op * edge)):=
+  Fixpoint build l : option (builder * computation_graph):=
   match l with
-  | nil => Some (nil,nil)
-  | (x,o) :: nil => add (x::nil) nil (x,o)
+  | nil => Some (builder_empty, cg_empty)
+  | (x,o) :: nil => add (x,o) (builder_make x, cg_empty)
   | e :: l =>
     match build l with
-    | Some (vs, es) => add vs es e
+    | Some cgb => add e cgb
     | _ => None
     end
   end.
-
+(*
   Definition to_cg l :=
   match build l with
   | Some (_, es) => Some es
@@ -649,4 +662,4 @@ Section Defs.
 *)
 End Defs.
 
-Extraction "ocaml/cg.ml" add.
+Extraction "ocaml/cg.ml" build.
