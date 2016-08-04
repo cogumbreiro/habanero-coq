@@ -17,7 +17,17 @@ let rec nat_of_int x =
     if x <= 0 then Cg.O
     else Cg.S (nat_of_int (x - 1))
 
-(** May throw an exception *)
+let rec as_list l : 'a list =
+    match l with
+    | Cg.Cons (x, l) ->
+        x::(as_list l)
+    | _ -> []
+
+let rec from_list l =
+    match l with
+    | [] -> Cg.Nil
+    | x::xs -> Cg.Cons (x,from_list xs)
+    ;;
 
 let _SO = "SO";;
 let _WO = "WO";;
@@ -51,6 +61,32 @@ let event_of_string s : Cg.event =
     | s::o::[] -> Cg.Pair (nat_of_string s, op_of_string o)
     | _ -> raise (Failure "op_of_string")
 
+let string_of_reg r =
+    match r with
+    | Cg.SIGNAL_ONLY -> _SO
+    | Cg.SIGNAL_WAIT -> _SW
+    | Cg.WAIT_ONLY -> _WO;;
+
+let string_of_op o =
+    match o with
+    | Cg.ASYNC x -> "async " ^ (string_of_nat x)
+    | Cg.ASYNC_PHASED (x, r) -> "asyncPhased " ^ (string_of_nat x) ^ " " ^ (string_of_reg r)
+    | Cg.SIGNAL -> "signal"
+    | Cg.WAIT -> "wait"
+    | Cg.DROP -> "drop"
+    | Cg.CONTINUE -> "continue"
+    ;;
+
+let string_of_event e =
+    match e with
+    | Cg.Pair (x, o) ->
+    (string_of_int (int_of_nat x)) ^ ": " ^ (string_of_op o)
+    ;;
+
+let string_of_trace t =
+    concat "\n" (List.map string_of_event (rev (as_list t)))
+
+
 let filter_duplicates lst =
   let rec is_member n mlst =
     match mlst with
@@ -74,47 +110,12 @@ let filter_duplicates lst =
   in
   loop lst
 
-let rec as_list l : 'a list =
-    match l with
-    | Cg.Cons (x, l) ->
-        x::(as_list l)
-    | _ -> []
-
-let rec from_list l =
-    match l with
-    | [] -> Cg.Nil
-    | x::xs -> Cg.Cons (x,from_list xs)
-    ;;
-
 let trace_of_string s =
     let to_evt x : Cg.event list = 
         try [event_of_string x]
         with | Failure _ -> []
     in
     from_list (rev (flatten (List.map to_evt (split s '\n'))))
-
-let string_of_trace t =
-    let string_of_reg r =
-        match r with
-        | Cg.SIGNAL_ONLY -> _SO
-        | Cg.SIGNAL_WAIT -> _SW
-        | Cg.WAIT_ONLY -> _WO
-    in
-    let string_of_op o =
-        match o with
-        | Cg.ASYNC x -> "async " ^ (string_of_nat x)
-        | Cg.ASYNC_PHASED (x, r) -> "asyncPhased " ^ (string_of_nat x) ^ " " ^ (string_of_reg r)
-        | Cg.SIGNAL -> "signal"
-        | Cg.WAIT -> "wait"
-        | Cg.DROP -> "drop"
-        | Cg.CONTINUE -> "continue"
-    in
-    let string_of_event e =
-        match e with
-        | Cg.Pair (x, o) ->
-        (string_of_int (int_of_nat x)) ^ ": " ^ (string_of_op o)
-    in
-    concat "\n" (List.map string_of_event (rev (as_list t)))
 
 let js_array_from_list l =
     let arr = jsnew Js.array_empty () in
@@ -123,13 +124,18 @@ let js_array_from_list l =
 
 type edge = (Cg.nat, Cg.nat) Cg.prod
 
-let rec js_of_vertex (idx:int) = js (string_of_int idx)
+let js_of_vertex (idx:int) (ns:Cg.op Cg.MN.t) =
+    js (
+        match Cg.MN.find (nat_of_int idx) ns with
+        | Cg.Some o -> string_of_op o
+        | _ -> ""
+    )
 
-let js_of_vertices (vs:Cg.tid Cg.list) =
+let js_of_vertices (vs:Cg.tid Cg.list) (ns:Cg.op Cg.MN.t) =
     let to_js (idx:int) (tid:int) =
         Js.Unsafe.obj [|
         ("id", Js.Unsafe.inject idx);
-        ("label", Js.Unsafe.inject (js_of_vertex idx));
+        ("label", Js.Unsafe.inject (js_of_vertex idx ns));
         ("group", Js.Unsafe.inject tid)
         |]
     in
@@ -151,13 +157,19 @@ let js_of_edges (cg:Cg.computation_graph) =
     let is_enabled b =
         Js.Unsafe.obj [| ("enabled", Js.Unsafe.inject (js_of_bool b)) |]
     in
+    let js_dash t =
+        match t with
+        | SYNC -> js_of_bool true
+        | FORK -> Js.Unsafe.js_expr "[1,10,1,10]"
+        | CONTINUE -> js_of_bool false
+    in
     let to_js (t:edge_type) (e:edge) =
         match e with
         | Cg.Pair(n1,n2) ->
         Js.Unsafe.obj [|
         ("from", Js.Unsafe.inject (int_of_nat n1));
         ("to", Js.Unsafe.inject (int_of_nat n2));
-        ("dashes", Js.Unsafe.inject (js_of_bool (t <> CONTINUE)));
+        ("dashes", Js.Unsafe.inject (js_dash t));
         ("arrows", Js.Unsafe.inject (js "to"));
         ("smooth", Js.Unsafe.inject (is_enabled (t <> CONTINUE)))
         |]
@@ -171,7 +183,7 @@ let js_of_cg bcg =
     match bcg with
     | Cg.Pair (b, cg) ->
     Js.Unsafe.obj [|
-        ("nodes", Js.Unsafe.inject (js_of_vertices (Cg.get_nodes b)));
+        ("nodes", Js.Unsafe.inject (js_of_vertices (Cg.get_nodes b) (Cg.node_to_op b)));
         ("edges", Js.Unsafe.inject (js_of_edges cg)) |]
 
 let draw_graph container g : unit =
@@ -179,10 +191,17 @@ let draw_graph container g : unit =
  "
 {
   edges: {
-    width: 1,
+    width: 2,
     smooth: {
         enabled: false
-    }
+    },
+    shadow:true
+  },
+  nodes : {
+    shape: 'dot',
+    size: 15,
+    shadow:true,
+    font: {face:'courier', size: 20, strokeWidth:3, strokeColor:'#ffffff'}
   },
   layout: {
     randomSeed: 0
