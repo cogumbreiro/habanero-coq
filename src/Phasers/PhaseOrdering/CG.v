@@ -345,12 +345,15 @@ Section Defs.
   Structure builder := {
     get_nodes: list tid;
     get_sp: phases;
-    get_wp: phases
+    get_wp: phases;
+    node_to_op: MN.t op
   }.
 
-  Definition builder_empty := {| get_nodes := nil; get_sp:= ph_empty; get_wp := ph_empty |}.
+  Definition builder_empty :=
+  {| get_nodes := nil; get_sp:= ph_empty; get_wp := ph_empty; node_to_op:=MN.empty op |}.
 
-  Definition builder_make x := {| get_nodes := (x::nil); get_sp:= ph_make x; get_wp := ph_make x |}.
+  Definition builder_make x :=
+  {| get_nodes := (x::nil); get_sp:= ph_make x; get_wp := ph_make x; node_to_op:=MN.empty op |}.
 
   Definition Phase n ph (sp:phases) := MN.MapsTo n ph (snd sp).
 
@@ -427,18 +430,39 @@ Section Defs.
     intuition.
   Qed.
 
+  Inductive UpdateOps (vs:list tid) (m:MN.t op): event -> MN.t op -> Prop :=
+  | update_ops_def:
+    forall n x o,
+    MapsTo x n vs ->
+    UpdateOps vs m (x, o) (MN.add n o m).
+
+  Let update_ops (vs:list tid) (e:event) (m:MN.t op) :=
+  let (x, o) := e in
+  match lookup TID.eq_dec x vs with
+  | Some n => Some (MN.add n o m)
+  | _ => None
+  end.
+
   Inductive UpdateBuilder (b:builder) : event -> builder -> Prop :=
   | update_builder_def:
-    forall sp wp e,
+    forall sp wp e m,
     UpdateSP (get_nodes b) (update_nodes (get_nodes b) e) (get_sp b) e sp ->
     UpdateWP (update_nodes (get_nodes b) e) (get_wp b) e wp ->
-    UpdateBuilder b e {| get_nodes:=update_nodes (get_nodes b) e; get_sp:=sp; get_wp:=wp |}.
+    UpdateOps (get_nodes b) (node_to_op b) e m ->
+    UpdateBuilder b e
+    {| get_nodes:=update_nodes (get_nodes b) e;
+       get_sp:=sp;
+       get_wp:=wp;
+       node_to_op:=m |}.
 
   Let update_builder (e:event) b :=
   let vs := update_nodes (get_nodes b) e in
-  match update_sp (get_nodes b) vs e (get_sp b), update_wp vs e (get_wp b) with
-  | Some sp, Some wp => Some {| get_nodes:=vs; get_sp:=sp; get_wp:=wp |}
-  | _, _ => None
+  match update_sp (get_nodes b) vs e (get_sp b),
+        update_wp vs e (get_wp b),
+        update_ops (get_nodes b) e (node_to_op b) with
+  | Some sp, Some wp, Some m =>
+    Some {| get_nodes:=vs; get_sp:=sp; get_wp:=wp; node_to_op := m |}
+  | _,_,_ => None
   end.
 
   Structure computation_graph := {
@@ -821,6 +845,11 @@ Section Defs.
     WaitPhase x n ph ->
     GetPhase x n sp.
 
+  Let SP_Complete (ph:Phaser.phaser) (wp:phases) : Prop :=
+    forall x n,
+    SignalPhase x n ph ->
+    GetPhase x n wp.
+
   Let wp_signal:
     forall x y n ph,
     WaitPhase x n ph ->
@@ -948,6 +977,23 @@ Section Defs.
     eauto using wait_phase_def.
   Qed.
 
+  Let signal_phase_inv_wait:
+    forall x sp ph y,
+    SignalPhase x sp (Phaser.wait y ph) ->
+    SignalPhase x sp ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply wait_mapsto_inv in H0.
+    destruct H0 as [(?,(v',(Heq,mt)))|(?,mt)]. {
+      subst.
+      rewrite wait_preserves_mode in *.
+      rewrite wait_preserves_signal_phase.
+      eauto using signal_phase_def.
+    }
+    eauto using signal_phase_def.
+  Qed.
+
   Let wait_phase_inv_wait:
     forall x wp ph y,
     WaitPhase x wp (Phaser.wait y ph) ->
@@ -964,6 +1010,24 @@ Section Defs.
       apply wait_phase_def with (v:=v'); auto.
     }
     eauto using wait_phase_def.
+  Qed.
+
+  Let signal_phase_inv_signal:
+    forall x sp ph y,
+    SignalPhase x sp (Phaser.signal y ph) ->
+    (y = x /\ exists sp', sp = S sp' /\ SignalPhase x sp' ph) \/ (y <> x /\ SignalPhase x sp ph).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply signal_mapsto_inv in H0.
+    destruct H0 as [(?, (v', (?, ?)))|(?,?)]. {
+      subst; left; split; auto.
+      rewrite signal_preserves_mode in *.
+      exists (signal_phase v').
+      split; auto.
+      apply signal_phase_def with (v:=v'); auto.
+    }
+    eauto using signal_phase_def.
   Qed.
 
   Let get_phases_inc:
@@ -1094,7 +1158,6 @@ Section Defs.
     eapply copy_2; eauto.
   Qed.
 
-
   Let wp_complete_reg_1:
     forall vs wp x ph t n r wp',
     WFPhases vs wp ->
@@ -1142,14 +1205,71 @@ Section Defs.
         subst.
         eauto.
       }
-      eauto.
+      apply H0 in H2.
+      eapply get_phases_inc_neq in H6; eauto.
     - apply wait_phase_drop_eq in H3.
       destruct H3.
       eauto.
     - eapply wp_complete_reg_1; eauto.
     - eapply wp_complete_reg_2; eauto.
   Qed.
+(*
+  Let set_phase_cons:
+    forall vs sp y ph sp',
+    SetPhase vs sp y ph sp' ->
+    SetPhase (y :: vs) sp y ph sp'.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply set_phase_def.
+    - auto using maps_to_eq.
+    auto using set_phase_def, maps_to_cons, MN.add_1.
+  Qed.
 
+  Let inc_cons:
+    forall vs sp y sp',
+    Inc vs sp y sp' ->
+    Inc (y :: vs) sp y sp'.
+  Proof.
+    intros.
+    inversion H; subst.
+    apply inc_def with (ph:=ph); auto.
+  Qed.
+*)
+
+(*
+  Let sp_complete:
+    forall vs sp ph x o ph' sp',
+    WFPhases vs sp ->
+    WFPhases (update_nodes vs (x, of_op o)) sp ->
+    SP_Complete ph sp ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateSP vs (update_nodes vs (x, of_op o)) sp (x, of_op o) sp' ->
+    SP_Complete ph' sp'.
+  Proof.
+    intros; unfold SP_Complete; intros.
+    rename x into y.
+    rename x0 into x.
+    destruct o; inversion H2; simpl in *; subst;
+    inversion H3; subst; clear H2 H3.
+    - apply signal_phase_inv_signal in H4.
+      destruct H4 as [(?, (?, (?, ?)))|(?,?)]. {
+        subst.
+        eauto.
+      }
+      apply H1 in H3.
+      eapply get_phases_inc_neq in H3; eauto.
+      
+      eauto.
+    - apply signal_phase_inv_wait in H4; auto.
+    - apply wait_phase_drop_eq in H3.
+      destruct H3.
+      eauto.
+    - eapply wp_complete_reg_1; eauto.
+    - eapply wp_complete_reg_2; eauto.
+    
+  Qed.
+*)
   Let wf_phases_inc:
     forall vs wp t x n wp',
     WFPhases vs wp ->
@@ -1415,6 +1535,23 @@ Section Defs.
       auto using update_wp_drop.
   Qed.
 
+  Let update_ops_some:
+    forall vs e m m',
+    update_ops vs e m = Some m' ->
+    UpdateOps vs m e m'.
+  Proof.
+    unfold update_ops; intros.
+    destruct e as (x, o).
+    remember (lookup _ _ _).
+    symmetry in Heqo0.
+    destruct o0. {
+      inversion H; subst.
+      apply lookup_some in Heqo0.
+      auto using update_ops_def.
+    }
+    inversion H.
+  Qed.
+
   Let update_builder_some:
     forall b e b',
     update_builder e b = Some b' ->
@@ -1428,8 +1565,15 @@ Section Defs.
       remember (update_wp _ _ _).
       symmetry in Heqo0.
       destruct o. {
-        inversion H; subst.
-        auto using update_builder_def.
+        remember (update_ops _ _ _).
+        symmetry in Heqo1.
+        destruct o. {
+          apply update_wp_some in Heqo0.
+          apply update_ops_some in Heqo1.
+          inversion H; subst.
+          apply update_builder_def; auto.
+        }
+        inversion H.
       }
       inversion H.
     }
