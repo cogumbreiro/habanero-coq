@@ -3,6 +3,8 @@ Require Import Coq.Lists.List.
 Require Import Aniceto.Pair.
 Require Import Aniceto.List.
 
+Require Import Phasers.Phaser.
+Require Import Phasers.Taskview.
 Require Import Regmode.
 Require Import Vars.
 Require Import Node.
@@ -232,11 +234,15 @@ Section Defs.
   | update_wp_async:
     forall x y,
     UpdateWP vs ws (x, ASYNC y) ws
-  | update_wp_phased:
+  | update_wp_phased_can_wait:
     forall ws' x y r,
     CanWait r ->
     Copy vs ws x y ws' ->
     UpdateWP vs ws (x, ASYNC_PHASED y r) ws'
+  | update_wp_phased_cannot_wait:
+    forall x y r,
+    ~ CanWait r ->
+    UpdateWP vs ws (x, ASYNC_PHASED y r) ws
   | update_wp_signal:
     forall x,
     UpdateWP vs ws (x, SIGNAL) ws
@@ -267,11 +273,15 @@ Section Defs.
   | update_sp_async:
     forall x y,
     UpdateSP vs ws (x, ASYNC y) ws
-  | update_sp_phased:
+  | update_sp_phased_can_signal:
     forall ws' x y r,
     CanSignal r ->
     Copy vs ws x y ws' ->
     UpdateSP vs ws (x, ASYNC_PHASED y r) ws'
+  | update_sp_phased_cannot_signal:
+    forall x y r,
+    ~ CanSignal r ->
+    UpdateSP vs ws (x, ASYNC_PHASED y r) ws
   | update_sp_signal:
     forall x ws',
     Inc vs ws x ws' ->
@@ -444,7 +454,522 @@ Section Defs.
   | _ => None
   end.
 
-  Definition edges cg := (c_edges cg) ++ (f_edges cg) ++ (s_edges cg).
+  Inductive WaitPhase x n ph : Prop :=
+  | wait_phase_def:
+    forall v,
+    Map_TID.MapsTo x v ph ->
+    CanWait (Taskview.mode v) ->
+    Taskview.wait_phase v = n ->
+    WaitPhase x n ph.
+
+  Inductive SignalPhase x n ph : Prop :=
+  | signal_phase_def:
+    forall v,
+    Map_TID.MapsTo x v ph ->
+    CanSignal (Taskview.mode v) ->
+    Taskview.signal_phase v = n ->
+    SignalPhase x n ph.
+
+  Let SP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
+    forall x n,
+    GetPhase x n sp ->
+    SignalPhase x n ph.
+
+  Let of_op (o:Phaser.op) :=
+  match o with
+  | Phaser.SIGNAL => SIGNAL
+  | Phaser.WAIT => WAIT
+  | Phaser.DROP => DROP
+  | Phaser.REGISTER r => ASYNC_PHASED (Phaser.get_task r) (Phaser.get_mode r)
+  end.
+
+  Let set_phase_to_get_phase:
+    forall vs sp t ph sp',
+    SetPhase vs sp t ph sp' ->
+    GetPhase t ph sp'.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply get_phase_def with (n:=n); eauto using Map_TID.add_1, MN.add_1.
+  Qed.
+
+  Let get_phase_fun:
+    forall t ph ph' sp,
+    GetPhase t ph sp ->
+    GetPhase t ph' sp ->
+    ph' = ph.
+  Proof.
+    intros.
+    inversion H; inversion H0; subst; clear H H0.
+    inversion H10; subst; clear H10.
+    assert (n0 = n) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+    eauto using MN_Facts.MapsTo_fun.
+  Qed.
+
+  Let inc_inv:
+    forall vs sp t sp',
+    Inc vs sp t sp' ->
+    exists n, GetPhase t n sp /\ GetPhase t (S n) sp'.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply set_phase_to_get_phase in H1.
+    eauto.
+  Qed.
+
+  Let NodesDefined (vs:list tid) (m:Map_TID.t node) : Prop :=
+  forall x n, Map_TID.MapsTo x n m -> TaskOf n x vs. (* nodes are mapped to the correct owner *)
+
+  Let WFPhases (vs:list tid) (ps:phases) := NodesDefined vs (fst ps).
+
+  Let set_phase_3:
+    forall t sp' sp x vs ph ph',
+    WFPhases vs sp ->
+    GetPhase t ph sp' ->
+    x <> t ->
+    SetPhase vs sp x ph' sp' ->
+    GetPhase t ph sp.
+  Proof.
+    intros.
+    inversion H2; subst; clear H2.
+    inversion H0; subst; clear H0.
+    apply Map_TID.add_3 in H7; auto.
+    assert (n0 <> n). {
+      unfold WFPhases in *; simpl in *.
+      rewrite MN_Facts.add_mapsto_iff in *.
+      destruct H8 as [(?,?)|(?,?)]. {
+        subst.
+        apply H in H7.
+        apply maps_to_to_task_of in H3.
+        simpl_node.
+        contradiction H1; trivial.
+      }
+      auto.
+    }
+    apply MN.add_3 in H8; auto.
+    eauto using get_phase_def.
+  Qed.
+
+  Let inc_3:
+    forall vs t n sp' sp x,
+    WFPhases vs sp ->
+    GetPhase t n sp' ->
+    Inc vs sp x sp' ->
+    x <> t ->
+    GetPhase t n sp.
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    eapply set_phase_3 in H4; eauto.
+  Qed.
+
+  Let signal_neq:
+    forall x y ph n,
+    x <> y ->
+    SignalPhase x n ph ->
+    SignalPhase x n (Phaser.signal y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using signal_phase_def, signal_2.
+  Qed.
+
+  Let signal_neq_drop:
+    forall x y ph n,
+    x <> y ->
+    SignalPhase x n ph ->
+    SignalPhase x n (Phaser.drop y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using signal_phase_def, drop_2.
+  Qed.
+
+  Let signal_eq:
+    forall vs sp sp' ph t n,
+    WFPhases vs sp ->
+    (forall x n, GetPhase x n sp -> SignalPhase x n ph) ->
+    GetPhase t n sp' ->
+    Phaser.SignalPre t ph ->
+    Inc vs sp t sp' ->
+    SignalPhase t n (Phaser.signal t ph).
+  Proof.
+    intros.
+    apply inc_inv in H3.
+    rename n into n'.
+    destruct H3 as (n, (Hg1, Hg2)).
+    apply H0 in Hg1.
+    assert (n' = S n) by eauto; subst.
+    inversion H2; subst; clear H2.
+    apply signal_phase_def with (v:=Taskview.signal v).
+    - rewrite Phaser.signal_rw with (v:=v); auto.
+      auto using Map_TID.add_1.
+    - rewrite Taskview.signal_preserves_mode.
+      auto using signal_pre_to_can_signal.
+    - inversion Hg1.
+      subst.
+      unfold signal.
+      simpl.
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      trivial.
+  Qed.
+
+  Let signal_phase_wait:
+    forall x n ph y,
+    SignalPhase x n ph ->
+    SignalPhase x n (Phaser.wait y ph).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    destruct (TID.eq_dec x y). {
+      subst.
+      eauto using signal_phase_def, wait_mapsto_spec.
+    }
+    eauto using wait_2, signal_phase_def.
+  Qed.
+
+  Let drop_inv:
+    forall sp x y n sp',
+    Drop sp x sp' ->
+    GetPhase y n sp' ->
+    x <> y /\ GetPhase y n sp.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    inversion H0; subst; clear H0.
+    destruct (TID.eq_dec x y). {
+      subst.
+      apply Map_TID_Extra.mapsto_to_in in H4.
+      rewrite Map_TID_Facts.remove_in_iff in *.
+      destruct H4 as (N,_).
+      intuition.
+    }
+    split; auto.
+    apply Map_TID.remove_3 in H4.
+    eauto using get_phase_def.
+  Qed.
+
+  Let copy_3:
+    forall x y z sp sp' vs n,
+    WFPhases vs sp ->
+    z <> y ->
+    GetPhase z n sp' ->
+    Copy vs sp x y sp' ->
+    GetPhase z n sp.
+  Proof.
+    intros.
+    inversion H2; subst; clear H2.
+    eapply set_phase_3 in H4; eauto.
+  Qed.
+
+  Let copy_inv_eq:
+    forall x y sp sp' vs n,
+    GetPhase y n sp' ->
+    Copy vs sp x y sp' ->
+    GetPhase x n sp.
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eapply set_phase_to_get_phase in H2; eauto.
+    assert (ph = n) by eauto.
+    subst.
+    trivial.
+  Qed.
+
+  Let sp_register:
+    forall r x ph n,
+    RegisterPre r x ph ->
+    CanSignal (get_mode r) ->
+    SignalPhase x n ph ->
+    SignalPhase (get_task r) n (register r x ph).
+  Proof.
+    intros.
+    inversion H1; subst.
+    eauto using signal_phase_def, register_spec.
+  Qed.
+
+  Let sp_register_neq:
+    forall x y n ph r,
+    RegisterPre r y ph ->
+    SignalPhase x n ph ->
+    SignalPhase x n (register r y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    inversion H; subst; clear H.
+    destruct (TID.eq_dec (get_task r) x). {
+      subst.
+      contradiction H0.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    eauto using signal_phase_def, register_2.
+  Qed.
+
+  Let sp_sound:
+    forall vs sp ph x o ph' sp',
+    WFPhases vs sp ->
+    SP_Sound ph sp ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateSP vs sp (x, of_op o) sp' ->
+    SP_Sound ph' sp'.
+  Proof.
+    unfold SP_Sound; intros.
+    rename x0 into t.
+    destruct o; inversion H1; simpl in *; subst;
+    inversion H2; subst; clear H2 H1.
+    - destruct (TID.eq_dec x t). {
+        subst.
+        eapply signal_eq; eauto.
+      }
+      eapply inc_3 in H6; eauto.
+    - destruct (TID.eq_dec x t); subst; eauto.
+    - apply drop_inv with (y:=t) (n:=n) in H6; auto.
+      destruct H6 as (Hx,Hy).
+      eauto.
+    - destruct (TID.eq_dec (get_task r) t). {
+        subst.
+        apply copy_inv_eq with (n:=n) in H10; auto.
+      }
+      eapply copy_3 in H10; eauto.
+    - eauto.
+  Qed.
+
+  Let WP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
+    forall x n,
+    GetPhase x n sp ->
+    WaitPhase x n ph.
+
+  Let wp_signal:
+    forall x y n ph,
+    WaitPhase x n ph ->
+    WaitPhase x n (Phaser.signal y ph).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    destruct (TID.eq_dec x y). {
+      subst.
+      apply wait_phase_def with (v:=Taskview.signal v);
+      auto using signal_preserves_wait_phase, Phaser.signal_eq.
+    }
+    apply wait_phase_def with (v:= v);
+    auto using signal_preserves_wait_phase, signal_2.
+  Qed.
+
+  Let wp_wait_eq:
+    forall x n ph,
+    WaitPhase x n ph ->
+    WaitPhase x (S n) (Phaser.wait x ph).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using wait_phase_def, Phaser.wait_eq.
+  Qed.
+
+  Let wp_wait_neq:
+    forall x y n ph,
+    x <> y ->
+    WaitPhase x n ph ->
+    WaitPhase x n (Phaser.wait y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using wait_phase_def, Phaser.wait_2.
+  Qed.
+
+  Let wp_wait_neq_drop:
+    forall x y n ph,
+    x <> y ->
+    WaitPhase x n ph ->
+    WaitPhase x n (Phaser.drop y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using wait_phase_def, Phaser.drop_2.
+  Qed.
+
+  Let wp_register:
+    forall r x ph n,
+    RegisterPre r x ph ->
+    CanWait (get_mode r) ->
+    WaitPhase x n ph ->
+    WaitPhase (get_task r) n (register r x ph).
+  Proof.
+    intros.
+    inversion H1; subst.
+    eauto using wait_phase_def, register_spec.
+  Qed.
+
+  Let wp_register_neq:
+    forall x y n ph r,
+    RegisterPre r y ph ->
+    WaitPhase x n ph ->
+    WaitPhase x n (register r y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    inversion H; subst; clear H.
+    destruct (TID.eq_dec (get_task r) x). {
+      subst.
+      contradiction H0.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    eauto using wait_phase_def, register_2.
+  Qed.
+
+  Let wp_sound:
+    forall vs wp ph x o ph' wp',
+    WFPhases vs wp ->
+    WP_Sound ph wp ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateWP vs wp (x, of_op o) wp' ->
+    WP_Sound ph' wp'.
+  Proof.
+    intros; unfold WP_Sound; intros.
+    rename x0 into t.
+    destruct o; inversion H1; simpl in *; subst;
+    inversion H2; subst; clear H2 H1.
+    - eauto.
+    - destruct (TID.eq_dec t x). {
+        subst.
+        apply inc_inv in H6.
+        rename n into xw.
+        destruct H6 as (n, (Hg1, Hg2)).
+        assert (xw = S n) by eauto; subst.
+        eauto.
+      }
+      eapply inc_3 in H6; eauto.
+    - eapply drop_inv in H6; eauto.
+      destruct H6 as (?, Hg).
+      eauto.
+    - destruct (TID.eq_dec (get_task r) t). {
+        subst.
+        apply copy_inv_eq with (n:=n) in H10; auto.
+      }
+      eapply copy_3 in H10; eauto.
+    - eauto.
+  Qed.
+
+  Let wf_phases_inc:
+    forall vs wp t x n wp',
+    WFPhases vs wp ->
+    Map_TID.MapsTo t n (fst wp') ->
+    Inc (x :: vs) wp x wp' ->
+    TaskOf n t (x :: vs).
+  Proof.
+    intros.
+    assert (Hx := H1);
+    apply inc_inv in H1.
+    destruct H1 as (w, (Hg1, Hg2)).
+    inversion Hx; subst; clear Hx.
+    inversion H2; subst; clear H2.
+    simpl_node.
+    simpl in *.
+    assert (ph = w) by eauto; subst.
+    rewrite Map_TID_Facts.add_mapsto_iff in *.
+    destruct H0 as [(mt,?)|(Hneq,mt)]. {
+      subst.
+      auto using task_of_eq.
+    }
+    auto using task_of_cons.
+  Qed.
+
+  Let wf_phases_drop:
+    forall vs wp t n wp' x,
+    WFPhases vs wp ->
+    Map_TID.MapsTo t n (fst wp') ->
+    Drop wp x wp' ->
+    TaskOf n t (x :: vs).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    simpl in *.
+    apply Map_TID.remove_3 in H0.
+    auto using task_of_cons.
+  Qed.
+
+  Let wf_phases_reg:
+    forall vs wp t n wp' r x,
+    WFPhases vs wp ->
+    Map_TID.MapsTo t n (fst wp') ->
+    Copy (get_task r :: x :: vs) wp x (get_task r) wp' ->
+    TaskOf n t (get_task r :: x :: vs).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    inversion H3; subst; clear H3.
+    simpl in *.
+    rewrite Map_TID_Facts.add_mapsto_iff in *.
+    destruct H0 as [(?,?)|(?,mt)]. {
+      subst.
+      simpl_node.
+      auto using task_of_eq.
+    }
+    auto using task_of_cons.
+  Qed.
+
+  Let wf_phases_wp:
+    forall vs wp ph x o ph' wp',
+    WFPhases vs wp ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateWP (update_nodes vs (x, of_op o)) wp (x, of_op o) wp' ->
+    WFPhases (update_nodes vs (x, of_op o)) wp'.
+  Proof.
+    intros; unfold WFPhases, NodesDefined; intros.
+    rename x0 into t.
+    destruct o; inversion H0; simpl in *; subst;
+    inversion H1; subst; clear H0 H1; eauto using task_of_cons.
+  Qed.
+
+  Let wf_phases_sp:
+    forall vs sp ph x o ph' sp',
+    WFPhases vs sp ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateSP (update_nodes vs (x, of_op o)) sp (x, of_op o) sp' ->
+    WFPhases (update_nodes vs (x, of_op o)) sp'.
+  Proof.
+    intros; unfold WFPhases, NodesDefined; intros.
+    rename x0 into t.
+    destruct o; inversion H0; simpl in *; subst;
+    inversion H1; subst; clear H0 H1; eauto using task_of_cons.
+  Qed.
+
+  Inductive Sound ph b : Prop :=
+  | sound_def:
+    WFPhases (get_nodes b) (get_sp b) ->
+    WFPhases (get_nodes b) (get_wp b) ->
+    SP_Sound ph (get_sp b) ->
+    WP_Sound ph (get_wp b) ->
+    Sound ph b.
+
+  Let wp_phases_up:
+    forall vs ps e,
+    WFPhases vs ps ->
+    WFPhases (update_nodes vs e) ps.
+  Proof.
+    unfold WFPhases, NodesDefined; intros.
+    destruct e as (y, []); simpl; auto using task_of_cons.
+  Qed.
+
+  Let soundness:
+    forall b ph x o ph' b',
+    Sound ph b ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateBuilder b (x, of_op o) b' ->
+    Sound ph' b'.
+  Proof.
+    intros.
+    inversion H;  subst; clear H.
+    inversion H1; subst; clear H1.
+    assert (Hsp := H2).
+    assert (Hwp := H3).
+    eapply wf_phases_sp in H2; simpl; eauto.
+    eapply wf_phases_wp in H3; simpl; eauto.
+    apply sound_def; simpl; auto.
+    - remember (update_nodes _ _) as vs.
+      apply sp_sound with (vs:=vs) (sp:=get_sp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+    - remember (update_nodes _ _) as vs.
+      apply wp_sound with (vs:=vs) (wp:=get_wp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+  Qed.
 (*
 
 
@@ -516,109 +1041,20 @@ Section Defs.
     destruct H as  (e, (Hi, Hw)).
     eauto.
   Qed.
-
-  Let do_add_continue vs es (x:tid) (n:node) :=
-  ((x::vs), (CONTINUE, (n, fresh vs)) :: es).
-
-  Let do_add_async vs es x (n:node) y :=
-  let (vs', es') := do_add_continue vs es x n in
-  ((y::vs'), ((ASYNC y, (n, fresh vs')) :: es')).
-
-  Let do_add_async_phased vs es x (n:node) y :=
-  let (vs', es') := do_add_continue vs es x n in
-  ((y::vs'), ((ASYNC_PHASED y, (n, fresh vs')) :: es')).
-
-  Let do_add_signal vs es (x:tid) ph (n:node) :=
-  ((x::vs), (SIGNAL ph, (n, fresh vs)) :: es).
-
-  Let do_add_wait vs es (x:tid) ph (n:node) :=
-  ((x::vs), wait_edges vs ph es ++ (WAIT ph, (n, fresh vs)) :: es).
-
-  Let do_add_drop vs es (x:tid) ph (n:node) :=
-  ((x::vs), (DROP ph, (n, fresh vs)) :: es).
-
-  (**
-    Decidable implementation of adding an edge to the CG.
-    *)
-
-  Definition add vs es (e:event) :=
-  let (x, o) := e in
-  match lookup TID.eq_dec x vs with
-  | Some n =>
-    match o with
-    | ASYNC y => Some (do_add_async vs es x n y)
-    | ASYNC_PHASED y => Some (do_add_async_phased vs es x n y)
-    | SIGNAL ph => Some (do_add_signal vs es x ph n)
-    | WAIT ph => Some (do_add_wait vs es x ph n)
-    | DROP ph => Some (do_add_drop vs es x ph n)
-    | PREC => None
-    | CONTINUE => Some (do_add_continue vs es x n)
-    end
-  | _ => None
-  end.
-
-  Lemma add_some:
-    forall vs es e vs' es',
-    add vs es e = Some (vs', es') ->
-    Add vs es e vs' es'.
-  Proof.
-    unfold add; intros.
-    destruct e as (x, o).
-    remember (lookup _ _ _) as d.
-    symmetry in Heqd.
-    destruct d.
-    apply lookup_some in Heqd. {
-      destruct o; inversion H; subst; clear H;
-      auto using add_async, add_continue,
-                 add_async_phased, add_signal, add_wait, add_drop.
-    }
-    inversion H.
-  Qed.
-
-  Let add_to_in:
-    forall vs es x o vs' es',
-    Add vs es (x, o) vs' es' ->
-    List.In x vs.
-  Proof.
-    intros.
-    inversion H; subst; eauto using maps_to_to_in;
-    try (inversion H4; subst; eauto using maps_to_to_in; fail).
-    inversion H2; subst; eauto using maps_to_to_in.
-  Qed.
-
-  Lemma add_none:
-    forall vs es e,
-    add vs es e = None ->
-    forall vs' es',
-    ~ Add vs es e vs' es'.
-  Proof.
-    unfold add; intros.
-    unfold not; intros N.
-    destruct e as (x, o).
-    remember (lookup _ _ _) as d.
-    symmetry in Heqd.
-    destruct d. {
-      destruct o; inversion H.
-      inversion N.
-    }
-    apply lookup_none in Heqd.
-    contradiction Heqd.
-    eauto using add_to_in.
-  Qed.
-
-  Inductive Build: list event -> list tid -> list (op * edge) -> Prop :=
-  | build_nil:
-    Build nil nil nil
-  | build_cons_nil:
-    forall x o vs es,
-    Add (x::nil) nil (x,o) vs es -> 
-    Build ((x,o)::nil) vs es
-  | build_cons:
-    forall e l vs es vs' es',
-    Build l vs es ->
-    Add vs es e vs' es' -> 
-    Build (e::l) vs' es'.
 *)
+
+  Inductive Build: list event -> builder * computation_graph -> Prop :=
+  | build_nil:
+    Build nil (builder_empty, cg_empty)
+  | build_cons_nil:
+    forall x o cgb,
+    Add (builder_make x, cg_empty) (x,o) cgb -> 
+    Build ((x,o)::nil) cgb
+  | build_cons:
+    forall e l cgb cgb',
+    Build l cgb ->
+    Add cgb e cgb' -> 
+    Build (e::l) cgb'.
 
   Fixpoint build l : option (builder * computation_graph):=
   match l with
