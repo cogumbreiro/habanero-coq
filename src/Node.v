@@ -172,6 +172,16 @@ Section Props.
     eauto using Bijection.maps_to_fun_2.
   Qed.
 
+  Lemma task_of_fun_2:
+    forall vs (x y:A) n,
+    TaskOf n x vs ->
+    TaskOf n y vs ->
+    x = y.
+  Proof.
+    unfold TaskOf; intros.
+    eauto using Bijection.index_of_fun_2.
+  Qed.
+
   Lemma maps_to_inv_eq:
     forall (x:A) n vs,
     MapsTo x n (x :: vs) ->
@@ -499,15 +509,20 @@ End MoreProps.
   | [ H: MapsTo _ (fresh ?vs) ?vs |- _ ] =>
       apply maps_to_absurd_fresh in H;
       contradiction
-  | [ H: TaskOf (fresh ?vs) _ ?vs |- _ ] =>
-      apply task_of_absurd_fresh in H;
-      contradiction
   | [ H: Node (fresh ?vs) ?vs |- _ ] =>
       apply node_absurd_fresh in H;
       contradiction
-  | [ H: TaskOf (fresh ?vs) ?x (?y :: ?vs) |- _ ] => apply task_of_inv_eq in H; subst
   | [ H: MapsTo ?x (fresh ?vs) (?x :: ?vs) |- _ ] => clear H
   | [ H1: MapsTo ?x _ (?y :: _), H2: ?x <> ?y |- _ ] => apply maps_to_neq in H1; auto
   | [ H1: MapsTo ?x _ (?y :: _), H2: ?y <> ?x |- _ ] => apply maps_to_neq in H1; auto
   | [ H: MapsTo ?x _ (?x :: _) |- _ ] => apply maps_to_inv_eq in H; rewrite H in *; clear H
+  | [ H: TaskOf (fresh ?vs) _ ?vs |- _ ] =>
+      apply task_of_absurd_fresh in H;
+      contradiction
+  | [ H: TaskOf (fresh ?vs) ?x (?y :: ?vs) |- _ ] => apply task_of_inv_eq in H; subst
+  | [ H1: TaskOf ?n ?x ?v, H2: TaskOf ?n ?y ?v |- _ ] =>
+      let H' := fresh "H" in
+      assert (H': y = x) by eauto using task_of_fun_2;
+      rewrite H' in *;
+      clear H' H2
   end.
