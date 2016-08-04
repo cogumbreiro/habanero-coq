@@ -370,7 +370,7 @@ Section Defs.
     forall es x n ph,
     GetPhase x ph (get_wp b) ->
     MapsTo x n vs' ->
-    (forall n', List.In (n, n') es <-> Phase n' (S ph) (get_sp b)) ->
+    (forall n', List.In (n', n) es <-> Phase n' (S ph) (get_sp b)) ->
     AddSEdges b vs' (x, WAIT) es
   | add_s_edges_neq:
     forall x o,
@@ -383,7 +383,7 @@ Section Defs.
   | WAIT =>
     match get_phase x (get_wp b), lookup TID.eq_dec x vs' with
     | Some ph, Some n =>
-      Some (map (fun n' => (n, n')) (phase (S ph) (get_sp b)))
+      Some (map (fun n' => (n', n)) (phase (S ph) (get_sp b)))
     | _, _ => None
     end
   | _ => Some nil
@@ -391,7 +391,7 @@ Section Defs.
 
   Let phase_2:
     forall (a:node) b ph sp,
-    In (a, b) (map (fun c => (a, c)) (phase ph sp)) ->
+    In (b, a) (map (fun c => (c, a)) (phase ph sp)) ->
     Phase b ph sp.
   Proof.
     unfold phase; intros.
@@ -412,7 +412,7 @@ Section Defs.
   Let phase_1:
     forall (a:node) b ph sp,
     Phase b ph sp ->
-    In (a, b) (map (fun c => (a, c)) (phase ph sp)).
+    In (b, a) (map (fun c => (c, a)) (phase ph sp)).
   Proof.
     unfold phase; intros.
     rewrite in_map_iff.
@@ -430,13 +430,13 @@ Section Defs.
   Inductive UpdateBuilder (b:builder) : event -> builder -> Prop :=
   | update_builder_def:
     forall sp wp e,
-    UpdateSP (update_nodes (get_nodes b) e) (get_sp b) e sp ->
+    UpdateSP (get_nodes b) (get_sp b) e sp ->
     UpdateWP (update_nodes (get_nodes b) e) (get_wp b) e wp ->
     UpdateBuilder b e {| get_nodes:=update_nodes (get_nodes b) e; get_sp:=sp; get_wp:=wp |}.
 
   Let update_builder (e:event) b :=
   let vs := update_nodes (get_nodes b) e in
-  match update_sp vs e (get_sp b), update_wp vs e (get_wp b) with
+  match update_sp (get_nodes b) e (get_sp b), update_wp vs e (get_wp b) with
   | Some sp, Some wp => Some {| get_nodes:=vs; get_sp:=sp; get_wp:=wp |}
   | _, _ => None
   end.
@@ -953,13 +953,35 @@ Section Defs.
     forall vs sp ph x o ph' sp',
     WFPhases vs sp ->
     Phaser.Reduces ph x o ph' ->
-    UpdateSP (update_nodes vs (x, of_op o)) sp (x, of_op o) sp' ->
-    WFPhases (update_nodes vs (x, of_op o)) sp'.
+    UpdateSP vs sp (x, of_op o) sp' ->
+    WFPhases vs sp'.
   Proof.
     intros; unfold WFPhases, NodesDefined; intros.
     rename x0 into t.
     destruct o; inversion H0; simpl in *; subst;
     inversion H1; subst; clear H0 H1; eauto using task_of_cons.
+    - destruct H5.
+      inversion H1; subst; clear H1.
+      simpl in *.
+      rewrite Map_TID_Facts.add_mapsto_iff in *.
+      destruct H2 as [(?,?)|(?,mt)]. {
+        subst.
+        auto using maps_to_to_task_of.
+      }
+      auto.
+    - destruct sp; unfold drop in *; simpl in *.
+      apply Map_TID.remove_3 in H2.
+      auto.
+    - inversion H9.
+      inversion H1.
+      subst.
+      simpl in *.
+      rewrite Map_TID_Facts.add_mapsto_iff in *.
+      destruct H2 as [(?,?)|(?,mt)]. {
+        subst.
+        auto using maps_to_to_task_of.
+      }
+      auto.
   Qed.
 
   Inductive Sound ph b : Prop :=
@@ -991,11 +1013,12 @@ Section Defs.
     inversion H1; subst; clear H1.
     assert (Hsp := H2).
     assert (Hwp := H3).
-    eapply wf_phases_sp in H2; simpl; eauto.
     eapply wf_phases_wp in H3; simpl; eauto.
     apply sound_def; simpl; auto.
+    - eapply wf_phases_sp in H; eauto.
+      apply wp_phases_up with (e:=(x, of_op o)) in H; auto.
     - remember (update_nodes _ _) as vs.
-      apply sp_sound with (vs:=vs) (sp:=get_sp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+      apply sp_sound with (vs:=get_nodes b) (sp:=get_sp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
     - remember (update_nodes _ _) as vs.
       apply wp_sound with (vs:=vs) (wp:=get_wp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
   Qed.
