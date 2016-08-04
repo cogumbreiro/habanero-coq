@@ -114,7 +114,7 @@ let string_of_trace t =
         | Cg.Pair (x, o) ->
         (string_of_int (int_of_nat x)) ^ ": " ^ (string_of_op o)
     in
-    concat "\n" (List.map string_of_event (as_list t))
+    concat "\n" (List.map string_of_event (rev (as_list t)))
 
 let js_array_from_list l =
     let arr = jsnew Js.array_empty () in
@@ -174,7 +174,7 @@ let js_of_cg bcg =
         ("nodes", Js.Unsafe.inject (js_of_vertices (Cg.get_nodes b)));
         ("edges", Js.Unsafe.inject (js_of_edges cg)) |]
 
-let draw_graph container g =
+let draw_graph container g : unit =
     let opts = Js.Unsafe.js_expr 
  "
 {
@@ -196,12 +196,6 @@ let draw_graph container g =
     [| Js.Unsafe.inject container;  Js.Unsafe.inject g; opts|] in
     ()
 
-let parse_cg container t =
-    match Cg.build t with
-    | Cg.None -> ()
-    | Cg.Some cg -> draw_graph container (js_of_cg cg)
-    ;;
-
 let onload _ =
     let txt =
         Dom_html.getElementById "trace_in"
@@ -218,14 +212,12 @@ let onload _ =
     let handler = (fun _ ->
         let trace_txt = Js.to_string (txt##value) in
         let t = trace_of_string trace_txt in
-        (match !last_trace = t, Cg.build t with
-        | false, Cg.Some cg ->
+        if !last_trace <> t then (
             last_trace := t;
-            draw_graph graph (js_of_cg cg)
-        | false, Cg.None ->
-            print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
-        | _ -> ()
-        );
+            match Cg.build t with
+            | Cg.Some cg -> draw_graph graph (js_of_cg cg)
+            | Cg.None -> print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
+        ) else ();
         Js._false)
     in
     txt##onkeyup <- Html.handler handler;
