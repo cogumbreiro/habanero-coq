@@ -53,7 +53,7 @@ Section Defs.
     - auto using in_cons.
   Qed.
 
-  Lemma index_of_fun:
+  Lemma index_of_fun_1:
     forall l x n n',
     NoDup l ->
     IndexOf x n l ->
@@ -224,7 +224,7 @@ Section Defs.
     inversion H0; clear H0.
     rename yn0 into zn.
     assert (xn0 = yn) by
-    eauto using index_of_fun; subst.
+    eauto using index_of_fun_1; subst.
     apply lt_def with (xn:=xn) (yn:=zn); auto.
     omega.
   Qed.
@@ -246,7 +246,7 @@ Section Defs.
     intros.
     intuition.
     inversion H.
-    assert (xn=yn) by eauto using index_of_fun.
+    assert (xn=yn) by eauto using index_of_fun_1.
     intuition.
   Qed.
 
@@ -433,6 +433,27 @@ Section MapsTo.
       trivial.
     }
     apply index_of_absurd_length in H2; contradiction.
+  Qed.
+
+  Lemma index_of_fun_2:
+    forall l (x:A) y n,
+    IndexOf x n l ->
+    IndexOf y n l ->
+    y = x.
+  Proof.
+    induction l; intros. {
+      inversion H.
+    }
+    inversion H; subst; clear H. {
+      inversion H0; subst; clear H0. {
+        trivial.
+      }
+      apply index_of_absurd_length in H2; contradiction.
+    }
+    inversion H0; subst; clear H0. {
+      apply index_of_absurd_length in H3; contradiction.
+    }
+    eauto.
   Qed.
 
   Lemma maps_to_fun_1:
