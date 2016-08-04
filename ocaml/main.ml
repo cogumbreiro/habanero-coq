@@ -19,24 +19,29 @@ let rec nat_of_int x =
 
 (** May throw an exception *)
 
+let _SO = "SO";;
+let _WO = "WO";;
+let _SW = "SW";;
+
 let nat_of_string x = nat_of_int (int_of_string (trim x)) ;;
 
+let string_of_nat x = string_of_int (int_of_nat x) ;;
+
 let reg_of_string s : Cg.regmode =
-    match String.uppercase (trim s) with
-    | "SIG_ONLY"  -> Cg.SIGNAL_ONLY
-    | "SIG_WAIT" -> Cg.SIGNAL_WAIT
-    | "WAIT_ONLY"  -> Cg.WAIT_ONLY
-    | _ -> raise (Failure "reg_of_string")
-    ;;
+    let s = trim s in
+    if s = _WO then Cg.WAIT_ONLY
+    else if s = _SO then Cg.SIGNAL_ONLY
+    else if s = _SW then Cg.SIGNAL_WAIT
+    else raise (Failure "reg_of_string")
   
 let op_of_string s : Cg.op =
-    match split (String.uppercase (trim s)) ' ' with
-    | "ASYNC" :: x :: [] -> Cg.ASYNC (nat_of_string x)
-    | "PHASED" :: x :: r :: [] -> Cg.ASYNC_PHASED ((nat_of_string x), (reg_of_string r))
-    | "SIGNAL" :: [] -> Cg.SIGNAL
-    | "WAIT" :: [] -> Cg.WAIT
-    | "DROP" :: [] -> Cg.DROP
-    | "CONTINUE" :: [] -> Cg.CONTINUE
+    match split (trim s) ' ' with
+    | "async" :: x :: [] -> Cg.ASYNC (nat_of_string x)
+    | "asyncPhased" :: x :: r :: [] -> Cg.ASYNC_PHASED ((nat_of_string x), (reg_of_string r))
+    | "signal" :: [] -> Cg.SIGNAL
+    | "wait" :: [] -> Cg.WAIT
+    | "drop" :: [] -> Cg.DROP
+    | "continue" :: [] -> Cg.CONTINUE
     | _ -> raise (Failure "op_of_string")
     ;;
 
@@ -87,6 +92,29 @@ let trace_of_string s =
         with | Failure _ -> []
     in
     from_list (rev (flatten (List.map to_evt (split s '\n'))))
+
+let string_of_trace t =
+    let string_of_reg r =
+        match r with
+        | Cg.SIGNAL_ONLY -> _SO
+        | Cg.SIGNAL_WAIT -> _SW
+        | Cg.WAIT_ONLY -> _WO
+    in
+    let string_of_op o =
+        match o with
+        | Cg.ASYNC x -> "async " ^ (string_of_nat x)
+        | Cg.ASYNC_PHASED (x, r) -> "asyncPhased " ^ (string_of_nat x) ^ " " ^ (string_of_reg r)
+        | Cg.SIGNAL -> "signal"
+        | Cg.WAIT -> "wait"
+        | Cg.DROP -> "drop"
+        | Cg.CONTINUE -> "continue"
+    in
+    let string_of_event e =
+        match e with
+        | Cg.Pair (x, o) ->
+        (string_of_int (int_of_nat x)) ^ ": " ^ (string_of_op o)
+    in
+    concat "\n" (List.map string_of_event (as_list t))
 
 let js_array_from_list l =
     let arr = jsnew Js.array_empty () in
@@ -194,6 +222,8 @@ let onload _ =
         | false, Cg.Some cg ->
             last_trace := t;
             draw_graph graph (js_of_cg cg)
+        | false, Cg.None ->
+            print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
         | _ -> ()
         );
         Js._false)
