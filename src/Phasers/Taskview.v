@@ -313,6 +313,15 @@ Section Facts.
     inversion H1.
   Qed.
 
+  Lemma signal_pre_to_can_signal:
+    forall v,
+    SignalPre v ->
+    CanSignal (mode v).
+  Proof.
+    intros.
+    inversion H;
+    rewrite H0; auto using can_signal_sw, can_signal_so.
+  Qed.
 End Facts.
 
 Section Semantics.

@@ -528,6 +528,21 @@ Section Facts.
       auto using Map_TID.add_1.
   Qed.
 
+  Let update_2:
+    forall x y v ph f,
+    x <> y ->
+    Map_TID.MapsTo x v ph ->
+    Map_TID.MapsTo x v (update y f ph).
+  Proof.
+    intros.
+    unfold update.
+    destruct (Map_TID_Extra.find_rw y ph) as [(R,?)|(v',(R,mt))];
+    rewrite R in *; clear R. {
+      assumption.
+    }
+    eauto using Map_TID.add_2.
+  Qed.
+
   Let signal_mapsto_eq:
     forall t v ph,
     Map_TID.MapsTo t v (signal t ph) ->
@@ -536,6 +551,24 @@ Section Facts.
     intros.
     unfold signal in *.
     eauto using update_mapsto_eq.
+  Qed.
+
+  Lemma signal_eq:
+    forall x v ph,
+    Map_TID.MapsTo x v ph ->
+    Map_TID.MapsTo x (Taskview.signal v) (signal x ph).
+  Proof.
+    unfold signal.
+    eauto.
+  Qed.
+
+  Lemma wait_eq:
+    forall x v ph,
+    Map_TID.MapsTo x v ph ->
+    Map_TID.MapsTo x (Taskview.wait v) (wait x ph).
+  Proof.
+    unfold wait.
+    eauto.
   Qed.
 
   Lemma try_signal_mapsto_eq:
@@ -607,6 +640,64 @@ Section Facts.
   Proof.
     intros.
     apply update_mapsto_spec; auto.
+  Qed.
+
+  Lemma signal_2:
+    forall x y v ph,
+    x <> y ->
+    Map_TID.MapsTo x v ph ->
+    Map_TID.MapsTo x v (signal y ph).
+  Proof.
+    unfold signal; auto.
+  Qed.
+
+  Lemma wait_2:
+    forall x y v ph,
+    x <> y ->
+    Map_TID.MapsTo x v ph ->
+    Map_TID.MapsTo x v (wait y ph).
+  Proof.
+    unfold wait; auto.
+  Qed.
+
+  Lemma drop_2:
+    forall x y v ph,
+    x <> y ->
+    Map_TID.MapsTo x v ph ->
+    Map_TID.MapsTo x v (drop y ph).
+  Proof.
+    unfold drop; auto using Map_TID.remove_2.
+  Qed.
+
+  Lemma register_2:
+    forall x y v r ph,
+    x <> get_task r ->
+    Map_TID.MapsTo x v ph ->
+    Map_TID.MapsTo x v (register r y ph).
+  Proof.
+    unfold register.
+    intros.
+    destruct (Map_TID_Extra.find_rw y ph) as [(R,Hin)|(v',(R,mt))];
+    rewrite R in *; clear R. {
+      assumption.
+    }
+    eauto using Map_TID.add_2.
+  Qed.
+
+  Lemma register_spec:
+    forall x v r ph,
+    Map_TID.MapsTo x v ph ->
+    Map_TID.MapsTo (get_task r) (set_mode v (get_mode r)) (register r x ph).
+  Proof.
+    intros.
+    unfold register.
+    destruct (Map_TID_Extra.find_rw x ph) as [(R,Hin)|(v',(R,mt))];
+    rewrite R in *; clear R. {
+      contradiction Hin.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    assert (v'=v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+    eauto using Map_TID.add_1.
   Qed.
 
   Lemma wait_mapsto_eq:
