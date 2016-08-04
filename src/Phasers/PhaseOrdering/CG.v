@@ -210,11 +210,6 @@ Section Defs.
   | _ => None
   end.
 
-  Inductive Drop: phases -> tid -> phases -> Prop :=
-  | drop_def:
-    forall ns ps x,
-    Drop (ns, ps) x (Map_TID.remove x ns, ps).
-
   Let drop (x:tid) (ws:phases) : phases := let (ns, ps) := ws in (Map_TID.remove x ns, ps).
 
   Inductive Copy vs ws x y ws' : Prop :=
@@ -246,15 +241,14 @@ Section Defs.
   | update_wp_signal:
     forall x,
     UpdateWP vs ws (x, SIGNAL) ws
-  | upate_wp_wait:
+  | update_wp_wait:
     forall x ws',
     Inc vs ws x ws' ->
     UpdateWP vs ws (x, WAIT) ws'
-  | upate_wp_drop:
-    forall x ws',
-    Drop ws x ws' ->
-    UpdateWP vs ws (x, DROP) ws'
-  | upate_wp_continue:
+  | update_wp_drop:
+    forall x,
+    UpdateWP vs ws (x, DROP) (drop x ws)
+  | update_wp_continue:
     forall x,
     UpdateWP vs ws (x, CONTINUE) ws.
 
@@ -263,7 +257,7 @@ Section Defs.
   match o with
   | ASYNC_PHASED y r =>
     if can_wait r then copy vs x y wp
-    else None
+    else Some wp
   | WAIT => inc vs wp x
   | DROP => Some (drop x wp)
   | _ => Some wp
@@ -286,26 +280,25 @@ Section Defs.
     forall x ws',
     Inc vs ws x ws' ->
     UpdateSP vs ws (x, SIGNAL) ws'
-  | upate_sp_wait:
+  | update_sp_wait:
     forall x,
     UpdateSP vs ws (x, WAIT) ws
-  | upate_sp_drop:
-    forall x ws',
-    Drop ws x ws' ->
-    UpdateSP vs ws (x, DROP) ws'
-  | upate_sp_continue:
+  | update_sp_drop:
+    forall x,
+    UpdateSP vs ws (x, DROP) (drop x ws)
+  | update_sp_continue:
     forall x,
     UpdateSP vs ws (x, CONTINUE) ws.
 
-  Definition update_sp vs (e:event) wp :=
+  Definition update_sp vs (e:event) sp :=
   let (x, o) := e in
   match o with
   | ASYNC_PHASED y r =>
-    if can_signal r then copy vs x y wp
-    else None
-  | SIGNAL => inc vs wp x
-  | DROP => Some (drop x wp)
-  | _ => Some wp
+    if can_signal r then copy vs x y sp
+    else Some sp
+  | SIGNAL => inc vs sp x
+  | DROP => Some (drop x sp)
+  | _ => Some sp
   end.
 
   (* Old nodes *)
@@ -327,26 +320,26 @@ Section Defs.
   (* Old nodes *)
 
   Inductive AddFEdges vs vs' : event -> list (node * node) -> Prop :=
-  | add_f_edges_eq:
+  | add_f_edges_is_pair:
     forall x nx ny y o,
     MapsTo x nx vs ->
     MapsTo y ny vs' ->
     IsPar o y ->
     AddFEdges vs vs' (x, o) ((nx, ny)::nil)
-  | fork_edge_neq:
+  | add_f_edges_is_seq:
     forall x o,
     IsSeq o ->
     AddFEdges vs vs' (x, o) nil.
 
   Let add_f_edges vs vs' (e:event) :=
   let (x, o) := e in
-  match is_par o, lookup TID.eq_dec x vs with
-  | Some y, Some nx =>
-    match lookup TID.eq_dec y vs' with
-    | Some ny => Some ((nx, ny)::nil)
-    | _ => None
+  match is_par o with
+  | Some y =>
+    match lookup TID.eq_dec x vs, lookup TID.eq_dec y vs' with
+    | Some nx, Some ny => Some ((nx, ny)::nil)
+    | _,_ => None
     end
-  | _, _ => None
+  | None => Some nil
   end.
 
   Structure builder := {
@@ -395,6 +388,44 @@ Section Defs.
     end
   | _ => Some nil
   end.
+
+  Let phase_2:
+    forall (a:node) b ph sp,
+    In (a, b) (map (fun c => (a, c)) (phase ph sp)) ->
+    Phase b ph sp.
+  Proof.
+    unfold phase; intros.
+    apply in_map_iff in H.
+    destruct H as (x, (Heq, Hin)).
+    inversion Heq; subst.
+    apply in_omap_2 in Hin.
+    destruct Hin as ((n,ph'), (Hin, Heq')).
+    destruct (eq_nat_dec ph' ph). {
+      subst.
+      inversion Heq'; subst; clear Heq'.
+      apply MN_Extra.in_elements_impl_maps_to in Hin.
+      auto.
+    }
+    inversion Heq'.
+  Qed.
+
+  Let phase_1:
+    forall (a:node) b ph sp,
+    Phase b ph sp ->
+    In (a, b) (map (fun c => (a, c)) (phase ph sp)).
+  Proof.
+    unfold phase; intros.
+    rewrite in_map_iff.
+    exists b; split; auto.
+    unfold Phase in *.
+    apply in_omap_1 with (x:=(b,ph)). {
+      apply MN_Extra.maps_to_iff_in_elements; auto.
+    }
+    destruct (eq_nat_dec ph ph). {
+      trivial.
+    }
+    intuition.
+  Qed.
 
   Inductive UpdateBuilder (b:builder) : event -> builder -> Prop :=
   | update_builder_def:
@@ -629,14 +660,13 @@ Section Defs.
   Qed.
 
   Let drop_inv:
-    forall sp x y n sp',
-    Drop sp x sp' ->
-    GetPhase y n sp' ->
+    forall sp x y n,
+    GetPhase y n (drop x sp) ->
     x <> y /\ GetPhase y n sp.
   Proof.
-    intros.
+    unfold drop; intros.
+    destruct sp as (ns, ps).
     inversion H; subst; clear H.
-    inversion H0; subst; clear H0.
     destruct (TID.eq_dec x y). {
       subst.
       apply Map_TID_Extra.mapsto_to_in in H4.
@@ -723,8 +753,8 @@ Section Defs.
       }
       eapply inc_3 in H6; eauto.
     - destruct (TID.eq_dec x t); subst; eauto.
-    - apply drop_inv with (y:=t) (n:=n) in H6; auto.
-      destruct H6 as (Hx,Hy).
+    - apply drop_inv with (y:=t) (n:=n) in H3; auto.
+      destruct H3 as (Hx,Hy).
       eauto.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
@@ -838,8 +868,8 @@ Section Defs.
         eauto.
       }
       eapply inc_3 in H6; eauto.
-    - eapply drop_inv in H6; eauto.
-      destruct H6 as (?, Hg).
+    - eapply drop_inv in H3; eauto.
+      destruct H3 as (?, Hg).
       eauto.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
@@ -874,14 +904,13 @@ Section Defs.
   Qed.
 
   Let wf_phases_drop:
-    forall vs wp t n wp' x,
+    forall vs wp t n x,
     WFPhases vs wp ->
-    Map_TID.MapsTo t n (fst wp') ->
-    Drop wp x wp' ->
+    Map_TID.MapsTo t n (fst (drop x wp)) ->
     TaskOf n t (x :: vs).
   Proof.
-    intros.
-    inversion H1; subst; clear H1.
+    unfold drop; intros.
+    destruct wp as (ns, ps).
     simpl in *.
     apply Map_TID.remove_3 in H0.
     auto using task_of_cons.
@@ -1066,17 +1095,241 @@ Section Defs.
     | _ => None
     end
   end.
-(*
-  Definition to_cg l :=
-  match build l with
-  | Some (_, es) => Some es
-  | _ => None
-  end.
 
-  Lemma build_some:
-    forall l vs es,
-    build l = Some (vs, es) ->
-    Build l vs es.
+  Let copy_some:
+    forall vs x y sp sp',
+    copy vs x y sp = Some sp' ->
+    Copy vs sp x y sp'.
+  Proof.
+    unfold copy; intros.
+    remember (get_phase x sp).
+    symmetry in Heqo.
+    destruct o. {
+      apply get_phase_some in Heqo.
+      apply set_phase_some in H.
+      eauto using copy_def.
+    }
+    inversion H.
+  Qed.
+
+  Let inc_some:
+    forall vs sp x sp',
+    inc vs sp x = Some sp' ->
+    Inc vs sp x sp'.
+  Proof.
+    unfold inc; intros.
+    remember (get_phase x sp).
+    symmetry in Heqo.
+    destruct o. {
+      apply get_phase_some in Heqo.
+      apply set_phase_some in H.
+      eauto using inc_def.
+    }
+    inversion H.
+  Qed.
+
+  Let update_sp_some:
+    forall vs e sp sp',
+    update_sp vs e sp = Some sp' ->
+    UpdateSP vs sp e sp'.
+  Proof.
+    unfold update_sp;intros.
+    destruct e as (x, o).
+    destruct o;
+    try (inversion H; subst; auto using update_sp_async, update_sp_wait, update_sp_continue; fail).
+    - destruct (can_signal r). {
+        auto using update_sp_phased_can_signal.
+      }
+      inversion H; subst; auto using update_sp_phased_cannot_signal.
+    - auto using update_sp_signal.
+    - inversion H.
+      subst.
+      auto using update_sp_drop.
+  Qed.
+
+  Let update_wp_some:
+    forall vs e wp wp',
+    update_wp vs e wp = Some wp' ->
+    UpdateWP vs wp e wp'.
+  Proof.
+    unfold update_wp; intros.
+    destruct e as (x, o).
+    destruct o;
+    (inversion H; subst; auto using update_wp_async, update_wp_signal, update_wp_continue).
+    - destruct (can_wait r). {
+        auto using update_wp_phased_can_wait.
+      }
+      inversion H; subst; auto using update_wp_phased_cannot_wait.
+    - auto using update_wp_wait.
+    - inversion H.
+      subst.
+      auto using update_wp_drop.
+  Qed.
+
+  Let update_builder_some:
+    forall b e b',
+    update_builder e b = Some b' ->
+    UpdateBuilder b e b'.
+  Proof.
+    unfold update_builder; intros.
+    remember (update_sp _ _ _).
+    symmetry in Heqo.
+    destruct o. {
+      apply update_sp_some in Heqo.
+      remember (update_wp _ _ _).
+      symmetry in Heqo0.
+      destruct o. {
+        inversion H; subst.
+        auto using update_builder_def.
+      }
+      inversion H.
+    }
+    inversion H.
+  Qed.
+
+  Let add_c_edges_some:
+    forall vs vs' e es,
+    add_c_edges vs vs' e = Some es ->
+    AddCEdges vs vs' e es.
+  Proof.
+    unfold add_c_edges; intros.
+    destruct e as (x, y).
+    remember (lookup _ _ vs).
+    symmetry in Heqo.
+    destruct o. {
+      apply lookup_some in Heqo.
+      remember (lookup _ _ _).
+      symmetry in Heqo0.
+      destruct o. {
+        apply lookup_some in Heqo0.
+        inversion H; subst.
+        auto using add_c_edges_def.
+      }
+      inversion H.
+    }
+    inversion H.
+  Qed.
+
+  Let add_f_edges_some:
+    forall vs vs' e es,
+    add_f_edges vs vs' e = Some es ->
+    AddFEdges vs vs' e es.
+  Proof.
+    unfold add_f_edges; intros.
+    destruct e as (x, y).
+    remember (is_par y).
+    symmetry in Heqo.
+    destruct o. {
+      apply is_par_some in Heqo.
+      remember (lookup _ _ vs).
+      symmetry in Heqo0.
+      destruct o. {
+        apply lookup_some in Heqo0.
+        remember (lookup _ _ _).
+        symmetry in Heqo1.
+        destruct o. {
+          apply lookup_some in Heqo1.
+          inversion H; subst.
+          eauto using add_f_edges_is_pair.
+        }
+        inversion H.
+      }
+      inversion H.
+    }
+    inversion H.
+    auto using add_f_edges_is_seq.
+  Qed.
+
+  Let add_s_edges_some:
+    forall b vs e es,
+    add_s_edges b vs e = Some es ->
+    AddSEdges b vs e es.
+  Proof.
+    unfold add_s_edges; intros.
+    destruct e as (x, y).
+    assert (Hx: y = WAIT \/ y <> WAIT). {
+      destruct y; auto;
+      right;
+      unfold not; intros N;
+      inversion N.
+    }
+    destruct Hx. {
+      subst.
+      remember (get_phase _ _).
+      symmetry in Heqo.
+      destruct o. {
+        apply get_phase_some in Heqo.
+        remember (lookup _ _ _).
+        symmetry in Heqo0.
+        destruct o. {
+          apply lookup_some in Heqo0.
+          inversion H.
+          apply add_s_edges_eq with (ph:=n)(n:=n0); auto.
+          split; eauto.
+        }
+        inversion H.
+      }
+      inversion H.
+    }
+    destruct y; inversion H; subst; clear H; auto using add_s_edges_neq.
+    intuition.
+  Qed.
+
+  Let add_edges_some:
+    forall b b' e cg cg',
+    add_edges b b' e cg = Some cg' ->
+    AddEdges b b' cg e cg'.
+  Proof.
+    unfold add_edges; intros.
+    remember (add_c_edges _ _ _).
+    symmetry in Heqo.
+    destruct o. {
+      apply add_c_edges_some in Heqo.
+      remember (add_f_edges _ _ _).
+      symmetry in Heqo0.
+      destruct o. {
+        apply add_f_edges_some in Heqo0.
+        remember (add_s_edges _ _ _).
+        symmetry in Heqo1.
+        destruct o. {
+          inversion H.
+          apply add_s_edges_some in Heqo1.
+          auto using add_edges_def.
+        }
+        inversion H.
+      }
+      inversion H.
+    }
+    inversion H.
+  Qed.
+
+  Let add_some:
+    forall e bcg bcg',
+    add e bcg = Some bcg' ->
+    Add bcg e bcg'.
+  Proof.
+    unfold add; intros.
+    destruct bcg as (b, cg).
+    remember (update_builder e b).
+    symmetry in Heqo.
+    destruct o. {
+      apply update_builder_some in Heqo.
+      remember (add_edges  _ _ _ _).
+      symmetry in Heqo0.
+      destruct o. {
+        apply add_edges_some in Heqo0.
+        inversion H.
+        auto using add_def.
+      }
+      inversion H.
+    }
+    inversion H.
+  Qed.
+
+  Let build_some:
+    forall l b cg,
+    build l = Some (b, cg) ->
+    Build l (b, cg).
   Proof.
     induction l; intros. {
       inversion H; subst.
@@ -1088,14 +1341,14 @@ Section Defs.
       apply add_some in H.
       auto using build_cons_nil.
     }
-    remember (build (p::l)) as b.
-    symmetry in Heqb.
-    destruct b as [(a,b)|]; unfold build in H, Heqb; rewrite Heqb in *. {
+    remember (build (p::l)) as b'.
+    symmetry in Heqb'.
+    destruct b' as [(a,b')|]; unfold build in H, Heqb'; rewrite Heqb' in *. {
       eauto using add_some, build_cons.
     }
     inversion H.
   Qed.
-*)
+
 End Defs.
 
 Extraction "ocaml/cg.ml" build.
