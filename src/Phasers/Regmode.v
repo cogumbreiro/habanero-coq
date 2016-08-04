@@ -227,4 +227,14 @@ Section Facts.
     destruct r; try (inversion H || inversion H0).
     trivial.
   Qed.
+
+  Lemma can_wait_le:
+    forall x y,
+    CanWait y ->
+    y <= x ->
+    CanWait x.
+  Proof.
+    intros.
+    inversion H0; subst; auto using can_wait_sw, can_wait_wo.
+  Qed.
 End Facts.

@@ -554,12 +554,12 @@ Section Defs.
   Let WFPhases (vs:list tid) (ps:phases) := NodesDefined vs (fst ps).
 
   Let set_phase_3:
-    forall t sp' sp x vs ph ph',
-    WFPhases vs sp ->
-    GetPhase t ph sp' ->
-    x <> t ->
-    SetPhase vs sp x ph' sp' ->
-    GetPhase t ph sp.
+    forall x ps' ps y vs ph ph',
+    WFPhases vs ps ->
+    GetPhase x ph ps' ->
+    y <> x ->
+    SetPhase vs ps y ph' ps' ->
+    GetPhase x ph ps.
   Proof.
     intros.
     inversion H2; subst; clear H2.
@@ -579,6 +579,27 @@ Section Defs.
     }
     apply MN.add_3 in H8; auto.
     eauto using get_phase_def.
+  Qed.
+
+  Let set_phase_2:
+    forall x y n ps ph ps' vs,
+    WFPhases vs ps ->
+    y <> x ->
+    GetPhase x n ps ->
+    SetPhase vs ps y ph ps' ->
+    GetPhase x n ps'.
+  Proof.
+    intros.
+    inversion H2; subst; clear H2.
+    inversion H1; subst; clear H1.
+    apply get_phase_def with (n:=n1).
+    - eauto using Map_TID.add_2.
+    - apply MN.add_2; auto.
+      unfold not; intros; subst.
+      apply H in H7.
+      apply maps_to_to_task_of in H3.
+      simpl_node.
+      intuition.
   Qed.
 
   Let inc_3:
@@ -693,10 +714,10 @@ Section Defs.
   Qed.
 
   Let copy_inv_eq:
-    forall x y sp sp' vs n,
-    GetPhase y n sp' ->
-    Copy vs sp x y sp' ->
-    GetPhase x n sp.
+    forall x y ps ps' vs n,
+    GetPhase y n ps' ->
+    Copy vs ps x y ps' ->
+    GetPhase x n ps.
   Proof.
     intros.
     inversion H0; subst; clear H0.
@@ -704,6 +725,31 @@ Section Defs.
     assert (ph = n) by eauto.
     subst.
     trivial.
+  Qed.
+
+  Let copy_2:
+    forall x y z ps ps' vs n,
+    WFPhases vs ps ->
+    z <> y ->
+    Copy vs ps x y ps' ->
+    GetPhase z n ps ->
+    GetPhase z n ps'.
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    eapply set_phase_2 in H4; eauto.
+  Qed.
+
+  Let copy_1:
+    forall vs wp wp' x y n,
+    Copy vs wp x y wp' ->
+    GetPhase x n wp ->
+    GetPhase y n wp'.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    assert (ph = n) by eauto; subst.
+    eauto.
   Qed.
 
   Let sp_register:
@@ -769,6 +815,11 @@ Section Defs.
     forall x n,
     GetPhase x n sp ->
     WaitPhase x n ph.
+
+  Let WP_Complete (ph:Phaser.phaser) (sp:phases) : Prop :=
+    forall x n,
+    WaitPhase x n ph ->
+    GetPhase x n sp.
 
   Let wp_signal:
     forall x y n ph,
@@ -878,6 +929,225 @@ Section Defs.
       }
       eapply copy_3 in H10; eauto.
     - eauto.
+  Qed.
+
+  Let wait_phase_inv_signal:
+    forall x wp ph y,
+    WaitPhase x wp (Phaser.signal y ph) ->
+    WaitPhase x wp ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply signal_mapsto_inv in H0.
+    destruct H0 as [(?,(v',(Heq,mt)))|(?,mt)]. {
+      subst.
+      rewrite signal_preserves_mode in *.
+      rewrite signal_preserves_wait_phase.
+      eauto using wait_phase_def.
+    }
+    eauto using wait_phase_def.
+  Qed.
+
+  Let wait_phase_inv_wait:
+    forall x wp ph y,
+    WaitPhase x wp (Phaser.wait y ph) ->
+    (y = x /\ exists wp', wp = S wp' /\ WaitPhase x wp' ph) \/ (y <> x /\ WaitPhase x wp ph).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply wait_mapsto_inv in H0.
+    destruct H0 as [(?, (v', (?, ?)))|(?,?)]. {
+      subst; left; split; auto.
+      rewrite wait_preserves_mode in *.
+      exists (wait_phase v').
+      split; auto.
+      apply wait_phase_def with (v:=v'); auto.
+    }
+    eauto using wait_phase_def.
+  Qed.
+
+  Let get_phases_inc:
+    forall x n ps ps' vs,
+    GetPhase x n ps ->
+    Inc vs ps x ps' ->
+    GetPhase x (S n) ps'.
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    assert (ph = n) by eauto; subst.
+    eauto.
+  Qed.
+
+  Let get_phases_set_phase_neq:
+    forall x y n ps ps' n' vs,
+    WFPhases vs ps ->
+    y <> x ->
+    GetPhase x n ps ->
+    SetPhase vs ps y n' ps' ->
+    GetPhase x n ps'.
+  Proof.
+    intros.
+    inversion H2; subst; clear H2.
+    inversion H1; subst; clear H1.
+    apply get_phase_def with (n:=n1).
+    - auto using Map_TID.add_2.
+    - apply MN.add_2; auto.
+      unfold not; intros N.
+      subst.
+      contradiction H0.
+      apply maps_to_to_task_of in H3.
+      apply H in H7.
+      eauto using task_of_fun_2.
+  Qed.
+
+  Let get_phases_inc_neq:
+    forall x y n ps ps' vs,
+    WFPhases vs ps ->
+    y <> x ->
+    GetPhase x n ps ->
+    Inc vs ps y ps' ->
+    GetPhase x n ps'.
+  Proof.
+    intros.
+    inversion H2; subst; clear H2.
+    eauto.
+  Qed.
+
+  Let wait_phase_drop_eq:
+    forall x n y ph,
+    WaitPhase x n (Phaser.drop y ph) ->
+    y <> x /\ WaitPhase x n ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply drop_mapsto_inv in H0.
+    destruct H0.
+    split; auto.
+    apply wait_phase_def with (v:=v); auto.
+  Qed.
+
+  Let wait_phase_drop_neq:
+    forall x n y ph,
+    y <> x ->
+    WaitPhase x n ph ->
+    WaitPhase x n (Phaser.drop y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    apply wait_phase_def with (v:=v); auto using drop_2.
+  Qed.
+
+  Let get_phase_drop_neq:
+    forall x y n ps,
+    y <> x ->
+    GetPhase x n ps ->
+    GetPhase x n (drop y ps).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    simpl.
+    apply get_phase_def with (n:=n0); auto.
+    eauto using Map_TID.remove_2.
+  Qed.
+
+  Let wp_complete_reg_2:
+    forall vs wp n ph x y r,
+    WFPhases vs wp ->
+    WP_Complete ph wp ->
+    WaitPhase x n (register r y ph) ->
+    ~ CanWait (get_mode r) ->
+    GetPhase x n wp.
+  Proof.
+    intros.
+      destruct H1; subst.
+      apply register_inv_mapsto in H1.
+      destruct H1 as [?|(?, (v', (?,?)))]. {
+        assert (WaitPhase x (wait_phase v) ph) by (apply wait_phase_def with (v:=v); auto).
+        auto.
+      }
+      subst.
+      rewrite mode_set_mode_rw in *.
+      rewrite set_mode_preserves_wait_phase.
+      contradiction.
+  Qed.
+
+  Let wp_complete_reg_3:
+    forall vs wp ph t v r x wp',
+    WFPhases vs wp ->
+    WP_Complete ph wp ->
+    Map_TID.MapsTo t v ph ->
+    RegisterPre r x ph ->
+    CanWait (get_mode r) ->
+    Copy vs wp x (get_task r) wp' ->
+    CanWait (mode v) ->
+    GetPhase t (wait_phase v) wp'.
+  Proof.
+    intros.
+    assert (WaitPhase t (wait_phase v) ph) by (apply wait_phase_def with (v:=v); auto).
+    apply H0 in H6.
+    destruct (TID.eq_dec t (get_task r)). {
+      subst.
+      inversion H2.
+      contradiction H7.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    eapply copy_2; eauto.
+  Qed.
+
+
+  Let wp_complete_reg_1:
+    forall vs wp x ph t n r wp',
+    WFPhases vs wp ->
+    WP_Complete ph wp ->
+    WaitPhase t n (register r x ph) ->
+    RegisterPre r x ph ->
+    CanWait (get_mode r) ->
+    Copy vs wp x (get_task r) wp' ->
+    GetPhase t n wp'.
+  Proof.
+    intros.
+    destruct H1; subst.
+      apply register_inv_mapsto in H1.
+      destruct H1 as [?|(?, (v', (?,?)))]. {
+        eapply wp_complete_reg_3; eauto.
+      }
+      subst.
+      rewrite mode_set_mode_rw in *.
+      rewrite set_mode_preserves_wait_phase.
+      assert (Hw: WaitPhase x (wait_phase v') ph). {
+        apply wait_phase_def with (v:=v'); auto.
+        inversion H2.
+        assert (v'=v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+        apply can_wait_le with (y:=get_mode r); auto.
+      }
+      apply H0 in Hw.
+      apply copy_1 with (n:=wait_phase v') in H4; auto.
+  Qed.
+
+  Let wp_complete:
+    forall vs wp ph x o ph' wp',
+    WFPhases vs wp ->
+    WP_Complete ph wp ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateWP vs wp (x, of_op o) wp' ->
+    WP_Complete ph' wp'.
+  Proof.
+    intros; unfold WP_Complete; intros.
+    rename x0 into t.
+    destruct o; inversion H1; simpl in *; subst;
+    inversion H2; subst; clear H2 H1.
+    - apply wait_phase_inv_signal in H3; auto.
+    - apply wait_phase_inv_wait in H3.
+      destruct H3 as [(?, (?, (?, ?)))|(?,?)]. {
+        subst.
+        eauto.
+      }
+      eauto.
+    - apply wait_phase_drop_eq in H3.
+      destruct H3.
+      eauto.
+    - eapply wp_complete_reg_1; eauto.
+    - eapply wp_complete_reg_2; eauto.
   Qed.
 
   Let wf_phases_inc:
