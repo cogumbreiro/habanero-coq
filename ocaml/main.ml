@@ -211,7 +211,7 @@ let draw_graph container g : unit =
   edges: {
     width: 2,
     smooth: {
-        enabled: false
+  type: 'cubicBezier'
     },
     shadow:true
   },
