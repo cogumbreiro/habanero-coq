@@ -46,6 +46,7 @@ let rec from_list l =
     | x::xs -> Cg.Cons (x,from_list xs)
     ;;
 
+let _REG = "reg"
 let _SO = "SO";;
 let _WO = "WO";;
 let _SW = "SW";;
@@ -64,7 +65,7 @@ let reg_of_string s : Cg.regmode =
 let op_of_string s : Cg.op =
     match split (trim s) ' ' with
     | "async" :: x :: [] -> Cg.ASYNC (nat_of_string x)
-    | "asyncPhased" :: x :: r :: [] -> Cg.ASYNC_PHASED ((nat_of_string x), (reg_of_string r))
+    | "reg" :: x :: r :: [] -> Cg.ASYNC_PHASED ((nat_of_string x), (reg_of_string r))
     | "signal" :: [] -> Cg.SIGNAL
     | "wait" :: [] -> Cg.WAIT
     | "drop" :: [] -> Cg.DROP
@@ -87,7 +88,7 @@ let string_of_reg r =
 let string_of_op o =
     match o with
     | Cg.ASYNC x -> "async " ^ (string_of_nat x)
-    | Cg.ASYNC_PHASED (x, r) -> "asyncPhased " ^ (string_of_nat x) ^ " " ^ (string_of_reg r)
+    | Cg.ASYNC_PHASED (x, r) -> "reg " ^ (string_of_nat x) ^ " " ^ (string_of_reg r)
     | Cg.SIGNAL -> "signal"
     | Cg.WAIT -> "wait"
     | Cg.DROP -> "drop"
@@ -148,21 +149,30 @@ let js_of_vertex (idx:int) (ns:Cg.op Cg.MN.t) =
         | _ -> ""
     )
 
-let js_of_vertices (vs:Cg.tid Cg.list) (ns:Cg.op Cg.MN.t) =
+let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) =
+    let parent_of = I.create 10 in
+    List.iter (fun p ->
+        match p with
+        | Cg.Pair (n_idx, Cg.ASYNC_PHASED (y,_)) ->
+            I.add parent_of (int_of_nat y) (Array.get vs (int_of_nat n_idx))
+        | Cg.Pair (n_idx, Cg.ASYNC y) ->
+            I.add parent_of (int_of_nat y) (Array.get vs (int_of_nat n_idx))
+        | _ -> ()
+    ) (as_list (Cg.MN.elements ns));
     let tbl = I.create 10 in
-    let to_js (idx, tid) =
-        let offset = (try (I.find tbl tid) + 1 with | _ ->  0) in
+    let parent_offset tid = (try (I.find tbl (I.find parent_of tid) - 1) with | _ -> 0) in
+    let to_js idx tid =
+        let offset = (try (I.find tbl tid) + 1 with | _ -> parent_offset tid) in
         I.add tbl tid offset;
         Js.Unsafe.obj [|
         ("id", Js.Unsafe.inject idx);
-        ("x", Js.Unsafe.inject (tid * 150));
-        ("y", Js.Unsafe.inject (offset * 150));
+        ("y", Js.Unsafe.inject (tid * 150));
+        ("x", Js.Unsafe.inject (tid * 50 + offset * 150));
         ("label", Js.Unsafe.inject (js_of_vertex idx ns));
         ("group", Js.Unsafe.inject tid)
         |]
     in
-    let vs = List.mapi (fun idx x -> (idx, (int_of_nat x))) (rev (as_list vs)) in
-    js_array_from_list (List.map to_js vs)
+    js_array_from_list (Array.to_list (Array.mapi to_js vs))
 
 let js_of_bool b = if b then Js._true else Js._false
 
@@ -200,8 +210,9 @@ let js_of_edges (cg:Cg.computation_graph) =
 let js_of_cg bcg =
     match bcg with
     | Cg.Pair (b, cg) ->
+    let tids = Array.of_list (rev (List.map int_of_nat (as_list (Cg.get_nodes b)))) in
     Js.Unsafe.obj [|
-        ("nodes", Js.Unsafe.inject (js_of_vertices (Cg.get_nodes b) (Cg.node_to_op b)));
+        ("nodes", Js.Unsafe.inject (js_of_vertices tids (Cg.node_to_op b)));
         ("edges", Js.Unsafe.inject (js_of_edges cg)) |]
 
 let draw_graph container g : unit =
@@ -211,13 +222,13 @@ let draw_graph container g : unit =
   edges: {
     width: 2,
     smooth: {
-  type: 'cubicBezier'
+  type: 'vertical'
     },
     shadow:true
   },
   nodes : {
     shape: 'dot',
-    size: 15,
+    size: 10,
     shadow:true,
     font: {face:'courier', size: 20, strokeWidth:3, strokeColor:'#ffffff'}
   },
