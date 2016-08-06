@@ -237,4 +237,14 @@ Section Facts.
     intros.
     inversion H0; subst; auto using can_wait_sw, can_wait_wo.
   Qed.
+
+  Lemma can_signal_le:
+    forall x y,
+    CanSignal y ->
+    y <= x ->
+    CanSignal x.
+  Proof.
+    intros.
+    inversion H0; subst; auto using can_signal_sw, can_signal_wo.
+  Qed.
 End Facts.
