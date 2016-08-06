@@ -115,6 +115,12 @@ Section Defs.
     MN.MapsTo n w phs -> (* get the phase number *)
     GetPhase x w (ns, phs).
 
+  Inductive Registered x ws : Prop :=
+  | registered_def:
+    forall ph,
+    GetPhase x ph ws ->
+    Registered x ws.
+
   Let get_phase (x:tid) (ws:phases) :=
   let (ns, phs) := ws in
   match Map_TID.find x ns with
@@ -204,11 +210,39 @@ Section Defs.
     SetPhase vs ws x (S ph) ws' ->
     Inc vs ws x ws'.
 
+  Inductive TryInc vs ws x : phases -> Prop :=
+  | try_inc_ok:
+    forall ws',
+    Inc vs ws x ws' ->
+    TryInc vs ws x ws'
+  | try_inc_skip:
+    ~ Registered x ws ->
+    TryInc vs ws x ws.
+
+  Let is_registered x sp :
+    { Registered x sp } + { ~ Registered x sp }.
+  Proof.
+    remember (get_phase x sp).
+    symmetry in Heqo.
+    destruct o. {
+      eauto using registered_def.
+    }
+    right.
+    unfold not; intros N.
+    destruct N.
+    apply get_phase_some_prop in H.
+    rewrite H in *.
+    inversion Heqo.
+  Defined.
+
   Let inc vs ws x : option phases :=
   match get_phase x ws with
   | Some ph => set_phase vs ws x (S ph)
   | _ => None
   end.
+
+  Let try_inc vs sp x :=
+  if is_registered x sp then inc vs sp x else Some sp.
 
   Let drop (x:tid) (ws:phases) : phases := let (ns, ps) := ws in (Map_TID.remove x ns, ps).
 
@@ -246,8 +280,9 @@ Section Defs.
     Inc vs ws x ws' ->
     UpdateWP vs ws (x, WAIT) ws'
   | update_wp_drop:
-    forall x,
-    UpdateWP vs ws (x, DROP) (drop x ws)
+    forall x ws',
+    TryInc vs ws x ws' ->
+    UpdateWP vs ws (x, DROP) (drop x ws')
   | update_wp_continue:
     forall x,
     UpdateWP vs ws (x, CONTINUE) ws.
@@ -259,7 +294,11 @@ Section Defs.
     if can_wait r then copy vs x y wp
     else Some wp
   | WAIT => inc vs wp x
-  | DROP => Some (drop x wp)
+  | DROP =>
+    match try_inc vs wp x with
+    | Some wp' => Some (drop x wp')
+    | _ => None
+    end
   | _ => Some wp
   end.
 
@@ -284,8 +323,9 @@ Section Defs.
     forall x,
     UpdateSP vs vs' ws (x, WAIT) ws
   | update_sp_drop:
-    forall x,
-    UpdateSP vs vs' ws (x, DROP) (drop x ws)
+    forall x ws',
+    TryInc vs ws x ws' ->
+    UpdateSP vs vs' ws (x, DROP) (drop x ws')
   | update_sp_continue:
     forall x,
     UpdateSP vs vs' ws (x, CONTINUE) ws.
@@ -297,7 +337,11 @@ Section Defs.
     if can_signal r then copy vs' x y sp
     else Some sp
   | SIGNAL => inc vs sp x
-  | DROP => Some (drop x sp)
+  | DROP =>
+    match try_inc vs sp x with
+    | Some sp' => Some (drop x sp')
+    | _ => None
+    end
   | _ => Some sp
   end.
 
@@ -572,6 +616,18 @@ Section Defs.
     eauto.
   Qed.
 
+  Let try_inc_inv:
+    forall vs sp t sp',
+    TryInc vs sp t sp' ->
+    (~ Registered t sp /\ sp' = sp) \/ exists n, (GetPhase t n sp /\ GetPhase t (S n) sp').
+  Proof.
+    intros.
+    destruct H. {
+      eauto.
+    }
+    auto.
+  Qed.
+
   Let NodesDefined (vs:list tid) (m:Map_TID.t node) : Prop :=
   forall x n, Map_TID.MapsTo x n m -> TaskOf n x vs. (* nodes are mapped to the correct owner *)
 
@@ -626,6 +682,34 @@ Section Defs.
       intuition.
   Qed.
 
+  Let inc_2:
+    forall x y n ps ps' vs,
+    WFPhases vs ps ->
+    y <> x ->
+    GetPhase x n ps ->
+    Inc vs ps y ps' ->
+    GetPhase x n ps'.
+  Proof.
+    intros.
+    inversion H2; subst.
+    eauto.
+  Qed.
+
+  Let try_inc_2:
+    forall x y n ps ps' vs,
+    WFPhases vs ps ->
+    y <> x ->
+    GetPhase x n ps ->
+    TryInc vs ps y ps' ->
+    GetPhase x n ps'.
+  Proof.
+    intros.
+    inversion H2; subst. {
+      eauto.
+    }
+    auto.
+  Qed.
+
   Let inc_3:
     forall vs t n sp' sp x,
     WFPhases vs sp ->
@@ -637,6 +721,22 @@ Section Defs.
     intros.
     inversion H1; subst; clear H1.
     eapply set_phase_3 in H4; eauto.
+  Qed.
+
+  Let try_inc_3:
+    forall vs t n sp' sp x,
+    WFPhases vs sp ->
+    GetPhase t n sp' ->
+    TryInc vs sp x sp' ->
+    x <> t ->
+    GetPhase t n sp.
+  Proof.
+    intros.
+    inversion H1; subst; clear H1. {
+      inversion H3; subst; clear H3.
+      eapply set_phase_3 in H4; eauto.
+    }
+    auto.
   Qed.
 
   Let signal_neq:
@@ -826,7 +926,7 @@ Section Defs.
     - destruct (TID.eq_dec x t); subst; eauto.
     - apply drop_inv with (y:=t) (n:=n) in H4; auto.
       destruct H4 as (Hx,Hy).
-      eauto.
+      eapply try_inc_3 in H7; eauto.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
         apply copy_inv_eq with (n:=n) in H11; auto.
@@ -949,9 +1049,9 @@ Section Defs.
         eauto.
       }
       eapply inc_3 in H6; eauto.
-    - eapply drop_inv in H3; eauto.
+    - apply drop_inv in H3; auto.
       destruct H3 as (?, Hg).
-      eauto.
+      eapply try_inc_3 in H6; eauto.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
         apply copy_inv_eq with (n:=n) in H10; auto.
@@ -1295,7 +1395,8 @@ Section Defs.
       eapply get_phases_inc_neq in H6; eauto.
     - apply wait_phase_drop_eq in H3.
       destruct H3.
-      eauto.
+      apply get_phase_drop_neq; auto.
+      eapply try_inc_2 in H6; eauto.
     - eapply wp_complete_reg_1; eauto.
     - eapply wp_complete_reg_2; eauto.
   Qed.
@@ -1324,7 +1425,7 @@ Section Defs.
     - apply signal_phase_inv_wait in H4; auto.
     - apply signal_phase_drop_eq in H4.
       destruct H4.
-      eauto.
+      eapply try_inc_2 in H7; eauto.
     - eapply sp_complete_reg_1; eauto.
     - eapply sp_complete_reg_2; eauto.
   Qed.
@@ -1354,16 +1455,31 @@ Section Defs.
   Qed.
 
   Let wf_phases_drop:
-    forall vs wp t n x,
+    forall vs wp t n x ws' vs',
     WFPhases vs wp ->
-    Map_TID.MapsTo t n (fst (drop x wp)) ->
+    Map_TID.MapsTo t n (fst (drop x ws')) ->
+    TryInc vs' wp x ws' ->
     TaskOf n t (x :: vs).
   Proof.
     unfold drop; intros.
-    destruct wp as (ns, ps).
+    inversion H1; subst; clear H1. {
+      destruct ws' as (ns, ps).
+      simpl in *.
+      assert (t <> x). {
+        unfold not; intros; subst.
+        apply Map_TID_Extra.mapsto_to_in in H0.
+        rewrite Map_TID_Facts.remove_in_iff in *.
+        destruct H0 as (N,_).
+        intuition.
+      }
+      apply Map_TID.remove_3 in H0.
+      inversion H2; subst; clear H2.
+      inversion H4; subst; clear H4.
+      eauto using Map_TID.add_3, task_of_cons.
+    }
+    destruct ws'.
     simpl in *.
-    apply Map_TID.remove_3 in H0.
-    auto using task_of_cons.
+    eauto using task_of_cons, Map_TID.remove_3.
   Qed.
 
   Let wf_phases_reg:
@@ -1730,6 +1846,19 @@ Section Defs.
     inversion H.
   Qed.
 
+  Let try_inc_some:
+    forall vs sp x sp',
+    try_inc vs sp x = Some sp' ->
+    TryInc vs sp x sp'.
+  Proof.
+    unfold try_inc; intros.
+    destruct (is_registered x sp). {
+      auto using try_inc_ok.
+    }
+    inversion H; subst.
+    eauto using try_inc_skip.
+  Qed.
+
   Let update_sp_some:
     forall vs vs' e sp sp',
     update_sp vs vs' e sp = Some sp' ->
@@ -1746,7 +1875,14 @@ Section Defs.
     - auto using update_sp_signal.
     - inversion H.
       subst.
-      auto using update_sp_drop.
+      remember (try_inc _ _ _).
+      symmetry in Heqo.
+      destruct o. {
+        apply try_inc_some in Heqo.
+        inversion H; subst.
+        auto using update_sp_drop.
+      }
+      inversion H.
   Qed.
 
   Let update_wp_some:
@@ -1765,7 +1901,14 @@ Section Defs.
     - auto using update_wp_wait.
     - inversion H.
       subst.
-      auto using update_wp_drop.
+      remember (try_inc _ _ _).
+      symmetry in Heqo.
+      destruct o. {
+        apply try_inc_some in Heqo.
+        inversion H; subst.
+        auto using update_wp_drop.
+      }
+      inversion H.
   Qed.
 
   Let update_ops_some:
