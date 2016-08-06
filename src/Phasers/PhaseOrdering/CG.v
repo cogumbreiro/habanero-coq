@@ -1074,7 +1074,7 @@ Section Defs.
   Proof.
     intros.
     inversion H2; subst; clear H2.
-    eauto.
+    eapply get_phases_set_phase_neq; eauto.
   Qed.
 
   Let wait_phase_drop_eq:
@@ -1088,6 +1088,19 @@ Section Defs.
     destruct H0.
     split; auto.
     apply wait_phase_def with (v:=v); auto.
+  Qed.
+
+  Let signal_phase_drop_eq:
+    forall x n y ph,
+    SignalPhase x n (Phaser.drop y ph) ->
+    y <> x /\ SignalPhase x n ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply drop_mapsto_inv in H0.
+    destruct H0.
+    split; auto.
+    apply signal_phase_def with (v:=v); auto.
   Qed.
 
   Let wait_phase_drop_neq:
@@ -1170,21 +1183,94 @@ Section Defs.
   Proof.
     intros.
     destruct H1; subst.
+    apply register_inv_mapsto in H1.
+    destruct H1 as [?|(?, (v', (?,?)))]. {
+      eapply wp_complete_reg_3; eauto.
+    }
+    subst.
+    rewrite mode_set_mode_rw in *.
+    rewrite set_mode_preserves_wait_phase.
+    assert (Hw: WaitPhase x (wait_phase v') ph). {
+      apply wait_phase_def with (v:=v'); auto.
+      inversion H2.
+      assert (v'=v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      apply can_wait_le with (y:=get_mode r); auto.
+    }
+    apply H0 in Hw.
+    apply copy_1 with (n:=wait_phase v') in H4; auto.
+  Qed.
+
+  Let sp_complete_reg_3:
+    forall vs wp ph t v r x wp',
+    WFPhases vs wp ->
+    SP_Complete ph wp ->
+    Map_TID.MapsTo t v ph ->
+    RegisterPre r x ph ->
+    CanSignal (get_mode r) ->
+    Copy vs wp x (get_task r) wp' ->
+    CanSignal (mode v) ->
+    GetPhase t (signal_phase v) wp'.
+  Proof.
+    intros.
+    assert (SignalPhase t (signal_phase v) ph) by (apply signal_phase_def with (v:=v); auto).
+    apply H0 in H6.
+    destruct (TID.eq_dec t (get_task r)). {
+      subst.
+      inversion H2.
+      contradiction H7.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    eapply copy_2; eauto.
+  Qed.
+
+  Let sp_complete_reg_1:
+    forall vs wp x ph t n r wp',
+    WFPhases vs wp ->
+    SP_Complete ph wp ->
+    SignalPhase t n (register r x ph) ->
+    RegisterPre r x ph ->
+    CanSignal (get_mode r) ->
+    Copy vs wp x (get_task r) wp' ->
+    GetPhase t n wp'.
+  Proof.
+    intros.
+    destruct H1; subst.
+    apply register_inv_mapsto in H1.
+    destruct H1 as [?|(?, (v', (?,?)))]. {
+      eapply sp_complete_reg_3; eauto.
+    }
+    subst.
+    rewrite mode_set_mode_rw in *.
+    rewrite set_mode_preserves_signal_phase.
+    assert (Hw: SignalPhase x (signal_phase v') ph). {
+      apply signal_phase_def with (v:=v'); auto.
+      inversion H2.
+      assert (v'=v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      apply can_signal_le with (y:=get_mode r); auto.
+    }
+    apply H0 in Hw.
+    apply copy_1 with (n:=signal_phase v') in H4; auto.
+  Qed.
+
+  Let sp_complete_reg_2:
+    forall vs wp n ph x y r,
+    WFPhases vs wp ->
+    SP_Complete ph wp ->
+    SignalPhase x n (register r y ph) ->
+    ~ CanSignal (get_mode r) ->
+    GetPhase x n wp.
+  Proof.
+    intros.
+      destruct H1; subst.
       apply register_inv_mapsto in H1.
       destruct H1 as [?|(?, (v', (?,?)))]. {
-        eapply wp_complete_reg_3; eauto.
+        assert (SignalPhase x (signal_phase v) ph) by (apply signal_phase_def with (v:=v); auto).
+        auto.
       }
       subst.
       rewrite mode_set_mode_rw in *.
-      rewrite set_mode_preserves_wait_phase.
-      assert (Hw: WaitPhase x (wait_phase v') ph). {
-        apply wait_phase_def with (v:=v'); auto.
-        inversion H2.
-        assert (v'=v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-        apply can_wait_le with (y:=get_mode r); auto.
-      }
-      apply H0 in Hw.
-      apply copy_1 with (n:=wait_phase v') in H4; auto.
+      rewrite set_mode_preserves_signal_phase.
+      contradiction.
   Qed.
 
   Let wp_complete:
@@ -1213,31 +1299,7 @@ Section Defs.
     - eapply wp_complete_reg_1; eauto.
     - eapply wp_complete_reg_2; eauto.
   Qed.
-(*
-  Let set_phase_cons:
-    forall vs sp y ph sp',
-    SetPhase vs sp y ph sp' ->
-    SetPhase (y :: vs) sp y ph sp'.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply set_phase_def.
-    - auto using maps_to_eq.
-    auto using set_phase_def, maps_to_cons, MN.add_1.
-  Qed.
 
-  Let inc_cons:
-    forall vs sp y sp',
-    Inc vs sp y sp' ->
-    Inc (y :: vs) sp y sp'.
-  Proof.
-    intros.
-    inversion H; subst.
-    apply inc_def with (ph:=ph); auto.
-  Qed.
-*)
-
-(*
   Let sp_complete:
     forall vs sp ph x o ph' sp',
     WFPhases vs sp ->
@@ -1258,18 +1320,15 @@ Section Defs.
         eauto.
       }
       apply H1 in H3.
-      eapply get_phases_inc_neq in H3; eauto.
-      
-      eauto.
+      apply get_phases_inc_neq with (y:=y) (ps':=sp') (vs:=vs) in H3; auto.
     - apply signal_phase_inv_wait in H4; auto.
-    - apply wait_phase_drop_eq in H3.
-      destruct H3.
+    - apply signal_phase_drop_eq in H4.
+      destruct H4.
       eauto.
-    - eapply wp_complete_reg_1; eauto.
-    - eapply wp_complete_reg_2; eauto.
-    
+    - eapply sp_complete_reg_1; eauto.
+    - eapply sp_complete_reg_2; eauto.
   Qed.
-*)
+
   Let wf_phases_inc:
     forall vs wp t x n wp',
     WFPhases vs wp ->
@@ -1399,6 +1458,180 @@ Section Defs.
     - remember (update_nodes _ _) as vs.
       apply wp_sound with (vs:=vs) (wp:=get_wp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
   Qed.
+
+  Inductive Complete ph b : Prop :=
+  | complete_def:
+    WFPhases (get_nodes b) (get_sp b) ->
+    WFPhases (get_nodes b) (get_wp b) ->
+    SP_Complete ph (get_sp b) ->
+    WP_Complete ph (get_wp b) ->
+    Complete ph b.
+
+  Let completeness:
+    forall b ph x o ph' b',
+    Complete ph b ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateBuilder b (x, of_op o) b' ->
+    Complete ph' b'.
+  Proof.
+    intros.
+    inversion H; clear H.
+    inversion H1; subst; clear H1.
+    assert (Hsp := H2).
+    assert (Hwp := H3).
+    eapply wf_phases_wp in H3; simpl; eauto.
+    apply complete_def; simpl; auto.
+    - eapply wf_phases_sp in H; eauto.
+    - remember (update_nodes _ _) as vs.
+      apply sp_complete with (vs:=get_nodes b) (sp:=get_sp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+    - remember (update_nodes _ _) as vs.
+      apply wp_complete with (vs:=vs) (wp:=get_wp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+  Qed.
+
+  Definition WF ph b := Sound ph b /\ Complete ph b.
+
+  Theorem correctness:
+    forall b ph x o ph' b',
+    WF ph b ->
+    Phaser.Reduces ph x o ph' ->
+    UpdateBuilder b (x, of_op o) b' ->
+    WF ph' b'.
+  Proof.
+    unfold WF.
+    intros.
+    destruct H.
+    eauto.
+  Qed.
+
+  Let wf_sp_1:
+    forall ph b x v,
+    WF ph b ->
+    SignalPhase x (signal_phase v) ph ->
+    GetPhase x (signal_phase v) (get_sp b).
+  Proof.
+    intros.
+    destruct H.
+    apply H1.
+    assumption.
+  Qed.
+
+  Let wf_sp_2:
+    forall ph b x v,
+    WF ph b ->
+    GetPhase x (signal_phase v) (get_sp b) ->
+    SignalPhase x (signal_phase v) ph.
+  Proof.
+    intros.
+    destruct H.
+    apply H.
+    assumption.
+  Qed.
+
+  Let wf_wp_1:
+    forall ph b x v,
+    WF ph b ->
+    WaitPhase x (wait_phase v) ph ->
+    GetPhase x (wait_phase v) (get_wp b).
+  Proof.
+    intros.
+    destruct H.
+    apply H1.
+    assumption.
+  Qed.
+
+  Let wf_wp_2:
+    forall ph b x v,
+    WF ph b ->
+    GetPhase x (wait_phase v) (get_wp b) ->
+    WaitPhase x (wait_phase v) ph.
+  Proof.
+    intros.
+    destruct H.
+    apply H.
+    assumption.
+  Qed.
+
+  Let wf_get_sp:
+    forall ph x b v,
+    WF ph b ->
+    Map_TID.MapsTo x v ph ->
+    CanSignal (mode v) ->
+    GetPhase x (signal_phase v) (get_sp b).
+  Proof.
+    intros.
+    assert (Hsp: SignalPhase x (signal_phase v) ph) by
+    (apply signal_phase_def with (v:=v); auto).
+    eauto.
+  Qed.
+
+  Let wf_get_wp:
+    forall ph x b v,
+    WF ph b ->
+    Map_TID.MapsTo x v ph ->
+    CanWait (mode v) ->
+    GetPhase x (wait_phase v) (get_wp b).
+  Proof.
+    intros.
+    assert (Hsp: WaitPhase x (wait_phase v) ph) by
+    (apply wait_phase_def with (v:=v); auto).
+    eauto.
+  Qed.
+
+  Let get_phase_to_set_phase:
+    forall x n n' ws vs,
+    GetPhase x n ws ->
+    List.In x vs ->
+    exists ws', SetPhase vs ws x n' ws'.
+  Proof.
+    intros.
+    destruct ws as (ns, ps).
+    apply in_to_maps_to in H0; auto using TID.eq_dec.
+    destruct H0 as (n'', Hmt).
+    eauto using set_phase_def.
+  Qed.
+(*
+  Let wf_ph_red_signal:
+    forall ph b x ph',
+    WF ph b ->
+    Phaser.Reduces ph x Phaser.SIGNAL ph' ->
+    exists sp, Inc (get_nodes b) (get_sp b) x sp.
+  Proof.
+    intros.
+    inversion H0; simpl in *; subst; clear H0; inversion H1.
+    apply signal_pre_to_can_signal in H2.
+    assert (GetPhase x (signal_phase v) (get_sp b)). {
+      apply wf_get_sp with (ph:=ph); auto.
+    }
+    eapply wf_sp_2 in H3; eauto.
+    eauto using inc_def.
+  Qed.
+  
+  Let update_sp_total:
+    forall b x o ph ph',
+    WF ph b ->
+    Phaser.Reduces ph x o ph' ->
+    exists sp, UpdateSP (get_nodes b) (update_nodes (get_nodes b) (x, of_op o)) (get_sp b) (x, of_op o) sp.
+  Proof.
+    intros.
+    destruct o; eauto using update_sp_continue, update_sp_wait, update_sp_async.
+    - (update_sp_signal (get_nodes b) (update_nodes (get_nodes b) (x, of_op Phaser.SIGNAL)) (get_sp b)
+    - destruct (can_signal r). {
+        
+      }
+  Qed.
+
+  Let reduces_to_build:
+    forall b ph x o ph',
+    WF ph b ->
+    Phaser.Reduces ph x o ph' ->
+    exists b', UpdateBuilder b (x, of_op o) b'.
+  Proof.
+    intros.
+    destruct o; inversion H0; simpl in *; subst; clear H0.
+    - 
+  Qed.
+*)
+  
 (*
 
 
@@ -1752,4 +1985,16 @@ Section Defs.
 
 End Defs.
 
+Extract Inductive bool => "bool" [ "true" "false" ].
+Extract Inductive sumbool => "bool" [ "true" "false" ].
+Extract Inductive nat => "int"
+  [ "0" "(fun x -> x + 1)" ]
+  "(fun zero succ n ->
+      if n=0 then zero () else succ (n-1))".
+Extract Inductive list => "list" [ "[]" "(::)" ].
+Extract Inductive option => "option" [ "Some" "None" ].
+Extract Inductive prod => "(*)"  [ "(,)" ].
+Extract Constant plus => "( + )".
+Extract Constant mult => "( * )".
+(*Extract Constant beq_nat => "( = )".*)
 Extraction "ocaml/cg.ml" build.
