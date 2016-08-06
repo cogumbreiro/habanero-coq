@@ -7,23 +7,6 @@ open Stringext
 
 let js = Js.string
 
-let rec int_of_nat x =
-    match x with
-    | Cg.S n -> 1 + int_of_nat n
-    | Cg.O -> 0
-    ;;
-
-let rec nat_of_int x =
-    if x <= 0 then Cg.O
-    else Cg.S (nat_of_int (x - 1))
-
-module NatHash =
-    struct
-        type t = Cg.nat
-        let equal i j = i=j
-        let hash i = (int_of_nat i) land max_int
-    end
-
 module IntHash =
     struct
         type t = int
@@ -31,29 +14,12 @@ module IntHash =
         let hash i = i land max_int
     end
 
-module N = Hashtbl.Make(NatHash)
 module I = Hashtbl.Make(IntHash)
-
-let rec as_list l : 'a list =
-    match l with
-    | Cg.Cons (x, l) ->
-        x::(as_list l)
-    | _ -> []
-
-let rec from_list l =
-    match l with
-    | [] -> Cg.Nil
-    | x::xs -> Cg.Cons (x,from_list xs)
-    ;;
 
 let _REG = "reg"
 let _SO = "SO";;
 let _WO = "WO";;
 let _SW = "SW";;
-
-let nat_of_string x = nat_of_int (int_of_string (trim x)) ;;
-
-let string_of_nat x = string_of_int (int_of_nat x) ;;
 
 let reg_of_string s : Cg.regmode =
     let s = trim s in
@@ -64,8 +30,8 @@ let reg_of_string s : Cg.regmode =
   
 let op_of_string s : Cg.op =
     match split (trim s) ' ' with
-    | "async" :: x :: [] -> Cg.ASYNC (nat_of_string x)
-    | "reg" :: x :: r :: [] -> Cg.ASYNC_PHASED ((nat_of_string x), (reg_of_string r))
+    | "async" :: x :: [] -> Cg.ASYNC (int_of_string x)
+    | "reg" :: x :: r :: [] -> Cg.ASYNC_PHASED ((int_of_string x), (reg_of_string r))
     | "signal" :: [] -> Cg.SIGNAL
     | "wait" :: [] -> Cg.WAIT
     | "drop" :: [] -> Cg.DROP
@@ -76,7 +42,7 @@ let op_of_string s : Cg.op =
 let event_of_string s : Cg.event =
     let s = trim s in
     match split s ':' with
-    | s::o::[] -> Cg.Pair (nat_of_string s, op_of_string o)
+    | s::o::[] -> (int_of_string s, op_of_string o)
     | _ -> raise (Failure "op_of_string")
 
 let string_of_reg r =
@@ -87,8 +53,8 @@ let string_of_reg r =
 
 let string_of_op o =
     match o with
-    | Cg.ASYNC x -> "async " ^ (string_of_nat x)
-    | Cg.ASYNC_PHASED (x, r) -> "reg " ^ (string_of_nat x) ^ " " ^ (string_of_reg r)
+    | Cg.ASYNC x -> "async " ^ (string_of_int x)
+    | Cg.ASYNC_PHASED (x, r) -> "reg " ^ (string_of_int x) ^ " " ^ (string_of_reg r)
     | Cg.SIGNAL -> "signal"
     | Cg.WAIT -> "wait"
     | Cg.DROP -> "drop"
@@ -97,12 +63,11 @@ let string_of_op o =
 
 let string_of_event e =
     match e with
-    | Cg.Pair (x, o) ->
-    (string_of_int (int_of_nat x)) ^ ": " ^ (string_of_op o)
+    | (x, o) -> (string_of_int x) ^ ": " ^ (string_of_op o)
     ;;
 
 let string_of_trace t =
-    concat "\n" (List.map string_of_event (rev (as_list t)))
+    concat "\n" (List.map string_of_event (rev t))
 
 
 let filter_duplicates lst =
@@ -133,19 +98,22 @@ let trace_of_string s =
         try [event_of_string x]
         with | Failure _ -> []
     in
-    from_list (rev (flatten (List.map to_evt (split s '\n'))))
+    rev (flatten (List.map to_evt (split s '\n')))
 
 let js_array_from_list l =
     let arr = jsnew Js.array_empty () in
     List.iteri (fun idx v -> Js.array_set arr idx v) l;
     arr
 
-type edge = (Cg.nat, Cg.nat) Cg.prod
+let js_array a =
+    let arr = jsnew Js.array_empty () in
+    Array.iteri (fun idx v -> Js.array_set arr idx v) a;
+    arr
 
 let js_of_vertex (idx:int) (ns:Cg.op Cg.MN.t) =
     js (
-        match Cg.MN.find (nat_of_int idx) ns with
-        | Cg.Some o -> string_of_op o
+        match Cg.MN.find idx ns with
+        | Some o -> string_of_op o
         | _ -> ""
     )
 
@@ -153,12 +121,12 @@ let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) =
     let parent_of = I.create 10 in
     List.iter (fun p ->
         match p with
-        | Cg.Pair (n_idx, Cg.ASYNC_PHASED (y,_)) ->
-            I.add parent_of (int_of_nat y) (Array.get vs (int_of_nat n_idx))
-        | Cg.Pair (n_idx, Cg.ASYNC y) ->
-            I.add parent_of (int_of_nat y) (Array.get vs (int_of_nat n_idx))
+        | (n_idx, Cg.ASYNC_PHASED (y,_)) ->
+            I.add parent_of y (Array.get vs n_idx)
+        | (n_idx, Cg.ASYNC y) ->
+            I.add parent_of y (Array.get vs n_idx)
         | _ -> ()
-    ) (as_list (Cg.MN.elements ns));
+    ) (Cg.MN.elements ns);
     let tbl = I.create 10 in
     let parent_offset tid = (try (I.find tbl (I.find parent_of tid) - 1) with | _ -> 0) in
     let to_js idx tid =
@@ -172,7 +140,7 @@ let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) =
         ("group", Js.Unsafe.inject tid)
         |]
     in
-    js_array_from_list (Array.to_list (Array.mapi to_js vs))
+    js_array (Array.mapi to_js vs)
 
 let js_of_bool b = if b then Js._true else Js._false
 
@@ -191,26 +159,22 @@ let js_of_edges (cg:Cg.computation_graph) =
         | FORK -> Js.Unsafe.js_expr "[1,10,1,10]"
         | CONTINUE -> js_of_bool false
     in
-    let to_js (t:edge_type) (e:edge) =
-        match e with
-        | Cg.Pair(n1,n2) ->
+    let to_js (t:edge_type) (n1,n2) =
         Js.Unsafe.obj [|
-        ("from", Js.Unsafe.inject (int_of_nat n1));
-        ("to", Js.Unsafe.inject (int_of_nat n2));
+        ("from", Js.Unsafe.inject n1);
+        ("to", Js.Unsafe.inject n2);
         ("dashes", Js.Unsafe.inject (js_dash t));
         ("arrows", Js.Unsafe.inject (js "to"));
         ("smooth", Js.Unsafe.inject (is_enabled (t <> CONTINUE)))
         |]
     in
-    let ec = List.map (to_js CONTINUE) (as_list (Cg.c_edges cg)) in
-    let ej = List.map (to_js FORK) (as_list (Cg.f_edges cg)) in
-    let es = List.map (to_js SYNC) (as_list (Cg.s_edges cg)) in
+    let ec = List.map (to_js CONTINUE) (Cg.c_edges cg) in
+    let ej = List.map (to_js FORK) (Cg.f_edges cg) in
+    let es = List.map (to_js SYNC) (Cg.s_edges cg) in
     js_array_from_list (ec @ ej @ es)
 
-let js_of_cg bcg =
-    match bcg with
-    | Cg.Pair (b, cg) ->
-    let tids = Array.of_list (rev (List.map int_of_nat (as_list (Cg.get_nodes b)))) in
+let js_of_cg (b,cg) =
+    let tids = Array.of_list (rev (Cg.get_nodes b)) in
     Js.Unsafe.obj [|
         ("nodes", Js.Unsafe.inject (js_of_vertices tids (Cg.node_to_op b)));
         ("edges", Js.Unsafe.inject (js_of_edges cg)) |]
@@ -263,8 +227,8 @@ let onload _ =
         if !last_trace <> t then (
             last_trace := t;
             match Cg.build t with
-            | Cg.Some cg -> draw_graph graph (js_of_cg cg)
-            | Cg.None -> print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
+            | Some cg -> draw_graph graph (js_of_cg cg)
+            | None -> print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
         ) else ();
         Js._false)
     in
