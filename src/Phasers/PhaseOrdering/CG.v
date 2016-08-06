@@ -1985,16 +1985,34 @@ Section Defs.
 
 End Defs.
 
+(* bools *)
 Extract Inductive bool => "bool" [ "true" "false" ].
+Extract Inlined Constant negb => "not".
+
 Extract Inductive sumbool => "bool" [ "true" "false" ].
+
+Extract Inductive sumor => "option" [ "Some" "None" ].
+
+Extract Inductive option => "option" [ "Some" "None" ].
+
+(* list *)
+Extract Inductive list => "list" [ "[]" "(::)" ].
+Extract Inlined Constant length => "List.length".
+Extract Inlined Constant app => "List.append".
+Extract Inlined Constant map => "List.map".
+
+(* pairs *)
+Extract Inductive prod => "(*)"  [ "(,)" ].
+Extract Inlined Constant fst => "fst".
+Extract Inlined Constant snd => "snd".
+
+(* nat *)
 Extract Inductive nat => "int"
   [ "0" "(fun x -> x + 1)" ]
   "(fun zero succ n ->
       if n=0 then zero () else succ (n-1))".
-Extract Inductive list => "list" [ "[]" "(::)" ].
-Extract Inductive option => "option" [ "Some" "None" ].
-Extract Inductive prod => "(*)"  [ "(,)" ].
-Extract Constant plus => "( + )".
-Extract Constant mult => "( * )".
-(*Extract Constant beq_nat => "( = )".*)
+Extract Inlined Constant plus => "( + )".
+Extract Inlined Constant mult => "( * )".
+Extract Inlined Constant eq_nat_dec => "( = )".
+
 Extraction "ocaml/cg.ml" build.
