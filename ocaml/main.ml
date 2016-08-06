@@ -17,6 +17,23 @@ let rec nat_of_int x =
     if x <= 0 then Cg.O
     else Cg.S (nat_of_int (x - 1))
 
+module NatHash =
+    struct
+        type t = Cg.nat
+        let equal i j = i=j
+        let hash i = (int_of_nat i) land max_int
+    end
+
+module IntHash =
+    struct
+        type t = int
+        let equal i j = i=j
+        let hash i = i land max_int
+    end
+
+module N = Hashtbl.Make(NatHash)
+module I = Hashtbl.Make(IntHash)
+
 let rec as_list l : 'a list =
     match l with
     | Cg.Cons (x, l) ->
@@ -132,19 +149,20 @@ let js_of_vertex (idx:int) (ns:Cg.op Cg.MN.t) =
     )
 
 let js_of_vertices (vs:Cg.tid Cg.list) (ns:Cg.op Cg.MN.t) =
-    let to_js (idx:int) (tid:int) =
+    let tbl = I.create 10 in
+    let to_js (idx, tid) =
+        let offset = (try (I.find tbl tid) + 1 with | _ ->  0) in
+        I.add tbl tid offset;
         Js.Unsafe.obj [|
         ("id", Js.Unsafe.inject idx);
+        ("x", Js.Unsafe.inject (tid * 150));
+        ("y", Js.Unsafe.inject (offset * 150));
         ("label", Js.Unsafe.inject (js_of_vertex idx ns));
         ("group", Js.Unsafe.inject tid)
         |]
     in
-    let rec convert idx xs =
-        match xs with
-        | x::xs -> to_js idx (int_of_nat x) :: (convert (idx+1) xs)
-        | [] -> []
-    in
-    js_array_from_list (convert 0 (rev (as_list vs)))
+    let vs = List.mapi (fun idx x -> (idx, (int_of_nat x))) (rev (as_list vs)) in
+    js_array_from_list (List.map to_js vs)
 
 let js_of_bool b = if b then Js._true else Js._false
 
