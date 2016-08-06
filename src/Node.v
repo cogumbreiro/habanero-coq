@@ -458,6 +458,19 @@ Section MoreProps.
     Variable A:Type.
     Variable eq_dec: forall (x y:A), {x = y} + {x <> y}.
 
+    Lemma in_to_maps_to:
+      forall (x:A) vs,
+      List.In x vs ->
+      exists n, MapsTo x n vs.
+    Proof.
+      intros.
+      unfold MapsTo.
+      apply Bijection.in_to_maps_to in H; auto.
+      destruct H as (n, H).
+      exists (make n).
+      auto.
+    Qed.
+
     Definition lookup (x:A) xs :=
     match Bijection.lookup eq_dec x xs with
     | Some n => Some (make n)

@@ -505,6 +505,27 @@ Section MapsTo.
   Section MapsToDec.
     Variable eq_dec: forall (x y:A), { x = y } + { x <> y }.
 
+    Lemma in_to_maps_to:
+      forall (x:A) vs,
+      List.In x vs ->
+      exists n, MapsTo x n vs.
+    Proof.
+      induction vs; intros. {
+        inversion H.
+      }
+      destruct H. {
+        subst.
+        eauto using maps_to_eq.
+      }
+      destruct (eq_dec x a). {
+        subst.
+        eauto using maps_to_eq.
+      }
+      apply IHvs in H.
+      destruct H.
+      eauto using maps_to_cons.
+    Qed.
+
     Fixpoint lookup x l :=
     match l with
     | nil => None
