@@ -228,6 +228,15 @@ Section Facts.
     trivial.
   Qed.
 
+  Definition le_dec x y:
+    { x <= y } + { ~ x <= y }.
+  Proof.
+    destruct x, y;
+    auto using r_le_so, r_le_sw, r_le_wo;
+    right; unfold not; intros N;
+    inversion N.
+  Defined.
+
   Lemma can_wait_le:
     forall x y,
     CanWait y ->
