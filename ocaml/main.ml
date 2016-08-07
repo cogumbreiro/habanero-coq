@@ -30,12 +30,10 @@ let reg_of_string s : Cg.regmode =
   
 let op_of_string s : Cg.op =
     match split (trim s) ' ' with
-    | "async" :: x :: [] -> Cg.ASYNC (int_of_string x)
-    | "reg" :: x :: r :: [] -> Cg.ASYNC_PHASED ((int_of_string x), (reg_of_string r))
+    | "reg" :: x :: r :: [] -> Cg.REGISTER { Cg.get_task = int_of_string x; Cg.get_mode = reg_of_string r }
     | "signal" :: [] -> Cg.SIGNAL
     | "wait" :: [] -> Cg.WAIT
     | "drop" :: [] -> Cg.DROP
-    | "continue" :: [] -> Cg.CONTINUE
     | _ -> raise (Failure "op_of_string")
     ;;
 
@@ -53,12 +51,10 @@ let string_of_reg r =
 
 let string_of_op o =
     match o with
-    | Cg.ASYNC x -> "async " ^ (string_of_int x)
-    | Cg.ASYNC_PHASED (x, r) -> "reg " ^ (string_of_int x) ^ " " ^ (string_of_reg r)
+    | Cg.REGISTER r -> "reg " ^ (string_of_int (Cg.get_task r)) ^ " " ^ (string_of_reg (Cg.get_mode r))
     | Cg.SIGNAL -> "signal"
     | Cg.WAIT -> "wait"
     | Cg.DROP -> "drop"
-    | Cg.CONTINUE -> "continue"
     ;;
 
 let string_of_event e =
@@ -100,11 +96,6 @@ let trace_of_string s =
     in
     rev (flatten (List.map to_evt (split s '\n')))
 
-let js_array_from_list l =
-    let arr = jsnew Js.array_empty () in
-    List.iteri (fun idx v -> Js.array_set arr idx v) l;
-    arr
-
 let js_array a =
     let arr = jsnew Js.array_empty () in
     Array.iteri (fun idx v -> Js.array_set arr idx v) a;
@@ -121,10 +112,8 @@ let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) =
     let parent_of = I.create 10 in
     List.iter (fun p ->
         match p with
-        | (n_idx, Cg.ASYNC_PHASED (y,_)) ->
-            I.add parent_of y (Array.get vs n_idx)
-        | (n_idx, Cg.ASYNC y) ->
-            I.add parent_of y (Array.get vs n_idx)
+        | (n_idx, Cg.REGISTER r) ->
+            I.add parent_of (Cg.get_task r) (Array.get vs n_idx)
         | _ -> ()
     ) (Cg.MN.elements ns);
     let tbl = I.create 10 in
@@ -140,7 +129,7 @@ let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) =
         ("group", Js.Unsafe.inject tid)
         |]
     in
-    js_array (Array.mapi to_js vs)
+    (tbl, Array.mapi to_js vs)
 
 let js_of_bool b = if b then Js._true else Js._false
 
@@ -149,7 +138,7 @@ type edge_type =
 | SYNC
 | CONTINUE
 
-let js_of_edges (cg:Cg.computation_graph) =
+let js_of_edges (cg:Cg.computation_graph) : 'a array =
     let is_enabled b =
         Js.Unsafe.obj [| ("enabled", Js.Unsafe.inject (js_of_bool b)) |]
     in
@@ -171,42 +160,51 @@ let js_of_edges (cg:Cg.computation_graph) =
     let ec = List.map (to_js CONTINUE) (Cg.c_edges cg) in
     let ej = List.map (to_js FORK) (Cg.f_edges cg) in
     let es = List.map (to_js SYNC) (Cg.s_edges cg) in
-    js_array_from_list (ec @ ej @ es)
+    Array.of_list (ec @ ej @ es)
+
+let js_graph_empty = Js.Unsafe.obj [||]
+
+type node_meta = { get_tid_of : int array; get_last_id : int I.t }
 
 let js_of_cg (b,cg) =
     let tids = Array.of_list (rev (Cg.get_nodes b)) in
-    Js.Unsafe.obj [|
-        ("nodes", Js.Unsafe.inject (js_of_vertices tids (Cg.node_to_op b)));
-        ("edges", Js.Unsafe.inject (js_of_edges cg)) |]
+    let (tbl, vs) = js_of_vertices tids (Cg.node_to_op b) in
+    ({get_tid_of = tids; get_last_id = tbl }, (vs, js_of_edges cg))
 
-let draw_graph container g : unit =
-    let opts = Js.Unsafe.js_expr 
- "
-{
-  edges: {
-    width: 2,
-    smooth: {
-  type: 'vertical'
-    },
-    shadow:true
-  },
-  nodes : {
-    shape: 'dot',
-    size: 10,
-    shadow:true,
-    font: {face:'courier', size: 20, strokeWidth:3, strokeColor:'#ffffff'}
-  },
-  layout: {
-    randomSeed: 0
-  },
-  physics: {
-    enabled: false
-  }
-}"
+let js_new_dataset _ =
+    Js.Unsafe.new_obj (Js.Unsafe.variable "vis.DataSet")
+    [| Js.Unsafe.inject (js_array [| |]) |]
+
+let js_new_network container (vs, es) =
+    let js_graph = 
+        Js.Unsafe.obj [|
+            ("nodes", Js.Unsafe.inject (js_array vs));
+            ("edges", Js.Unsafe.inject (js_array es))
+        |]
     in
     let _ = Js.Unsafe.new_obj (Js.Unsafe.variable "vis.Network")
-    [| Js.Unsafe.inject container;  Js.Unsafe.inject g; opts|] in
+    [| Js.Unsafe.inject container; 
+       Js.Unsafe.inject js_graph;
+       Js.Unsafe.variable "OPTS"|] in
     ()
+
+let js_set_data net g : unit =
+    Js.Unsafe.meth_call net "setData" [| Js.Unsafe.inject g |]
+
+let string_of_phaser ph =
+    let string_of_taskview v =
+        "\t{sp: " ^ string_of_int (Cg.signal_phase v) ^
+        ", wp: " ^ string_of_int (Cg.wait_phase v) ^
+        ", mode: " ^ string_of_reg (Cg.mode v) ^
+        "}"
+    in
+    let string_of_entry (t, v) =
+        string_of_int t ^ ": " ^ string_of_taskview v
+    in
+    "{\n" ^
+    String.concat ",\n" (List.map string_of_entry (Cg.Map_TID.elements ph)) ^
+    "\n}"
+    ;;
 
 let onload _ =
     let txt =
@@ -218,16 +216,24 @@ let onload _ =
         (fun div -> div)
     in
     let last_trace = ref (trace_of_string "") in
-    let graph =
+    let trace_out =
         Js.Opt.get (Html.document##getElementById(Js.string "graph_out"))
         (fun () -> assert false) in
+
+    js_new_network trace_out ([||], [||]);
     let handler = (fun _ ->
         let trace_txt = Js.to_string (txt##value) in
         let t = trace_of_string trace_txt in
         if !last_trace <> t then (
             last_trace := t;
             match Cg.build t with
-            | Some cg -> draw_graph graph (js_of_cg cg)
+            | Some bcg -> (
+                let (meta, g) = js_of_cg bcg in
+                js_new_network trace_out g;
+                match Cg.eval_trace t with
+                | Some ph -> print_string ("Parsed string:\n" ^ string_of_phaser ph ^ "\n")
+                | _ -> ()
+            )
             | None -> print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
         ) else ();
         Js._false)
