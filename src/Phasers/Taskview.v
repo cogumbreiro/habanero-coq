@@ -1,3 +1,4 @@
+Require Import Coq.Arith.Peano_dec.
 Require Import HJ.Phasers.Regmode.
 
 Section Defs.
@@ -52,6 +53,32 @@ Section Defs.
       mode v = SIGNAL_ONLY ->
       SignalPre v.
 
+  Definition signal_pre v:
+    { SignalPre v } + { ~ SignalPre v }.
+  Proof.
+    destruct v as (s, w, r).
+    destruct (regmode_eq r SIGNAL_WAIT). {
+      destruct (eq_nat_dec s w). {
+        subst; auto using signal_pre_w.
+      }
+      right.
+      unfold not; intros N.
+      inversion N; subst; simpl in *. {
+        intuition.
+      }
+      inversion H.
+    }
+    destruct (regmode_eq r SIGNAL_ONLY). {
+      auto using signal_pre_s.
+    }
+    right.
+    unfold not; intros N.
+    inversion N; subst; simpl in *. {
+      intuition.
+    }
+    intuition.
+  Defined.
+
   (** The operation simply increments the signal phase. *)
 
   Definition signal v := set_signal_phase v (S (signal_phase v)).
@@ -87,6 +114,29 @@ Section Defs.
       mode v = SIGNAL_WAIT ->
       S (wait_phase v) = signal_phase v ->
       WaitPre v.
+
+  Definition wait_pre v:
+    { WaitPre v } + { ~ WaitPre v }.
+  Proof.
+    destruct (regmode_eq (mode v) WAIT_ONLY). {
+      auto using wait_pre_wo.
+    }
+    destruct (regmode_eq (mode v) SIGNAL_WAIT). {
+      destruct (eq_nat_dec (S (wait_phase v)) (signal_phase v)). {
+        subst; auto using wait_pre_sw.
+      }
+      right; unfold not; intros N.
+      inversion N. {
+        contradiction.
+      }
+      contradiction.
+    }
+    right; unfold not; intros N.
+    inversion N. {
+      contradiction.
+    }
+    contradiction.
+  Defined.
 
   Definition wait v := set_wait_phase v (S (wait_phase v)).
 
