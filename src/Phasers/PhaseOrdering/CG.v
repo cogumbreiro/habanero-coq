@@ -3,40 +3,27 @@ Require Import Coq.Lists.List.
 Require Import Aniceto.Pair.
 Require Import Aniceto.List.
 
-Require Import Phasers.Phaser.
 Require Import Phasers.Taskview.
 Require Import Regmode.
 Require Import Vars.
 Require Import Node.
+Require Import Phasers.Phaser.
 
 Section Defs.
-
-  Inductive op :=
-  | ASYNC : tid -> op
-  | ASYNC_PHASED : tid -> regmode -> op
-  | SIGNAL: op
-  | WAIT: op
-  | DROP: op
-  | CONTINUE: op.
-
-  Definition event := (tid * op) % type.
 
   Notation edge := (node * node) %type.
 
   Inductive IsSeq : op -> Prop :=
   | is_seq_signal: IsSeq SIGNAL
   | is_seq_wait: IsSeq WAIT
-  | is_seq_drop: IsSeq DROP
-  | is_seq_continue: IsSeq CONTINUE.
+  | is_seq_drop: IsSeq DROP.
 
   Inductive IsPar : op -> tid -> Prop :=
-  | is_par_async: forall x, IsPar (ASYNC x) x
-  | is_par_phased: forall x r, IsPar (ASYNC_PHASED x r) x.
+  | is_par_def: forall r, IsPar (REGISTER r) (get_task r).
 
   Let is_par o :=
   match o with
-  | ASYNC x => Some x
-  | ASYNC_PHASED x _ => Some x
+  | REGISTER r => Some (get_task r)
   | _ => None
   end.
 
@@ -46,7 +33,7 @@ Section Defs.
     IsPar o x.
   Proof.
     intros.
-    destruct o; simpl in *; inversion H; subst; auto using is_par_async, is_par_phased.
+    destruct o; simpl in *; inversion H; subst; auto using is_par_def.
   Qed.
 
   Let is_pair_some_prop:
@@ -72,7 +59,7 @@ Section Defs.
   Proof.
     intros.
     destruct o; simpl in *; inversion H; subst;
-    auto using is_seq_signal, is_seq_drop, is_seq_continue, is_seq_wait.
+    auto using is_seq_signal, is_seq_drop, is_seq_wait.
   Qed.
 
   Let is_pair_none_prop:
@@ -260,18 +247,15 @@ Section Defs.
   end.
 
   Inductive UpdateWP (vs:list tid) (ws:phases): event -> phases -> Prop :=
-  | update_wp_async:
-    forall x y,
-    UpdateWP vs ws (x, ASYNC y) ws
-  | update_wp_phased_can_wait:
-    forall ws' x y r,
-    CanWait r ->
-    Copy vs ws x y ws' ->
-    UpdateWP vs ws (x, ASYNC_PHASED y r) ws'
+  | update_wp_register_can_wait:
+    forall ws' x r,
+    CanWait (get_mode r) ->
+    Copy vs ws x (get_task r) ws' ->
+    UpdateWP vs ws (x, REGISTER r) ws'
   | update_wp_phased_cannot_wait:
-    forall x y r,
-    ~ CanWait r ->
-    UpdateWP vs ws (x, ASYNC_PHASED y r) ws
+    forall x r,
+    ~ CanWait (get_mode r) ->
+    UpdateWP vs ws (x, REGISTER r) ws
   | update_wp_signal:
     forall x,
     UpdateWP vs ws (x, SIGNAL) ws
@@ -282,16 +266,13 @@ Section Defs.
   | update_wp_drop:
     forall x ws',
     TryInc vs ws x ws' ->
-    UpdateWP vs ws (x, DROP) (drop x ws')
-  | update_wp_continue:
-    forall x,
-    UpdateWP vs ws (x, CONTINUE) ws.
+    UpdateWP vs ws (x, DROP) (drop x ws').
 
   Definition update_wp vs (e:event) (wp:phases) : option phases :=
   let (x, o) := e in
   match o with
-  | ASYNC_PHASED y r =>
-    if can_wait r then copy vs x y wp
+  | REGISTER r =>
+    if can_wait (get_mode r) then copy vs x (get_task r) wp
     else Some wp
   | WAIT => inc vs wp x
   | DROP =>
@@ -303,18 +284,15 @@ Section Defs.
   end.
 
   Inductive UpdateSP (vs vs':list tid) (ws:phases): event -> phases -> Prop :=
-  | update_sp_async:
-    forall x y,
-    UpdateSP vs vs' ws (x, ASYNC y) ws
-  | update_sp_phased_can_signal:
-    forall ws' x y r,
-    CanSignal r ->
-    Copy vs' ws x y ws' ->
-    UpdateSP vs vs' ws (x, ASYNC_PHASED y r) ws'
-  | update_sp_phased_cannot_signal:
-    forall x y r,
-    ~ CanSignal r ->
-    UpdateSP vs vs' ws (x, ASYNC_PHASED y r) ws
+  | update_sp_register_can_signal:
+    forall ws' x r,
+    CanSignal (get_mode r) ->
+    Copy vs' ws x (get_task r) ws' ->
+    UpdateSP vs vs' ws (x, REGISTER r) ws'
+  | update_sp_register_cannot_signal:
+    forall x r,
+    ~ CanSignal (get_mode r) ->
+    UpdateSP vs vs' ws (x, REGISTER r) ws
   | update_sp_signal:
     forall x ws',
     Inc vs ws x ws' ->
@@ -325,16 +303,13 @@ Section Defs.
   | update_sp_drop:
     forall x ws',
     TryInc vs ws x ws' ->
-    UpdateSP vs vs' ws (x, DROP) (drop x ws')
-  | update_sp_continue:
-    forall x,
-    UpdateSP vs vs' ws (x, CONTINUE) ws.
+    UpdateSP vs vs' ws (x, DROP) (drop x ws').
 
   Definition update_sp vs vs' (e:event) sp :=
   let (x, o) := e in
   match o with
-  | ASYNC_PHASED y r =>
-    if can_signal r then copy vs' x y sp
+  | REGISTER r =>
+    if can_signal (get_mode r) then copy vs' x (get_task r) sp
     else Some sp
   | SIGNAL => inc vs sp x
   | DROP =>
@@ -344,8 +319,6 @@ Section Defs.
     end
   | _ => Some sp
   end.
-
-  (* Old nodes *)
 
   Inductive AddCEdges vs vs' : event -> list edge -> Prop :=
   | add_c_edges_def:
@@ -394,10 +367,16 @@ Section Defs.
   }.
 
   Definition builder_empty :=
-  {| get_nodes := nil; get_sp:= ph_empty; get_wp := ph_empty; node_to_op:=MN.empty op |}.
+  {| get_nodes := nil;
+     get_sp:= ph_empty;
+     get_wp := ph_empty;
+     node_to_op:=MN.empty op |}.
 
   Definition builder_make x :=
-  {| get_nodes := (x::nil); get_sp:= ph_make x; get_wp := ph_make x; node_to_op:=MN.empty op |}.
+  {| get_nodes := (x::nil);
+     get_sp := ph_make x;
+     get_wp := ph_make x;
+     node_to_op := MN.empty op |}.
 
   Definition Phase n ph (sp:phases) := MN.MapsTo n ph (snd sp).
 
@@ -494,10 +473,10 @@ Section Defs.
     UpdateWP (update_nodes (get_nodes b) e) (get_wp b) e wp ->
     UpdateOps (get_nodes b) (node_to_op b) e m ->
     UpdateBuilder b e
-    {| get_nodes:=update_nodes (get_nodes b) e;
-       get_sp:=sp;
-       get_wp:=wp;
-       node_to_op:=m |}.
+    {| get_nodes := update_nodes (get_nodes b) e;
+       get_sp := sp;
+       get_wp := wp;
+       node_to_op := m |}.
 
   Let update_builder (e:event) b :=
   let vs := update_nodes (get_nodes b) e in
@@ -573,14 +552,6 @@ Section Defs.
     forall x n,
     GetPhase x n sp ->
     SignalPhase x n ph.
-
-  Let of_op (o:Phaser.op) :=
-  match o with
-  | Phaser.SIGNAL => SIGNAL
-  | Phaser.WAIT => WAIT
-  | Phaser.DROP => DROP
-  | Phaser.REGISTER r => ASYNC_PHASED (Phaser.get_task r) (Phaser.get_mode r)
-  end.
 
   Let set_phase_to_get_phase:
     forall vs sp t ph sp',
@@ -911,7 +882,7 @@ Section Defs.
     WFPhases vs' sp ->
     SP_Sound ph sp ->
     Phaser.Reduces ph x o ph' ->
-    UpdateSP vs vs' sp (x, of_op o) sp' ->
+    UpdateSP vs vs' sp (x, o) sp' ->
     SP_Sound ph' sp'.
   Proof.
     unfold SP_Sound; intros.
@@ -929,9 +900,9 @@ Section Defs.
       eapply try_inc_3 in H7; eauto.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
-        apply copy_inv_eq with (n:=n) in H11; auto.
+        apply copy_inv_eq with (n:=n) in H10; auto.
       }
-      eapply copy_3 in H11; eauto.
+      eapply copy_3 in H10; eauto.
     - eauto.
   Qed.
 
@@ -1032,7 +1003,7 @@ Section Defs.
     WFPhases vs wp ->
     WP_Sound ph wp ->
     Phaser.Reduces ph x o ph' ->
-    UpdateWP vs wp (x, of_op o) wp' ->
+    UpdateWP vs wp (x, o) wp' ->
     WP_Sound ph' wp'.
   Proof.
     intros; unfold WP_Sound; intros.
@@ -1054,9 +1025,9 @@ Section Defs.
       eapply try_inc_3 in H6; eauto.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
-        apply copy_inv_eq with (n:=n) in H10; auto.
+        apply copy_inv_eq with (n:=n) in H9; auto.
       }
-      eapply copy_3 in H10; eauto.
+      eapply copy_3 in H9; eauto.
     - eauto.
   Qed.
 
@@ -1378,7 +1349,7 @@ Section Defs.
     WFPhases vs wp ->
     WP_Complete ph wp ->
     Phaser.Reduces ph x o ph' ->
-    UpdateWP vs wp (x, of_op o) wp' ->
+    UpdateWP vs wp (x, o) wp' ->
     WP_Complete ph' wp'.
   Proof.
     intros; unfold WP_Complete; intros.
@@ -1404,10 +1375,10 @@ Section Defs.
   Let sp_complete:
     forall vs sp ph x o ph' sp',
     WFPhases vs sp ->
-    WFPhases (update_nodes vs (x, of_op o)) sp ->
+    WFPhases (update_nodes vs (x, o)) sp ->
     SP_Complete ph sp ->
     Phaser.Reduces ph x o ph' ->
-    UpdateSP vs (update_nodes vs (x, of_op o)) sp (x, of_op o) sp' ->
+    UpdateSP vs (update_nodes vs (x, o)) sp (x, o) sp' ->
     SP_Complete ph' sp'.
   Proof.
     intros; unfold SP_Complete; intros.
@@ -1506,8 +1477,8 @@ Section Defs.
     forall vs wp ph x o ph' wp',
     WFPhases vs wp ->
     Phaser.Reduces ph x o ph' ->
-    UpdateWP (update_nodes vs (x, of_op o)) wp (x, of_op o) wp' ->
-    WFPhases (update_nodes vs (x, of_op o)) wp'.
+    UpdateWP (update_nodes vs (x, o)) wp (x, o) wp' ->
+    WFPhases (update_nodes vs (x, o)) wp'.
   Proof.
     intros; unfold WFPhases, NodesDefined; intros.
     rename x0 into t.
@@ -1519,8 +1490,8 @@ Section Defs.
     forall vs sp ph x o ph' sp',
     WFPhases vs sp ->
     Phaser.Reduces ph x o ph' ->
-    UpdateSP vs (update_nodes vs (x, of_op o)) sp (x, of_op o) sp' ->
-    WFPhases (update_nodes vs (x, of_op o)) sp'.
+    UpdateSP vs (update_nodes vs (x, o)) sp (x, o) sp' ->
+    WFPhases (update_nodes vs (x, o)) sp'.
   Proof.
     intros; unfold WFPhases, NodesDefined; intros.
     rename x0 into t.
@@ -1558,7 +1529,7 @@ Section Defs.
     forall b ph x o ph' b',
     Sound ph b ->
     Phaser.Reduces ph x o ph' ->
-    UpdateBuilder b (x, of_op o) b' ->
+    UpdateBuilder b (x, o) b' ->
     Sound ph' b'.
   Proof.
     intros.
@@ -1587,7 +1558,7 @@ Section Defs.
     forall b ph x o ph' b',
     Complete ph b ->
     Phaser.Reduces ph x o ph' ->
-    UpdateBuilder b (x, of_op o) b' ->
+    UpdateBuilder b (x, o) b' ->
     Complete ph' b'.
   Proof.
     intros.
@@ -1610,7 +1581,7 @@ Section Defs.
     forall b ph x o ph' b',
     WF ph b ->
     Phaser.Reduces ph x o ph' ->
-    UpdateBuilder b (x, of_op o) b' ->
+    UpdateBuilder b (x, o) b' ->
     WF ph' b'.
   Proof.
     unfold WF.
@@ -1866,13 +1837,7 @@ Section Defs.
   Proof.
     unfold update_sp;intros.
     destruct e as (x, o).
-    destruct o;
-    try (inversion H; subst; auto using update_sp_async, update_sp_wait, update_sp_continue; fail).
-    - destruct (can_signal r). {
-        auto using update_sp_phased_can_signal.
-      }
-      inversion H; subst; auto using update_sp_phased_cannot_signal.
-    - auto using update_sp_signal.
+    destruct o; inversion H; subst; auto using update_sp_wait, update_sp_signal.
     - inversion H.
       subst.
       remember (try_inc _ _ _).
@@ -1883,6 +1848,10 @@ Section Defs.
         auto using update_sp_drop.
       }
       inversion H.
+    - destruct (can_signal (get_mode r)). {
+        auto using update_sp_register_can_signal.
+      }
+      inversion H; subst; auto using update_sp_register_cannot_signal.
   Qed.
 
   Let update_wp_some:
@@ -1892,13 +1861,7 @@ Section Defs.
   Proof.
     unfold update_wp; intros.
     destruct e as (x, o).
-    destruct o;
-    (inversion H; subst; auto using update_wp_async, update_wp_signal, update_wp_continue).
-    - destruct (can_wait r). {
-        auto using update_wp_phased_can_wait.
-      }
-      inversion H; subst; auto using update_wp_phased_cannot_wait.
-    - auto using update_wp_wait.
+    destruct o; inversion H; subst; auto using update_wp_wait, update_wp_signal.
     - inversion H.
       subst.
       remember (try_inc _ _ _).
@@ -1909,6 +1872,10 @@ Section Defs.
         auto using update_wp_drop.
       }
       inversion H.
+    - destruct (can_wait (get_mode r)). {
+        auto using update_wp_register_can_wait.
+      }
+      inversion H; subst; auto using update_wp_phased_cannot_wait.
   Qed.
 
   Let update_ops_some:
@@ -2118,14 +2085,6 @@ Section Defs.
     inversion H.
   Qed.
 
-  (** Bug #1 *)
-
-  Goal (build ((0, ASYNC_PHASED 1 SIGNAL_ONLY) :: nil) <> None). {
-    simpl.
-    unfold not; intros N; inversion N.
-  }
-  Qed.
-
 End Defs.
 
 (* bools *)
@@ -2158,4 +2117,4 @@ Extract Inlined Constant plus => "( + )".
 Extract Inlined Constant mult => "( * )".
 Extract Inlined Constant eq_nat_dec => "( = )".
 
-Extraction "ocaml/cg.ml" build.
+Extraction "ocaml/cg.ml" build Phaser.eval_trace.
