@@ -7,6 +7,8 @@
     <title>Computation Graph</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
+    <link href="https://fonts.googleapis.com/css?family=Droid+Sans+Mono" rel="stylesheet" />
+
     <style type="text/css">
 body {
 	padding: 0;
@@ -44,7 +46,8 @@ body {
     margin: 0;
     border: 0;
     background: url(http://i.stack.imgur.com/ynxjD.png) repeat-y;
-    font: normal 14px mono;
+    font: normal 14px;
+    font-family: 'Droid Sans Mono', monospace;
     line-height: 25px;
     width: 100%;
     height: 100%;
@@ -61,6 +64,29 @@ body {
     <script type="text/javascript" src="http://methvin.com/jquery/jquery.js" data-embed></script>
     <script type="text/javascript" src="http://methvin.com/splitter/jquery.cookie.js" data-embed></script>
     <script type="text/javascript" src="http://methvin.com/splitter/splitter.js" data-embed></script>
+    <script type="text/javascript">
+        var OPTS = {
+          edges: {
+            width: 2,
+            smooth: {
+          type: 'vertical'
+            },
+            shadow:true
+          },
+          nodes : {
+            shape: 'dot',
+            size: 10,
+            shadow:true,
+            font: {face:'Droid Sans Mono', size: 20, strokeWidth:3, strokeColor:'#ffffff'}
+          },
+          layout: {
+            randomSeed: 0
+          },
+          physics: {
+            enabled: false
+          }
+        };
+    </script>
     <script type="text/javascript" src="cg.js" data-embed></script>
 <script type="text/javascript">
 
@@ -73,6 +99,7 @@ $().ready(function() {
 	});
 });
 </script>
+    <link href="http://visjs.org/dist/vis.css" rel="stylesheet" type="text/css" />
   </head>
   <body id="main">
   <div id="MySplitter">
@@ -85,10 +112,11 @@ $().ready(function() {
 1: wait
 2: wait
 1: signal
-3: signal
+3: drop
 2: wait
 1: wait
-</textarea></div>
+</textarea>
+</div>
 
   <div id="RightPane">
   <div id="graph_out" />
