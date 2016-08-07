@@ -101,14 +101,27 @@ let js_array a =
     Array.iteri (fun idx v -> Js.array_set arr idx v) a;
     arr
 
-let js_of_vertex (idx:int) (ns:Cg.op Cg.MN.t) =
+let string_of_taskview v =
+    "sp: " ^ string_of_int (Cg.signal_phase v) ^
+    "\nwp: " ^ string_of_int (Cg.wait_phase v) ^
+    "\nmode: " ^ string_of_reg (Cg.mode v)
+
+let js_of_vertex (tid:int) (idx:int) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
+    let tv = match ph with
+        | Some ph -> (
+            match Cg.Map_TID.find tid ph with
+            | Some v -> "\n\n" ^ string_of_taskview v
+            | _ -> ""
+            )
+        | _ -> ""
+    in
     js (
         match Cg.MN.find idx ns with
         | Some o -> string_of_op o
-        | _ -> ""
+        | _ -> tv
     )
 
-let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) =
+let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
     let parent_of = I.create 10 in
     List.iter (fun p ->
         match p with
@@ -125,11 +138,11 @@ let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) =
         ("id", Js.Unsafe.inject idx);
         ("y", Js.Unsafe.inject (tid * 150));
         ("x", Js.Unsafe.inject (tid * 50 + offset * 150));
-        ("label", Js.Unsafe.inject (js_of_vertex idx ns));
+        ("label", Js.Unsafe.inject (js_of_vertex tid idx ns ph));
         ("group", Js.Unsafe.inject tid)
         |]
     in
-    (tbl, Array.mapi to_js vs)
+    Array.mapi to_js vs
 
 let js_of_bool b = if b then Js._true else Js._false
 
@@ -162,18 +175,9 @@ let js_of_edges (cg:Cg.computation_graph) : 'a array =
     let es = List.map (to_js SYNC) (Cg.s_edges cg) in
     Array.of_list (ec @ ej @ es)
 
-let js_graph_empty = Js.Unsafe.obj [||]
-
-type node_meta = { get_tid_of : int array; get_last_id : int I.t }
-
-let js_of_cg (b,cg) =
+let js_of_cg (b,cg) ph =
     let tids = Array.of_list (rev (Cg.get_nodes b)) in
-    let (tbl, vs) = js_of_vertices tids (Cg.node_to_op b) in
-    ({get_tid_of = tids; get_last_id = tbl }, (vs, js_of_edges cg))
-
-let js_new_dataset _ =
-    Js.Unsafe.new_obj (Js.Unsafe.variable "vis.DataSet")
-    [| Js.Unsafe.inject (js_array [| |]) |]
+    (js_of_vertices tids (Cg.node_to_op b) ph, js_of_edges cg)
 
 let js_new_network container (vs, es) =
     let js_graph = 
@@ -188,16 +192,7 @@ let js_new_network container (vs, es) =
        Js.Unsafe.variable "OPTS"|] in
     ()
 
-let js_set_data net g : unit =
-    Js.Unsafe.meth_call net "setData" [| Js.Unsafe.inject g |]
-
 let string_of_phaser ph =
-    let string_of_taskview v =
-        "\t{sp: " ^ string_of_int (Cg.signal_phase v) ^
-        ", wp: " ^ string_of_int (Cg.wait_phase v) ^
-        ", mode: " ^ string_of_reg (Cg.mode v) ^
-        "}"
-    in
     let string_of_entry (t, v) =
         string_of_int t ^ ": " ^ string_of_taskview v
     in
@@ -228,11 +223,8 @@ let onload _ =
             last_trace := t;
             match Cg.build t with
             | Some bcg -> (
-                let (meta, g) = js_of_cg bcg in
-                js_new_network trace_out g;
-                match Cg.eval_trace t with
-                | Some ph -> print_string ("Parsed string:\n" ^ string_of_phaser ph ^ "\n")
-                | _ -> ()
+                let ph = Cg.eval_trace t in
+                js_new_network trace_out (js_of_cg bcg ph)
             )
             | None -> print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
         ) else ();
