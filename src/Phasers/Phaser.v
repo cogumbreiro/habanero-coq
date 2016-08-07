@@ -1,6 +1,7 @@
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Taskview.
+Require Import Compare_dec.
 
 Section Defs.
   Import HJ.Vars.Map_TID.
@@ -22,6 +23,7 @@ Section Defs.
 
   Record op_spec := mk_op_spec {
     can_run: phaser -> Prop;
+    can_run_dec ph : { can_run ph } + { ~ can_run ph };
     run: phaser -> phaser
   }.
 
@@ -49,11 +51,34 @@ Section Defs.
   (** For the signal to take any effect the task must be registered with the phaser. *)
 
   Inductive SignalPre (t:tid) (ph:phaser) : Prop :=
-    signal_pre:
+    signal_pre_def:
       forall v,
       Map_TID.MapsTo t v ph ->
       Taskview.SignalPre v ->
       SignalPre t ph.
+
+  Definition signal_pre t ph :
+    { SignalPre t ph } + { ~ SignalPre t ph }.
+  Proof.
+    remember (find t ph).
+    symmetry in Heqo.
+    destruct o as [v|]. {
+      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+      destruct (Taskview.signal_pre v). {
+        eauto using signal_pre_def.
+      }
+      right; unfold not; intros N.
+      contradiction n.
+      inversion N.
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      assumption.
+    }
+    right; unfold not; intros N.
+    inversion N.
+    rewrite Map_TID_Facts.find_mapsto_iff in *.
+    rewrite H in *.
+    inversion Heqo.
+  Defined.
 
   (**
     Signal just applies [Taskview.signal] to the taskview associated with
@@ -67,7 +92,7 @@ Section Defs.
     in the definition of the operational semantics.
    *)
 
-  Definition signal_op t := mk_op_spec (SignalPre t) (signal t).
+  Definition signal_op t := mk_op_spec (SignalPre t) (signal_pre t) (signal t).
 
   (**
     Function [try_signal] can be called without a pre-condition. It is crucial for
@@ -78,7 +103,13 @@ Section Defs.
 
   (** We define [try_signal_op] without a pre-condition. *)
 
-  Definition try_signal_op t := mk_op_spec (fun ph => True) (try_signal t).
+  Let can_try_signal (x:tid) (ph:phaser) :
+    { True } + { ~ True }.
+  Proof.
+    auto.
+  Defined.
+
+  Definition try_signal_op t := mk_op_spec (fun ph => True) (can_try_signal t) (try_signal t).
 
   (** * Wait *)
 
@@ -96,6 +127,83 @@ Section Defs.
         CanSignal (mode v) ->
         signal_phase v >= n) ->
       Phase ph n.
+
+  Definition signalers ph : list (tid * nat) :=
+  let handle_task (p:tid * taskview) :=
+    let (t, v) := p in
+    if can_signal (mode v) then Some (t, signal_phase v)
+    else None
+  in
+  List.omap handle_task (Map_TID.elements ph).
+
+  Let signalers_1:
+    forall x v ph,
+    MapsTo x v ph ->
+    CanSignal (mode v) ->
+    List.In (x, signal_phase v) (signalers ph).
+  Proof.
+    intros.
+    unfold signalers.
+    apply List.in_omap_1 with (x:=(x,v)). {
+      rewrite Map_TID_Extra.maps_to_iff_in_elements in H; auto.
+    }
+    destruct (can_signal (mode v)). {
+      trivial.
+    }
+    contradiction.
+  Qed.
+
+  Let signalers_2:
+    forall x n ph,
+    List.In (x, n) (signalers ph) ->
+    exists v, MapsTo x v ph /\ CanSignal (mode v) /\ n = signal_phase v.
+  Proof.
+    unfold signalers; intros.
+    apply List.in_omap_2 in H.
+    destruct H as ((y, v), (Hi, Hp)).
+    rewrite <- Map_TID_Extra.maps_to_iff_in_elements in Hi; auto.
+    destruct (can_signal (mode v)). {
+      inversion Hp; subst.
+      eauto.
+    }
+    inversion Hp.
+  Qed.
+
+  Definition phase ph n:
+    { Phase ph n } + { ~ Phase ph n }.
+  Proof.
+    remember (List.forallb (fun p => if ge_dec (snd p) n then true else false) (signalers ph)).
+    symmetry in Heqb.
+    destruct b. {
+      rewrite List.forallb_forall in Heqb.
+      left.
+      apply phase_def.
+      intros x; intros.
+      assert (Hx: List.In (x, signal_phase v) (signalers ph)) by auto.
+      apply Heqb in Hx.
+      simpl in *.
+      destruct (ge_dec (signal_phase v) n). {
+        assumption.
+      }
+      inversion Hx.
+    }
+    right; unfold not; intros N.
+    rewrite List.forallb_existsb in *.
+    rewrite Bool.negb_false_iff in *.
+    apply List.existsb_exists in Heqb.
+    destruct Heqb as ((x,n'),(Hi, Hn)).
+    rewrite Bool.negb_true_iff in *.
+    simpl in *.
+    apply signalers_2 in Hi.
+    destruct Hi as (v, (Hm, (?,?))).
+    destruct (ge_dec n' n). {
+      inversion Hn.
+    }
+    inversion N.
+    apply H1 in Hm; auto.
+    subst.
+    contradiction.
+  Defined.
 
   (**
     Predicate [Sync] defines what happens when a
@@ -122,6 +230,34 @@ Section Defs.
       Phase ph (S (wait_phase v)) ->
       Sync ph t.
 
+  Definition sync x ph:
+    { Sync ph x } + { ~ Sync ph x }.
+  Proof.
+    intros.
+    remember (find x ph).
+    symmetry in Heqo.
+    destruct o as [v|]. {
+      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+      destruct (can_wait_so (mode v)). {
+        destruct (phase ph (S (wait_phase v))). {
+          eauto using sync_wait.
+        }
+        right; unfold not; intros N; inversion N; subst; clear N;
+        assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst. {
+          rewrite H0 in *.
+          inversion c.
+        }
+        contradiction.
+      }
+      eauto using sync_so.
+    }
+    right; unfold not; intros N.
+    inversion N; subst; clear N;
+    rewrite Map_TID_Facts.find_mapsto_iff in *;
+    rewrite H in *;
+    inversion Heqo.
+  Defined.
+
   (**
     Wait consists of thee pre-conditions: (i) task [t] is registered in phaser [ph],
     (ii) task [t] has signalled as per [Taskview.WaitPre],
@@ -129,18 +265,43 @@ Section Defs.
     *)
 
   Inductive WaitPre t ph : Prop  := 
-    wait_pre:
+    wait_pre_def:
       forall v,
       Map_TID.MapsTo t v ph ->
       Taskview.WaitPre v ->
       Sync ph t ->
       WaitPre t ph.
 
+  Definition wait_pre x ph:
+    { WaitPre x ph } + { ~ WaitPre x ph }.
+  Proof.
+    remember (find x ph).
+    symmetry in Heqo.
+    destruct o as [v|]. {
+      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+      destruct (Taskview.wait_pre v). {
+        destruct (sync x ph). {
+          eauto using wait_pre_def.
+        }
+        right; unfold not; intros N;
+        inversion N; contradiction.
+      }
+      right; unfold not; intros N.
+      inversion N;
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; contradiction.
+    }
+    right; unfold not; intros N.
+    inversion N.
+    rewrite Map_TID_Facts.find_mapsto_iff in *.
+    rewrite H in *.
+    inversion Heqo.
+  Defined.
+
   (** Operationally, wait applies [Taskview.wait] on the taskview associated with task [t].*)
 
   Definition wait (t:tid) : phaser -> phaser := update t Taskview.wait.
 
-  Definition wait_op t := mk_op_spec (WaitPre t) (wait t).
+  Definition wait_op t := mk_op_spec (WaitPre t) (wait_pre t) (wait t).
 
   (**
     Function [try_wait] can be invoked by any *registered* task, needed to defined
@@ -159,7 +320,33 @@ Section Defs.
 
   Definition try_wait := wait.
 
-  Definition try_wait_op t := mk_op_spec (TryWaitPre t) (try_wait t).
+  Definition try_wait_pre x ph:
+    { TryWaitPre x ph } + { ~ TryWaitPre x ph }.
+  Proof.
+    destruct (wait_pre x ph). {
+      auto using try_wait_pre_can_wait.
+    }
+    remember (find x ph).
+    symmetry in Heqo.
+    destruct o as [v|]. {
+      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+      destruct (regmode_eq (mode v) SIGNAL_ONLY). {
+        eauto using try_wait_pre_so.
+      }
+      right; unfold not; intros N.
+      inversion N. {
+        contradiction.
+      }
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; contradiction.
+    }
+    right; unfold not; intros N.
+    inversion N. { contradiction. }
+    rewrite Map_TID_Facts.find_mapsto_iff in *.
+    rewrite H in *.
+    inversion Heqo.
+  Qed.
+
+  Definition try_wait_op t := mk_op_spec (TryWaitPre t) (try_wait_pre t) (try_wait t).
 
   (** * Drop *)
 
@@ -170,13 +357,29 @@ Section Defs.
     *)
 
   Inductive DropPre t (ph:phaser) : Prop :=
-    drop_pre:
+    drop_pre_def:
       Map_TID.In t ph ->
       DropPre t ph.
 
+  Definition drop_pre x ph:
+    { DropPre x ph } + { ~ DropPre x ph }.
+  Proof.
+    remember (Map_TID.find x ph).
+    symmetry in Heqo.
+    destruct o. {
+      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+      apply Map_TID_Extra.mapsto_to_in in Heqo.
+      auto using drop_pre_def.
+    }
+    right; unfold not; intros N.
+    inversion N.
+    rewrite <- Map_TID_Facts.not_find_in_iff in *.
+    contradiction.
+  Defined.
+
   Definition drop : tid -> phaser -> phaser := @remove taskview.
 
-  Definition drop_op t := mk_op_spec (DropPre t) (drop t).
+  Definition drop_op t := mk_op_spec (DropPre t) (drop_pre t) (drop t).
 
   (** * Register *)
 
@@ -200,12 +403,41 @@ Section Defs.
   Open Scope reg_scope.
 
   Inductive RegisterPre r t ph : Prop :=
-    register_pre:
+    register_pre_def:
       forall v,
       ~ Map_TID.In (get_task r) ph ->
       Map_TID.MapsTo t v ph ->
       get_mode r <= mode v ->
       RegisterPre r t ph.
+
+  Definition register_pre r x ph:
+    { RegisterPre r x ph } + { ~ RegisterPre r x ph }.
+  Proof.
+    remember (find (get_task r) ph).
+    remember (find x ph).
+    symmetry in Heqo.
+    symmetry in Heqo0.
+    destruct o. {
+      right; unfold not; intros N.
+      inversion N.
+      contradiction H.
+      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    rewrite <- Map_TID_Facts.not_find_in_iff in Heqo.
+    destruct o0 as [v|]. {
+      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+      destruct (Regmode.le_dec (get_mode r) (mode v)). {
+        eauto using register_pre_def.
+      }
+      right; unfold not; intros N; inversion N;
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; contradiction.
+    }
+    rewrite <- Map_TID_Facts.not_find_in_iff in *.
+    right; unfold not; intros N; inversion N.
+    contradiction Heqo0.
+    eauto using Map_TID_Extra.mapsto_to_in.
+  Defined.
 
   (**
     Operationally, register adds task [get_task r]  to the phaser, assigning new taskview
@@ -218,7 +450,7 @@ Section Defs.
     | None => ph
     end.
 
-  Definition register_op r t := mk_op_spec (RegisterPre r t) (register r t).
+  Definition register_op r t := mk_op_spec (RegisterPre r t) (register_pre r t) (register r t).
 
 
   (** * Operational semantics *)
@@ -247,6 +479,24 @@ Section Defs.
     ph_reduces:
       can_run (get_impl o t) ph ->
       Reduces ph t o (run (get_impl o t) ph).
+
+  Definition event := (tid * op) % type.
+
+  Definition eval (e:event) ph : option phaser :=
+  if can_run_dec (get_impl (snd e) (fst e)) ph
+  then Some (run (get_impl (snd e) (fst e)) ph)
+  else None.
+
+  Fixpoint eval_trace (l:list event) :=
+  match l with
+  | nil => Some (Map_TID.empty taskview)
+  | (e :: nil) % list => eval e (make (fst e))
+  | (e::l) % list =>
+    match eval_trace l with
+    | Some ph => eval e ph
+    | _ => None
+    end
+  end.
 
   (** Relation [SReducess] simply omits the task and operation of relation [Reduces]. *)
 
