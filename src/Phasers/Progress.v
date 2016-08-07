@@ -230,7 +230,7 @@ Proof.
   }
   destruct (can_wait_so (mode v)). {
     apply try_wait_pre_can_wait.
-    apply wait_pre with (v:=v); eauto using smallest_to_sync.
+    apply wait_pre_def with (v:=v); eauto using smallest_to_sync.
     inversion c;
     symmetry in H2.
     - apply Taskview.wait_pre_sw; auto.
