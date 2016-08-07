@@ -181,7 +181,7 @@ Section Facts.
     assert (Hin : Map_TID.In t ph) by eauto using register_inv_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
-    assert (Taskview.Reduces v o' (eval o' v)) by
+    assert (Taskview.Reduces v o' (Taskview.eval o' v)) by
         eauto using ph_reduces_to_tv_reduce.
       assert (ph' = Map_TID.add t (Taskview.eval o' v) ph) by
         eauto using ph_to_tv_correct.
