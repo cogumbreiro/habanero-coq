@@ -71,7 +71,11 @@ Section Facts.
     { m1 = m2 } + { m1 <> m2 }.
   Proof.
     intros.
-    destruct m1, m2; solve [ left; auto | right; intuition; inversion H]. 
+    destruct m1, m2; auto;
+    right;
+    unfold not;
+    intros N;
+    inversion N.
   Defined.
 
   (** Checking for the wait capability is a decidable property. *)
