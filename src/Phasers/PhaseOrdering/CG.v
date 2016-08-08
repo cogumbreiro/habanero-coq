@@ -877,27 +877,28 @@ Section Defs.
   Qed.
 
   Let sp_sound:
-    forall vs vs' sp ph x o ph' sp',
+    forall vs vs' sp ph e ph' sp',
     WFPhases vs sp ->
     WFPhases vs' sp ->
     SP_Sound ph sp ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateSP vs vs' sp (x, o) sp' ->
+    Phaser.Reduces ph e ph' ->
+    UpdateSP vs vs' sp e sp' ->
     SP_Sound ph' sp'.
   Proof.
     unfold SP_Sound; intros.
-    rename x0 into t.
+    rename x into t.
+    destruct e as (x, o).
     destruct o; inversion H2; simpl in *; subst;
     inversion H3; subst; clear H2 H3.
     - destruct (TID.eq_dec x t). {
         subst.
         apply signal_eq with (vs:=vs) (sp:=sp) (sp':=sp'); auto.
       }
-      eapply inc_3 in H7; eauto.
+      eapply inc_3 in H6; eauto.
     - destruct (TID.eq_dec x t); subst; eauto.
     - apply drop_inv with (y:=t) (n:=n) in H4; auto.
       destruct H4 as (Hx,Hy).
-      eapply try_inc_3 in H7; eauto.
+      eapply try_inc_3 in H6; eauto.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
         apply copy_inv_eq with (n:=n) in H10; auto.
@@ -931,7 +932,7 @@ Section Defs.
     destruct (TID.eq_dec x y). {
       subst.
       apply wait_phase_def with (v:=Taskview.signal v);
-      auto using signal_preserves_wait_phase, Phaser.signal_eq.
+      auto using signal_preserves_wait_phase, Phaser.signal_1.
     }
     apply wait_phase_def with (v:= v);
     auto using signal_preserves_wait_phase, signal_2.
@@ -944,7 +945,7 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using wait_phase_def, Phaser.wait_eq.
+    eauto using wait_phase_def, Phaser.wait_1.
   Qed.
 
   Let wp_wait_neq:
@@ -999,30 +1000,31 @@ Section Defs.
   Qed.
 
   Let wp_sound:
-    forall vs wp ph x o ph' wp',
+    forall vs wp ph e ph' wp',
     WFPhases vs wp ->
     WP_Sound ph wp ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateWP vs wp (x, o) wp' ->
+    Phaser.Reduces ph e ph' ->
+    UpdateWP vs wp e wp' ->
     WP_Sound ph' wp'.
   Proof.
     intros; unfold WP_Sound; intros.
-    rename x0 into t.
-    destruct o; inversion H1; simpl in *; subst;
+    rename x into t.
+    destruct e as  (x, []);
+    inversion H1; simpl in *; subst;
     inversion H2; subst; clear H2 H1.
     - eauto.
     - destruct (TID.eq_dec t x). {
         subst.
-        apply inc_inv in H6.
+        apply inc_inv in H5.
         rename n into xw.
-        destruct H6 as (n, (Hg1, Hg2)).
+        destruct H5 as (n, (Hg1, Hg2)).
         assert (xw = S n) by eauto; subst.
         eauto.
       }
-      eapply inc_3 in H6; eauto.
+      eapply inc_3 in H5; eauto.
     - apply drop_inv in H3; auto.
       destruct H3 as (?, Hg).
-      eapply try_inc_3 in H6; eauto.
+      eapply try_inc_3 in H5; eauto.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
         apply copy_inv_eq with (n:=n) in H9; auto.
@@ -1345,16 +1347,16 @@ Section Defs.
   Qed.
 
   Let wp_complete:
-    forall vs wp ph x o ph' wp',
+    forall vs wp ph e ph' wp',
     WFPhases vs wp ->
     WP_Complete ph wp ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateWP vs wp (x, o) wp' ->
+    Phaser.Reduces ph e ph' ->
+    UpdateWP vs wp e wp' ->
     WP_Complete ph' wp'.
   Proof.
     intros; unfold WP_Complete; intros.
-    rename x0 into t.
-    destruct o; inversion H1; simpl in *; subst;
+    rename x into t.
+    destruct e as (x,[]); inversion H1; simpl in *; subst;
     inversion H2; subst; clear H2 H1.
     - apply wait_phase_inv_signal in H3; auto.
     - apply wait_phase_inv_wait in H3.
@@ -1363,28 +1365,26 @@ Section Defs.
         eauto.
       }
       apply H0 in H2.
-      eapply get_phases_inc_neq in H6; eauto.
+      eapply get_phases_inc_neq in H5; eauto.
     - apply wait_phase_drop_eq in H3.
       destruct H3.
       apply get_phase_drop_neq; auto.
-      eapply try_inc_2 in H6; eauto.
+      eapply try_inc_2 in H5; eauto.
     - eapply wp_complete_reg_1; eauto.
     - eapply wp_complete_reg_2; eauto.
   Qed.
 
   Let sp_complete:
-    forall vs sp ph x o ph' sp',
+    forall vs sp ph e ph' sp',
     WFPhases vs sp ->
-    WFPhases (update_nodes vs (x, o)) sp ->
+    WFPhases (update_nodes vs e) sp ->
     SP_Complete ph sp ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateSP vs (update_nodes vs (x, o)) sp (x, o) sp' ->
+    Phaser.Reduces ph e ph' ->
+    UpdateSP vs (update_nodes vs e) sp e sp' ->
     SP_Complete ph' sp'.
   Proof.
     intros; unfold SP_Complete; intros.
-    rename x into y.
-    rename x0 into x.
-    destruct o; inversion H2; simpl in *; subst;
+    destruct e as (y,[]); inversion H2; simpl in *; subst;
     inversion H3; subst; clear H2 H3.
     - apply signal_phase_inv_signal in H4.
       destruct H4 as [(?, (?, (?, ?)))|(?,?)]. {
@@ -1396,7 +1396,7 @@ Section Defs.
     - apply signal_phase_inv_wait in H4; auto.
     - apply signal_phase_drop_eq in H4.
       destruct H4.
-      eapply try_inc_2 in H7; eauto.
+      eapply try_inc_2 in H6; eauto.
     - eapply sp_complete_reg_1; eauto.
     - eapply sp_complete_reg_2; eauto.
   Qed.
@@ -1474,30 +1474,30 @@ Section Defs.
   Qed.
 
   Let wf_phases_wp:
-    forall vs wp ph x o ph' wp',
+    forall vs wp ph e ph' wp',
     WFPhases vs wp ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateWP (update_nodes vs (x, o)) wp (x, o) wp' ->
-    WFPhases (update_nodes vs (x, o)) wp'.
+    Phaser.Reduces ph e ph' ->
+    UpdateWP (update_nodes vs e) wp e wp' ->
+    WFPhases (update_nodes vs e) wp'.
   Proof.
     intros; unfold WFPhases, NodesDefined; intros.
-    rename x0 into t.
-    destruct o; inversion H0; simpl in *; subst;
+    rename x into t.
+    destruct e as (?,[]); inversion H0; simpl in *; subst;
     inversion H1; subst; clear H0 H1; eauto using task_of_cons.
   Qed.
 
   Let wf_phases_sp:
-    forall vs sp ph x o ph' sp',
+    forall vs sp ph e ph' sp',
     WFPhases vs sp ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateSP vs (update_nodes vs (x, o)) sp (x, o) sp' ->
-    WFPhases (update_nodes vs (x, o)) sp'.
+    Phaser.Reduces ph e ph' ->
+    UpdateSP vs (update_nodes vs e) sp e sp' ->
+    WFPhases (update_nodes vs e) sp'.
   Proof.
     intros; unfold WFPhases, NodesDefined; intros.
-    rename x0 into t.
-    destruct o; inversion H0; simpl in *; subst;
+    rename x into t.
+    destruct e as (?,[]); inversion H0; simpl in *; subst;
     inversion H1; subst; clear H0 H1; eauto using task_of_cons.
-    destruct H5.
+    destruct H4.
     inversion H1; subst; clear H1.
     simpl in *.
     rewrite Map_TID_Facts.add_mapsto_iff in *.
@@ -1526,10 +1526,10 @@ Section Defs.
   Qed.
 
   Let soundness:
-    forall b ph x o ph' b',
+    forall b ph e ph' b',
     Sound ph b ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateBuilder b (x, o) b' ->
+    Phaser.Reduces ph e ph' ->
+    UpdateBuilder b e b' ->
     Sound ph' b'.
   Proof.
     intros.
@@ -1541,9 +1541,10 @@ Section Defs.
     apply sound_def; simpl; auto.
     - eapply wf_phases_sp in H; eauto.
     - remember (update_nodes _ _) as vs.
-      apply sp_sound with (vs:=get_nodes b) (vs':=vs) (sp:=get_sp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+      apply sp_sound with (vs:=get_nodes b) (vs':=vs) (sp:=get_sp b) (ph:=ph) (e:=e);
+      subst; auto.
     - remember (update_nodes _ _) as vs.
-      apply wp_sound with (vs:=vs) (wp:=get_wp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+      apply wp_sound with (vs:=vs) (wp:=get_wp b) (ph:=ph) (e:=e); subst; auto.
   Qed.
 
   Inductive Complete ph b : Prop :=
@@ -1555,10 +1556,10 @@ Section Defs.
     Complete ph b.
 
   Let completeness:
-    forall b ph x o ph' b',
+    forall b ph e ph' b',
     Complete ph b ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateBuilder b (x, o) b' ->
+    Phaser.Reduces ph e ph' ->
+    UpdateBuilder b e b' ->
     Complete ph' b'.
   Proof.
     intros.
@@ -1570,18 +1571,18 @@ Section Defs.
     apply complete_def; simpl; auto.
     - eapply wf_phases_sp in H; eauto.
     - remember (update_nodes _ _) as vs.
-      apply sp_complete with (vs:=get_nodes b) (sp:=get_sp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+      apply sp_complete with (vs:=get_nodes b) (sp:=get_sp b) (ph:=ph) (e:=e); subst; auto.
     - remember (update_nodes _ _) as vs.
-      apply wp_complete with (vs:=vs) (wp:=get_wp b) (ph:=ph) (x:=x) (o:=o); subst; auto.
+      apply wp_complete with (vs:=vs) (wp:=get_wp b) (ph:=ph) (e:=e); subst; auto.
   Qed.
 
   Definition WF ph b := Sound ph b /\ Complete ph b.
 
   Theorem correctness:
-    forall b ph x o ph' b',
+    forall b ph e ph' b',
     WF ph b ->
-    Phaser.Reduces ph x o ph' ->
-    UpdateBuilder b (x, o) b' ->
+    Phaser.Reduces ph e ph' ->
+    UpdateBuilder b e b' ->
     WF ph' b'.
   Proof.
     unfold WF.

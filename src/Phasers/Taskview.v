@@ -10,7 +10,7 @@ Section Defs.
     on a phaser (or next). 
   *)
 
-  Record taskview := mk_taskview {
+  Record taskview := {
     signal_phase: nat;
     wait_phase: nat;
     mode: regmode
@@ -24,15 +24,15 @@ Section Defs.
     and accounts for zero signals and zero waits.
   *)
 
-  Definition make := mk_taskview 0 0 SIGNAL_WAIT.
+  Definition make := {| signal_phase:=0; wait_phase:=0; mode:=SIGNAL_WAIT |}.
 
   (** * Basic mutators *)
 
   (** We define the mutators of a taskview. These are only used internally. *)
 
-  Definition set_signal_phase v n := mk_taskview n (wait_phase v) (mode v).
-  Definition set_wait_phase v n := mk_taskview (signal_phase v) n (mode v).
-  Definition set_mode v m := mk_taskview (signal_phase v) (wait_phase v) m.
+  Definition set_signal_phase v n := {| signal_phase:=n; wait_phase:=wait_phase v;mode:=mode v|}.
+  Definition set_wait_phase v n := {| signal_phase:=signal_phase v;wait_phase:=n;mode:=mode v|}.
+  Definition set_mode v m := {| signal_phase:=signal_phase v;wait_phase:=wait_phase v;mode:=m|}.
 
   (** * Signal *)
 

@@ -402,11 +402,11 @@ Module Phaser.
   Lemma ph_reduces_preserves_well_formed:
     forall ph t o ph',
     WellFormed ph ->
-    Reduces ph t o ph' ->
+    Reduces ph (t, o) ph' ->
     WellFormed ph'.
   Proof.
     intros.
-    destruct o; subst; inversion H; simpl in *; destruct H0; simpl in *.
+    destruct o; subst; inversion H; simpl in *; inversion H0; simpl in *; clear H0; subst.
     - eauto using
       ph_signal_preserves_well_formed.
     - eauto using
@@ -489,17 +489,16 @@ Module Phasermap.
     intros p' ph'; intros.
     rewrite ph_signal_rw with (ph:=ph) in H2; auto.
     rewrite Map_PHID_Facts.add_mapsto_iff in H2.
-    destruct H2.
-    - destruct H2; subst.
-      assert (Phaser.Reduces ph t SIGNAL (signal t ph)). {
+    destruct H2 as [(?,?)|(?,?)].
+    - subst.
+      assert (Phaser.Reduces ph (t, SIGNAL) (signal t ph)). {
         apply ph_reduces.
         simpl.
         trivial.
       }
       assert (Phaser.WellFormed ph) by (inversion H; eauto).
       eauto using ph_signal_preserves_well_formed.
-    - destruct H2.
-      inversion H; eauto.
+    - inversion H; eauto.
   Qed.
 
   Lemma pm_ph_drop_preserves_well_formed:
@@ -516,7 +515,7 @@ Module Phasermap.
     rewrite Map_PHID_Facts.add_mapsto_iff in H2.
     destruct H2.
     - destruct H2; subst.
-      assert (Phaser.Reduces ph t DROP (drop t ph)). {
+      assert (Phaser.Reduces ph (t, DROP) (drop t ph)). {
         apply ph_reduces.
         simpl.
         trivial.

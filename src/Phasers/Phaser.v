@@ -22,9 +22,9 @@ Section Defs.
 
 
   Record op_spec := mk_op_spec {
-    can_run: phaser -> Prop;
-    can_run_dec ph : { can_run ph } + { ~ can_run ph };
-    run: phaser -> phaser
+    pre: tid -> phaser -> Prop;
+    pre_dec t ph : { pre t ph } + { ~ pre t ph };
+    exec: tid ->  phaser -> phaser
   }.
 
   (**
@@ -92,7 +92,7 @@ Section Defs.
     in the definition of the operational semantics.
    *)
 
-  Definition signal_op t := mk_op_spec (SignalPre t) (signal_pre t) (signal t).
+  Definition signal_op := mk_op_spec SignalPre signal_pre signal.
 
   (**
     Function [try_signal] can be called without a pre-condition. It is crucial for
@@ -100,16 +100,6 @@ Section Defs.
    *)
 
   Definition try_signal (t:tid) : phaser -> phaser := update t Taskview.try_signal.
-
-  (** We define [try_signal_op] without a pre-condition. *)
-
-  Let can_try_signal (x:tid) (ph:phaser) :
-    { True } + { ~ True }.
-  Proof.
-    auto.
-  Defined.
-
-  Definition try_signal_op t := mk_op_spec (fun ph => True) (can_try_signal t) (try_signal t).
 
   (** * Wait *)
 
@@ -301,7 +291,7 @@ Section Defs.
 
   Definition wait (t:tid) : phaser -> phaser := update t Taskview.wait.
 
-  Definition wait_op t := mk_op_spec (WaitPre t) (wait_pre t) (wait t).
+  Definition wait_op := mk_op_spec WaitPre wait_pre wait.
 
   (**
     Function [try_wait] can be invoked by any *registered* task, needed to defined
@@ -346,8 +336,6 @@ Section Defs.
     inversion Heqo.
   Qed.
 
-  Definition try_wait_op t := mk_op_spec (TryWaitPre t) (try_wait_pre t) (try_wait t).
-
   (** * Drop *)
 
   (**
@@ -379,7 +367,7 @@ Section Defs.
 
   Definition drop : tid -> phaser -> phaser := @remove taskview.
 
-  Definition drop_op t := mk_op_spec (DropPre t) (drop_pre t) (drop t).
+  Definition drop_op := mk_op_spec DropPre drop_pre drop.
 
   (** * Register *)
 
@@ -450,7 +438,7 @@ Section Defs.
     | None => ph
     end.
 
-  Definition register_op r t := mk_op_spec (RegisterPre r t) (register_pre r t) (register r t).
+  Definition register_op r := mk_op_spec (RegisterPre r) (register_pre r) (register r).
 
 
   (** * Operational semantics *)
@@ -475,16 +463,17 @@ Section Defs.
     Relation [Reduces] defines the operational semantics.
   *)
 
-  Inductive Reduces ph t o : phaser -> Prop :=
-    ph_reduces:
-      can_run (get_impl o t) ph ->
-      Reduces ph t o (run (get_impl o t) ph).
-
   Definition event := (tid * op) % type.
 
+  Inductive Reduces ph: event -> phaser -> Prop :=
+    ph_reduces:
+      forall t o,
+      pre (get_impl o) t ph ->
+      Reduces ph (t, o) (exec (get_impl o) t ph).
+
   Definition eval (e:event) ph : option phaser :=
-  if can_run_dec (get_impl (snd e) (fst e)) ph
-  then Some (run (get_impl (snd e) (fst e)) ph)
+  if pre_dec (get_impl (snd e)) (fst e) ph
+  then Some (exec (get_impl (snd e)) (fst e) ph)
   else None.
 
   Fixpoint eval_trace (l:list event) :=
@@ -503,7 +492,7 @@ Section Defs.
   Inductive SReduces (ph1:phaser) (ph2:phaser) : Prop :=
     ph_s_reduces:
       forall t o,
-      Reduces ph1 t o ph2 ->
+      Reduces ph1 (t, o) ph2 ->
       SReduces ph1 ph2.
 
   (** Finally, we declare a function that converts a [Phaser.op] to a [Taskview.op]. *)
@@ -541,8 +530,8 @@ Section Facts.
 
   Let reduces_spec:
     forall ph t o ph',
-    Reduces ph t o ph' ->
-    ph' = run (get_impl o t) ph.
+    Reduces ph (t, o) ph' ->
+    ph' = exec (get_impl o) t ph.
   Proof.
     intros.
     destruct o;
@@ -707,13 +696,14 @@ Section Facts.
 
   Lemma register_inv_in:
     forall ph t o ph',
-    Reduces ph t o ph' ->
+    Reduces ph (t, o) ph' ->
     Map_TID.In t ph.
   Proof.
     intros.
     inversion H.
     destruct o;
-    simpl in *; inversion H0; eauto using Map_TID_Extra.mapsto_to_in.
+    simpl in *; subst; inversion H; subst;
+    inversion H1; subst; eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
   Lemma drop_mapsto_inv:
@@ -803,7 +793,7 @@ Section Facts.
     eauto using update_mapsto_eq.
   Qed.
 
-  Lemma signal_eq:
+  Lemma signal_1:
     forall x v ph,
     Map_TID.MapsTo x v ph ->
     Map_TID.MapsTo x (Taskview.signal v) (signal x ph).
@@ -812,13 +802,31 @@ Section Facts.
     eauto.
   Qed.
 
-  Lemma wait_eq:
+  Lemma wait_1:
     forall x v ph,
     Map_TID.MapsTo x v ph ->
     Map_TID.MapsTo x (Taskview.wait v) (wait x ph).
   Proof.
     unfold wait.
     eauto.
+  Qed.
+
+  Lemma register_1:
+    forall x v r ph,
+    Map_TID.MapsTo x v ph ->
+    ~ Map_TID.In (get_task r) ph ->
+    Map_TID.MapsTo x v (register r x ph).
+  Proof.
+    intros.
+    assert (get_task r <> x). {
+      unfold not; intros; subst.
+      contradiction H0.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    assert (R:=H).
+    apply register_rw with (r:=r) in R; auto.
+    rewrite R in *.
+    apply Map_TID.add_2; auto.
   Qed.
 
   Lemma try_signal_mapsto_eq:
@@ -950,6 +958,31 @@ Section Facts.
     eauto using Map_TID.add_1.
   Qed.
 
+  Lemma register_inv_1:
+    forall v v' r ph t,
+    Map_TID.MapsTo (get_task r) v' (register r t ph) ->
+    Map_TID.MapsTo t v ph ->
+    v' = set_mode v (get_mode r).
+  Proof.
+    intros.
+    assert (Map_TID.MapsTo (get_task r) (set_mode v (get_mode r)) (register r t ph))
+    by eauto using register_spec.
+    eauto using Map_TID_Facts.MapsTo_fun.
+  Qed.
+
+  Lemma signal_inv_1:
+    forall t v ph,
+    Map_TID.MapsTo t v (signal t ph) ->
+    exists v', Map_TID.MapsTo t v' ph /\ v = Taskview.signal v'.
+  Proof.
+    intros.
+    apply signal_mapsto_inv in H.
+    destruct H as [(_,(v',(?,?)))|(N,_)]. {
+      eauto.
+    }
+    intuition.
+  Qed.
+    
   Lemma wait_mapsto_eq:
     forall t v ph,
     Map_TID.MapsTo t v (wait t ph) ->
@@ -1018,7 +1051,7 @@ Section Facts.
 
   Lemma ph_to_tv_correct:
     forall ph t o o' ph' v,
-    Reduces ph t o ph' ->
+    Reduces ph (t, o) ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
     ph' = Map_TID.add t (Taskview.eval o' v) ph.
@@ -1026,10 +1059,10 @@ Section Facts.
     intros.
     destruct o'; simpl.
     - apply as_tv_op_inv_signal in H0; subst.
-      destruct H. simpl in *.
+      inversion H; simpl in *; subst; simpl in *.
       auto using signal_rw.
     - apply as_tv_op_inv_wait in H0; subst.
-      destruct H. simpl in *.
+      inversion H; simpl in *.
       auto using wait_rw.
   Qed.
   
@@ -1040,7 +1073,7 @@ Section Facts.
 
   Lemma ph_reduces_to_tv_reduce:
     forall ph t o o' ph' v,
-    Reduces ph t o ph' ->
+    Reduces ph (t, o) ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
     Taskview.Reduces v o' (Taskview.eval o' v).
@@ -1048,18 +1081,38 @@ Section Facts.
     intros.
     destruct o'; simpl.
     - apply as_tv_op_inv_signal in H0; subst.
-      inversion H; subst; simpl in *.
-      inversion H0.
+      inversion H; subst; simpl in *; clear H.
+      inversion H4.
       assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
       auto using tv_reduces_signal.
     - apply as_tv_op_inv_wait in H0; subst.
-      inversion H.
-      subst; simpl in *.
+      inversion H; subst; simpl in *; clear H.
       apply tv_reduces_wait.
-      inversion H0.
+      inversion H4.
       assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun.
       subst.
       intuition.
   Qed.
 
 End Facts.
+
+  Ltac simpl_red :=
+  repeat match goal with
+  | [ H : Reduces _ (_, _) _ |- _ ] =>
+     inversion H; subst; simpl in *; clear H
+  | [ H : SignalPre _ _ |- _ ] =>
+     inversion H; subst; simpl in *; clear H
+  | [ H : WaitPre _ _ |- _ ] =>
+     inversion H; subst; simpl in *; clear H
+  | [ H : DropPre _ _ |- _ ] =>
+     inversion H; subst; simpl in *; clear H
+  | [ H : RegisterPre _ _ _ |- _ ] =>
+     inversion H; subst; simpl in *; clear H
+  | [ H1 : Map_TID.MapsTo ?t ?v ?ph, H2 : Map_TID.MapsTo ?t ?v ?ph |- _ ] =>
+    clear H2
+  | [ H1 : Map_TID.MapsTo ?t ?v1 ?ph, H2 : Map_TID.MapsTo ?t ?v2 ?ph |- _ ] =>
+    let H := fresh "H" in
+    assert (H: v1 = v2) by eauto using Map_TID_Facts.MapsTo_fun;
+    rewrite H in *;
+    clear H
+  end.

@@ -173,7 +173,7 @@ Section Facts.
     forall ph ph' t o o',
     WellFormed ph ->
     WellOrdered ph ->
-    Reduces ph t o ph' ->
+    Reduces ph (t, o) ph' ->
     as_tv_op o = Some o' ->
     Facilitates ph' ph'.
   Proof.
@@ -213,10 +213,11 @@ Section Facts.
             }
             apply as_tv_op_inv_wait in H2.
             subst.
-            inversion H1; simpl in *; destruct H7.
-            assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun.
-            subst.
-            inversion H9; subst.
+            inversion H1; simpl in *; subst; clear H1.
+            inversion H3; simpl in *; subst; clear H3.
+            inversion H7; subst; clear H7.
+            assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+            inversion H8; subst; clear H8.
             {
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun.
               subst.
@@ -226,7 +227,7 @@ Section Facts.
               assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
               destruct (Regmode.can_signal_wo (mode v1)). {
                 apply tv_nhb_ge.
-                assert (signal_phase v1 >= S (wait_phase v)) by (inversion H12; eauto).
+                assert (signal_phase v1 >= S (wait_phase v)) by (inversion H11; eauto).
                 rewrite wait_wait_phase.
                 intuition.
               }
@@ -242,17 +243,17 @@ Section Facts.
   Let ph_ge_refl_preserves_reduces_drop:
     forall ph ph' t,
     WellOrdered ph ->
-    Reduces ph t DROP ph' ->
+    Reduces ph (t, DROP) ph' ->
     WellOrdered ph'.
   Proof.
     intros.
-    inversion H0.
-    subst.
+    inversion H0; subst; clear H0.
+    inversion H4; subst; clear H4; simpl in *.
     unfold drop in *.
     apply well_ordered_def.
     apply ph_rel_def.
     intros; simpl in *.
-    apply Map_TID.remove_3 in H3.
+    apply Map_TID.remove_3 in H1.
     apply Map_TID.remove_3 in H2.
     eauto using well_ordered_to_facilitates.
   Qed.
@@ -314,14 +315,12 @@ Section Facts.
   Let ph_ge_refl_preserves_reduces_register:
     forall t r ph ph',
     WellOrdered ph ->
-    Reduces ph t (REGISTER r) ph' ->
+    Reduces ph (t, (REGISTER r)) ph' ->
     WellOrdered ph'.
   Proof.
     intros ? ? ? ? Hge R.
-    inversion R; subst; simpl in *.
-    destruct H.
-    destruct R.
-    simpl in *.
+    inversion R; subst; simpl in *; clear R.
+    inversion H2; subst; clear H2.
     assert (R:=H0).
     apply register_rw with (r:=r) in R; auto.
     rewrite R; clear R.
@@ -347,7 +346,7 @@ Section Facts.
     forall ph t o ph',
     WellFormed ph ->
     WellOrdered ph ->
-    Phaser.Reduces ph t o ph' ->
+    Phaser.Reduces ph (t, o) ph' ->
     WellOrdered ph'.
   Proof.
     intros.
@@ -364,7 +363,7 @@ Section Facts.
     forall ph t o o' ph',
     WellFormed ph ->
     WellOrdered ph ->
-    Reduces ph t o ph' ->
+    Reduces ph (t, o) ph' ->
     as_tv_op o = Some o' ->
     Facilitates ph' ph.
   Proof.
@@ -392,28 +391,27 @@ Section Facts.
     forall ph t o ph',
     WellFormed ph ->
     WellOrdered ph ->
-    Reduces ph t o ph' ->
+    Reduces ph (t, o) ph' ->
     Facilitates ph' ph.
   Proof.
     intros ? ? ? ? WF Hge R.
     remember(as_tv_op o) as o'.
     symmetry in Heqo'.
     destruct o' as [o'|]; eauto using ph_ge_reduces_some.
-    (destruct o; simpl in Heqo'; inversion Heqo'); clear Heqo'.
-    - inversion R; subst;  simpl in *.
-      unfold drop in *.
+    (destruct o; simpl in Heqo'; inversion Heqo'); clear Heqo';
+    inversion R; subst;  simpl in *; clear R;
+    inversion H2; subst; clear H2.
+    - unfold drop in *.
       apply ph_rel_def.
       intros.
       apply Map_TID.remove_3 in H0.
       eauto using well_ordered_to_facilitates.
-    - destruct R; simpl in *.
-      destruct H.
-      assert (R:=H0).
-      apply register_rw with (r:=r) in R; auto.
-      rewrite R; clear R.
+    - assert (R:= H0).
+      apply register_rw with (r:=r) in H0; auto.
+      rewrite H0 in *; clear H0.
       apply ph_rel_def; intros.
-      apply Map_TID_Facts.add_mapsto_iff in H2;
-      destruct H2 as [(?,?)|(?,?)].
+      apply Map_TID_Facts.add_mapsto_iff in H0;
+      destruct H0 as [(?,?)|(?,?)].
       + subst.
         eauto using well_ordered_to_facilitates, tv_nhb_register_left.
       + eauto using well_ordered_to_facilitates.
@@ -433,36 +431,37 @@ Section Facts.
 
     (** Reduces for update-operations *)
 
-    Inductive ReducesUpdates p1 t o p2 : Prop :=
+    Inductive ReducesUpdates p1 : event -> phaser -> Prop :=
       reduces_updates_def:
+        forall t o p2,
         Update o ->
-        Reduces p1 t o p2 ->
-        ReducesUpdates p1 t o p2.
+        Reduces p1 (t, o) p2 ->
+        ReducesUpdates p1 (t, o) p2.
 
     Hint Constructors ReducesUpdates.
 
-    Inductive ReducesDestructs p1 t : op -> phaser -> Prop :=
+    Inductive ReducesDestructs p1 : event -> phaser -> Prop :=
       reduces_destructs_def:
-        forall p2,
-        Reduces p1 t DROP p2 ->
-        ReducesDestructs p1 t DROP p2.
+        forall p2 t,
+        Reduces p1 (t, DROP) p2 ->
+        ReducesDestructs p1 (t, DROP) p2.
 
     Hint Constructors ReducesDestructs.
 
     Lemma case_reduces:
-      forall ph1 t o ph2,
-      Reduces ph1 t o ph2 ->
-      { ReducesUpdates ph1 t o ph2 } + { ReducesDestructs ph1 t o ph2 }.
+      forall ph1 e ph2,
+      Reduces ph1 e ph2 ->
+      { ReducesUpdates ph1 e ph2 } + { ReducesDestructs ph1 e ph2 }.
     Proof.
       intros.
-      destruct o; (solve [left; auto | right; auto]).
+      destruct e as (?,[]); try (solve [left; auto | right; auto]).
     Qed.
 
     Lemma reduces_mapsto_neq:
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph1 ->
       t' <> t ->
-      Reduces ph1 t' o ph2 ->
+      Reduces ph1 (t', o) ph2 ->
       Map_TID.MapsTo t v ph2.
     Proof.
       intros.
@@ -470,16 +469,16 @@ Section Facts.
       apply Map_TID_Extra.in_to_mapsto in Hin.
       destruct Hin as (v', Hmt').
       assert (R:=Hmt').
-      destruct H1.
-      destruct o; simpl in *.
+      inversion H1; subst; clear H1.
+      destruct o; simpl in *;
+      inversion H5; subst; clear H5.
       - apply signal_rw in R. rewrite R.
         auto using Map_TID.add_2.
       - apply wait_rw in R; rewrite R.
         auto using Map_TID.add_2.
-      - inversion H1; destruct H2; subst; simpl in *; unfold drop in *.
+      - unfold drop in *.
         auto using Map_TID.remove_2.
-      - destruct H1.
-        apply register_rw with (r:=r) in R. rewrite R.
+      - apply register_rw with (r:=r) in R. rewrite R.
         apply Map_TID.add_2; auto.
         intuition.
         subst.
@@ -491,16 +490,17 @@ Section Facts.
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph2 ->
       t' <> t ->
-      Reduces ph1 t' o ph2 ->
+      Reduces ph1 (t', o) ph2 ->
       Map_TID.MapsTo t v ph1 \/ exists r, o = REGISTER r /\ t = (get_task r).
     Proof.
       intros.
       assert (Hin : Map_TID.In t' ph1) by eauto using register_inv_in.
       apply Map_TID_Extra.in_to_mapsto in Hin.
       destruct Hin as (v', Hmt').
-      destruct H1.
+      inversion H1; subst; clear H1.
       assert (R:=Hmt').
-      destruct o; simpl in *;  destruct H1.
+      destruct o; simpl in *;
+      inversion H5; subst; simpl in *; clear H5.
       - left.
         apply signal_rw in R.
         rewrite R in H.
@@ -524,37 +524,33 @@ Section Facts.
     Lemma reduces_update_inv:
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph1 ->
-      ReducesUpdates ph1 t' o ph2 ->
+      ReducesUpdates ph1 (t', o) ph2 ->
       { Map_TID.MapsTo t v ph2 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Taskview.eval o' v) ph2) }.
     Proof.
       intros.
-      destruct H0.
       destruct (TID.eq_dec t' t). {
         subst.
         assert (rw:=H).
-        destruct H1.
         destruct o; simpl in *; try destruct H1.
         - right.
           exists Taskview.SIGNAL.
           intuition.
-          apply signal_rw in rw; auto; rewrite rw.
-          auto using Map_TID.add_1.
+          inversion H0; subst; clear H0.
+          simpl_red.
+          auto using signal_1.
         - right; exists Taskview.WAIT; intuition.
-          apply wait_rw in rw; rewrite rw.
-          auto using Map_TID.add_1.
+          inversion H0; subst; clear H0.
+          simpl_red.
+          auto using wait_1.
         - left.
-          inversion H0.
+          inversion H0; inversion H3.
         - left.
-          apply register_rw with (r:=r) in rw.
-          rewrite rw in *.
-          apply Map_TID.add_2; auto.
-          inversion H1.
-          remember (set_mode _ _) as v'.
-          intuition; subst.
-          contradiction H2.
-          eauto using Map_TID_Extra.mapsto_to_in.
+          inversion H0; subst; clear H0.
+          simpl_red.
+          auto using register_1.
       }
       left.
+      inversion H0; subst; clear H0.
       eauto using reduces_mapsto_neq.
     Qed.
   End Trans.
@@ -563,7 +559,7 @@ Section Facts.
     forall x y z t o,
     WellFormed y ->
     Facilitates y x ->
-    ReducesUpdates y t o z ->
+    ReducesUpdates y (t, o) z ->
     Facilitates z x.
   Proof.
     intros.
@@ -591,27 +587,17 @@ Section Facts.
       assert (Taskview.WellFormed v) by (inversion H; eauto).
       eauto using tv_nhb_eval_lhs.
     }
-    destruct H1.
-    assert (R := H4).
-    apply reduces_mapsto_neq_rtl with (t:=tz) (v:=vz) in H4; auto.
-    destruct H4. { inversion H0; eauto. }
-    destruct H4 as (r, (?, ?)).
+    inversion H1; subst; clear H1.
+    assert (R := H8).
+    apply reduces_mapsto_neq_rtl with (t:=tz) (v:=vz) in R; auto.
+    destruct R as [?|R]. { inversion H0; eauto. }
+    destruct R as (r, (?, ?)).
     subst.
-    clear H1.
-    destruct R.
-    simpl in *.
-    destruct H1.
-    assert (R:=H4).
-    apply register_rw with (r:=r) in R; auto; rewrite R in *; clear R.
-    assert (vz = set_mode v (get_mode r)). {
-      apply Map_TID_Facts.add_mapsto_iff in H2.
-      destruct H2.
-      + intuition.
-      + destruct H2.
-        contradiction H2.
-        trivial.
+    simpl_red.
+    assert (R: vz = set_mode v (get_mode r)). {
+      eapply register_inv_1; eauto.
     }
-    subst.
+    rewrite R in *; clear R.
     assert (Taskview.Facilitates v vx)
     by (inversion H0; eauto).
     eauto using tv_nhb_register_left.
@@ -620,12 +606,12 @@ Section Facts.
   Lemma ph_reduces_drop_preserves_ge_left:
     forall x y z t,
     Facilitates y x ->
-    Reduces y t DROP z ->
+    Reduces y (t, DROP) z ->
     Facilitates z x.
   Proof.
     intros.
     apply ph_rel_def; intros tz tx vz vx; intros.
-    destruct H0; simpl in *.
+    simpl_red.
     apply drop_mapsto_inv in H1.
     destruct H1.
     inversion H; eauto.
@@ -693,39 +679,6 @@ Section Facts.
       }
       eauto using ph_s_reduces_preserves_ge_left.
   Qed.
-
-  (* 
-  Suppose~$\Ph \Rwait \Phy \Rsignal \Phz$ and that $\Mode[\Ph(\Tid)] = \SW$.
-  %
-  We have that~$\Ph \HappensBefore \Phz$.
-  *)
-  Section EX2.
-  Variable x y z: phaser.
-  Variable t: tid.
-  Variable R1: Reduces x t SIGNAL y.
-  Variable R2: Reduces y t WAIT z.
-  Variable v: taskview.
-  Variable mt1: Map_TID.MapsTo t v x.
-  Variable is_sw: mode v = SIGNAL_WAIT.
-  Variable wf: Taskview.WellFormed v.
-
-  Example ex2:
-    HappensBefore x z.
-  Proof.
-    intros.
-    inversion R1; simpl in *; clear R1.
-    subst; inversion H; clear H.
-    assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H0.
-    assert (Map_TID.MapsTo t (Taskview.signal v) (signal t x)) by eauto using signal_mapsto_spec.
-    inversion R2; simpl in *; clear R2.
-    subst.
-    assert (Map_TID.MapsTo t (Taskview.wait (Taskview.signal v)) (wait t (signal t x))) by eauto using wait_mapsto_spec.
-    apply ph_happens_before_def with (t1:=t) (t2:=t) (v1:=v) (v2:=(Taskview.wait (Taskview.signal v))); auto.
-    inversion H0.
-    assert (v0 = (Taskview.signal v)) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H0.
-    apply tv_ex_2; auto.
-  Qed.
-  End EX2.
 
   Import Notations.
   Open Scope phaser_scope.

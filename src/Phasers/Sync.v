@@ -104,12 +104,12 @@ Section ReducesPreservesAwait.
   Qed.
 
   Theorem ph_reduces_preserves_await:
-    forall ph' t o,
-    Reduces ph t o ph' ->
+    forall ph' e,
+    Reduces ph e ph' ->
     Phase ph' n.
   Proof.
     intros.
-    destruct o; inversion H; simpl in *; subst.
+    destruct e as (t, []); inversion H; simpl in *; subst.
     - auto using ph_signal_preserves_await.
     - auto using ph_wait_preserves_await.
     - auto using ph_drop_preserves_await.
