@@ -21,7 +21,7 @@ Section Defs.
    *)
 
 
-  Record op_spec := mk_op_spec {
+  Record rule := mk_rule {
     pre: tid -> phaser -> Prop;
     pre_dec t ph : { pre t ph } + { ~ pre t ph };
     exec: tid ->  phaser -> phaser
@@ -92,7 +92,7 @@ Section Defs.
     in the definition of the operational semantics.
    *)
 
-  Definition signal_op := mk_op_spec SignalPre signal_pre signal.
+  Definition signal_op := mk_rule SignalPre signal_pre signal.
 
   (**
     Function [try_signal] can be called without a pre-condition. It is crucial for
@@ -291,7 +291,7 @@ Section Defs.
 
   Definition wait (t:tid) : phaser -> phaser := update t Taskview.wait.
 
-  Definition wait_op := mk_op_spec WaitPre wait_pre wait.
+  Definition wait_op := mk_rule WaitPre wait_pre wait.
 
   (**
     Function [try_wait] can be invoked by any *registered* task, needed to defined
@@ -367,7 +367,7 @@ Section Defs.
 
   Definition drop : tid -> phaser -> phaser := @remove taskview.
 
-  Definition drop_op := mk_op_spec DropPre drop_pre drop.
+  Definition drop_op := mk_rule DropPre drop_pre drop.
 
   (** * Register *)
 
@@ -438,7 +438,7 @@ Section Defs.
     | None => ph
     end.
 
-  Definition register_op r := mk_op_spec (RegisterPre r) (register_pre r) (register r).
+  Definition register_op r := mk_rule (RegisterPre r) (register_pre r) (register r).
 
 
   (** * Operational semantics *)
@@ -451,7 +451,7 @@ Section Defs.
 
   (** Function [eval] interprets operation [o] as its operation specification [Op]. *)
 
-  Definition get_impl o :=
+  Definition select_rule o :=
     match o with
     | SIGNAL => signal_op
     | WAIT => wait_op
@@ -468,12 +468,12 @@ Section Defs.
   Inductive Reduces ph: event -> phaser -> Prop :=
     ph_reduces:
       forall t o,
-      pre (get_impl o) t ph ->
-      Reduces ph (t, o) (exec (get_impl o) t ph).
+      pre (select_rule o) t ph ->
+      Reduces ph (t, o) (exec (select_rule o) t ph).
 
   Definition eval (e:event) ph : option phaser :=
-  if pre_dec (get_impl (snd e)) (fst e) ph
-  then Some (exec (get_impl (snd e)) (fst e) ph)
+  if pre_dec (select_rule (snd e)) (fst e) ph
+  then Some (exec (select_rule (snd e)) (fst e) ph)
   else None.
 
   Fixpoint eval_trace (l:list event) :=
@@ -531,7 +531,7 @@ Section Facts.
   Let reduces_spec:
     forall ph t o ph',
     Reduces ph (t, o) ph' ->
-    ph' = exec (get_impl o) t ph.
+    ph' = exec (select_rule o) t ph.
   Proof.
     intros.
     destruct o;
