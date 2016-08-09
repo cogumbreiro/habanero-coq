@@ -1576,7 +1576,11 @@ Section Defs.
       apply wp_complete with (vs:=vs) (wp:=get_wp b) (ph:=ph) (e:=e); subst; auto.
   Qed.
 
-  Definition WF ph b := Sound ph b /\ Complete ph b.
+  Structure WF ph b := wf_def {
+    wf_trace: list event;
+    wf_sound: Sound ph b;
+    wf_complete: Complete ph b
+  }.
 
   Theorem correctness:
     forall b ph e ph' b',
@@ -1585,10 +1589,9 @@ Section Defs.
     UpdateBuilder b e b' ->
     WF ph' b'.
   Proof.
-    unfold WF.
     intros.
     destruct H.
-    eauto.
+    eauto using wf_def.
   Qed.
 
   Let wf_sp_1:
@@ -1598,8 +1601,8 @@ Section Defs.
     GetPhase x (signal_phase v) (get_sp b).
   Proof.
     intros.
-    destruct H.
-    apply H1.
+    apply wf_complete in H.
+    apply H.
     assumption.
   Qed.
 
@@ -1610,7 +1613,7 @@ Section Defs.
     SignalPhase x (signal_phase v) ph.
   Proof.
     intros.
-    destruct H.
+    apply wf_sound in H.
     apply H.
     assumption.
   Qed.
@@ -1622,8 +1625,8 @@ Section Defs.
     GetPhase x (wait_phase v) (get_wp b).
   Proof.
     intros.
-    destruct H.
-    apply H1.
+    apply wf_complete in H.
+    apply H.
     assumption.
   Qed.
 
@@ -1634,7 +1637,7 @@ Section Defs.
     WaitPhase x (wait_phase v) ph.
   Proof.
     intros.
-    destruct H.
+    apply wf_sound in H.
     apply H.
     assumption.
   Qed.
@@ -1677,6 +1680,9 @@ Section Defs.
     destruct H0 as (n'', Hmt).
     eauto using set_phase_def.
   Qed.
+
+
+    
 (*
   Let wf_ph_red_signal:
     forall ph b x ph',
