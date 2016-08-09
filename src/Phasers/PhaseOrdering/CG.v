@@ -1576,10 +1576,52 @@ Section Defs.
       apply wp_complete with (vs:=vs) (wp:=get_wp b) (ph:=ph) (e:=e); subst; auto.
   Qed.
 
+  Let NodesSpec b := forall n, MN.In n (node_to_op b) -> Node n (get_nodes b).
+
   Structure WF ph b := wf_def {
     wf_sound: Sound ph b;
-    wf_complete: Complete ph b
+    wf_complete: Complete ph b;
+    wf_nodes: NodesSpec b
   }.
+
+  Let wf_nodes_2:
+    forall n b e m,
+    NodesSpec b ->
+    UpdateOps (get_nodes b) (node_to_op b) e m ->
+    MN.In n m ->
+    Node n (update_nodes (get_nodes b) e).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    simpl.
+    destruct (is_par o). {
+      rewrite MN_Facts.add_in_iff in *.
+      destruct H1. {
+        subst.
+        eauto using maps_to_to_node, node_cons.
+      }
+      auto using node_cons.
+    }
+    rewrite MN_Facts.add_in_iff in *.
+    destruct H1. {
+      subst.
+      eauto using maps_to_to_node, node_cons.
+    }
+    auto using node_cons.
+  Qed.
+
+  Let nodes_spec_preserves:
+    forall b b' e,
+    NodesSpec b ->
+    UpdateBuilder b e b' ->
+    NodesSpec b'.
+  Proof.
+    intros.
+    unfold NodesSpec.
+    intros.
+    inversion H0; subst; clear H0; simpl in *.
+    eauto.
+  Qed.
 
   Theorem correctness:
     forall b ph e ph' b',
