@@ -106,19 +106,28 @@ let string_of_taskview v =
     "\nwp: " ^ string_of_int (Cg.wait_phase v) ^
     "\nmode: " ^ string_of_reg (Cg.mode v)
 
-let js_of_vertex (tid:int) (idx:int) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
-    let tv = match ph with
+type node_type =
+    | Past of Cg.op
+    | Current of Cg.taskview
+
+let get_node_type (tid:int) (idx:int) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
+    match Cg.MN.find idx ns with
+    | Some o -> Some (Past o)
+    | _ ->
+        (match ph with
         | Some ph -> (
             match Cg.Map_TID.find tid ph with
-            | Some v -> "\n\n" ^ string_of_taskview v
-            | _ -> ""
+            | Some v -> Some (Current v)
+            | _ -> None
             )
-        | _ -> ""
-    in
+        | _ -> None)
+
+let js_of_node_type (nt:node_type option) =
     js (
-        match Cg.MN.find idx ns with
-        | Some o -> string_of_op o
-        | _ -> tv
+        match nt with
+        | Some (Past o) -> string_of_op o
+        | Some (Current v) -> "\n\n" ^ string_of_taskview v
+        | _ -> ""
     )
 
 let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
@@ -132,14 +141,21 @@ let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
     let tbl = I.create 10 in
     let parent_offset tid = (try (I.find tbl (I.find parent_of tid) - 1) with | _ -> 0) in
     let to_js idx tid =
+        let nt = get_node_type tid idx ns ph in
+        let font =
+            match nt with
+            | Some (Current v) -> Js.Unsafe.js_expr "{strokeColor: 'yellow'}"
+            | _ -> Js.Unsafe.js_expr "{}"
+        in
         let offset = (try (I.find tbl tid) + 1 with | _ -> parent_offset tid) in
         I.add tbl tid offset;
         Js.Unsafe.obj [|
         ("id", Js.Unsafe.inject idx);
         ("y", Js.Unsafe.inject (tid * 150));
         ("x", Js.Unsafe.inject (tid * 50 + offset * 150));
-        ("label", Js.Unsafe.inject (js_of_vertex tid idx ns ph));
-        ("group", Js.Unsafe.inject tid)
+        ("label", Js.Unsafe.inject (js_of_node_type nt));
+        ("group", Js.Unsafe.inject tid);
+        ("font", Js.Unsafe.inject font)
         |]
     in
     Array.mapi to_js vs
