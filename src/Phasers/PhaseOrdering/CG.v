@@ -1577,7 +1577,6 @@ Section Defs.
   Qed.
 
   Structure WF ph b := wf_def {
-    wf_trace: list event;
     wf_sound: Sound ph b;
     wf_complete: Complete ph b
   }.
