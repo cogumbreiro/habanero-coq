@@ -492,7 +492,7 @@ Module Phasermap.
     destruct H2 as [(?,?)|(?,?)].
     - subst.
       assert (Phaser.Reduces ph (t, SIGNAL) (signal t ph)). {
-        apply ph_reduces.
+        apply reduces_def.
         simpl.
         trivial.
       }
@@ -516,7 +516,7 @@ Module Phasermap.
     destruct H2.
     - destruct H2; subst.
       assert (Phaser.Reduces ph (t, DROP) (drop t ph)). {
-        apply ph_reduces.
+        apply reduces_def.
         simpl.
         trivial.
       }
