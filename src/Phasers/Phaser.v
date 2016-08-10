@@ -466,7 +466,7 @@ Section Defs.
   Definition event := (tid * op) % type.
 
   Inductive Reduces ph: event -> phaser -> Prop :=
-    ph_reduces:
+    reduces_def:
       forall t o,
       pre (select_rule o) t ph ->
       Reduces ph (t, o) (exec (select_rule o) t ph).
@@ -475,6 +475,49 @@ Section Defs.
   if pre_dec (select_rule (snd e)) (fst e) ph
   then Some (exec (select_rule (snd e)) (fst e) ph)
   else None.
+
+  Lemma eval_1:
+    forall e ph ph',
+    eval e ph = Some ph' ->
+    Reduces ph e ph'.
+  Proof.
+    unfold eval; intros.
+    destruct e as (x, o).
+    simpl in *.
+    destruct (pre_dec (select_rule o)). {
+      inversion H; subst.
+      auto using reduces_def.
+    }
+    inversion H.
+  Qed.
+
+  Lemma eval_2:
+    forall e ph ph',
+    Reduces ph e ph' ->
+    eval e ph = Some ph'.
+  Proof.
+    intros.
+    unfold eval.
+    destruct e as (x, o).
+    inversion H; subst; clear H.
+    simpl.
+    destruct (pre_dec (select_rule o) x ph). {
+      trivial.
+    }
+    contradiction.
+  Qed.
+
+  Lemma eval_3:
+    forall e ph,
+    eval e ph = None ->
+    forall ph', ~ Reduces ph e ph'.
+  Proof.
+    intros.
+    unfold not; intros N.
+    apply eval_2 in N.
+    rewrite N in *.
+    inversion H.
+  Qed.
 
   Fixpoint eval_trace (l:list event) :=
   match l with
