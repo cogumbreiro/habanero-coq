@@ -319,7 +319,10 @@ Section Defs.
   Definition update_sp vs (e:event) sp :=
   let (x, o) := e in
   match o with
-  | REGISTER r => copy x (get_task r) sp
+  | REGISTER r =>
+    if can_signal (get_mode r)
+    then copy x (get_task r) sp
+    else Some sp
   | SIGNAL => inc vs sp x
   | DROP =>
     match try_inc vs sp x with
@@ -1907,14 +1910,13 @@ Section Defs.
     Copy sp x y sp'.
   Proof.
     unfold copy; intros.
-    remember (get_phase x sp).
-    symmetry in Heqo.
-    destruct o. {
-      apply get_phase_some in Heqo.
-      apply set_phase_some in H.
-      eauto using copy_def.
+    destruct sp as (ns, ps).
+    destruct (Map_TID_Extra.find_rw x ns) as [(R,?)|(?,(R,?))];
+    rewrite R in *; clear R. {
+      inversion H.
     }
-    inversion H.
+    inversion H; subst.
+    auto using copy_def.
   Qed.
 
   Let inc_some:
@@ -1947,9 +1949,9 @@ Section Defs.
   Qed.
 
   Let update_sp_some:
-    forall vs vs' e sp sp',
-    update_sp vs vs' e sp = Some sp' ->
-    UpdateSP vs vs' sp e sp'.
+    forall vs e sp sp',
+    update_sp vs e sp = Some sp' ->
+    UpdateSP vs sp e sp'.
   Proof.
     unfold update_sp;intros.
     destruct e as (x, o).
@@ -1965,9 +1967,9 @@ Section Defs.
       }
       inversion H.
     - destruct (can_signal (get_mode r)). {
-        auto using update_sp_register_can_signal.
+        auto using update_sp_register_ok.
       }
-      inversion H; subst; auto using update_sp_register_cannot_signal.
+      inversion H; subst; auto using update_sp_register_skip.
   Qed.
 
   Let update_wp_some:
@@ -1989,9 +1991,9 @@ Section Defs.
       }
       inversion H.
     - destruct (can_wait (get_mode r)). {
-        auto using update_wp_register_can_wait.
+        auto using update_wp_register_ok.
       }
-      inversion H; subst; auto using update_wp_phased_cannot_wait.
+      inversion H; subst; auto using update_wp_register_skip.
   Qed.
 
   Let update_ops_some:
@@ -2017,7 +2019,7 @@ Section Defs.
     UpdateBuilder b e b'.
   Proof.
     unfold update_builder; intros.
-    remember (update_sp _ _ _ _).
+    remember (update_sp _ _ _).
     symmetry in Heqo.
     destruct o. {
       apply update_sp_some in Heqo.
@@ -2272,7 +2274,7 @@ Extract Inlined Constant eq_nat_dec => "( = )".
 
 Extraction "ocaml/cg.ml" build Phaser.eval_trace.
 
-
+(*
 Section Props.
   Notation Phase n ph sp := (MN.MapsTo n ph (snd sp)).
   Notation In n sp := (MN.In n (snd sp)).
@@ -2640,3 +2642,4 @@ Section Props.
     intros.
   Qed.
     *)
+*)
