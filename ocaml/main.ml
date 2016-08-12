@@ -122,15 +122,28 @@ let get_node_type (tid:int) (idx:int) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
             )
         | _ -> None)
 
-let js_of_node_type (nt:node_type option) =
+let js_of_node_type (n:int) (nt:node_type option) sp wp =
+    let phase_of sp label n : string =
+        match Cg.MN.find n sp with
+        | Some ph -> Printf.sprintf "\n%s: %d" label ph
+        | _ -> ""
+    in
+    let handle_op o : string =
+        let o_sp = phase_of sp "sp" n in
+        let o_wp = phase_of wp "wp" n in
+        (string_of_op o) ^ o_sp ^ o_wp
+    in
     js (
         match nt with
-        | Some (Past o) -> string_of_op o
+        | Some (Past o) -> handle_op o 
         | Some (Current v) -> "\n\n" ^ string_of_taskview v
         | _ -> ""
     )
 
-let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
+let js_of_vertices (vs:int array) b (ph:Cg.phaser option) =
+    let ns = Cg.node_to_op b in
+    let sp = snd (Cg.get_sp b) in
+    let wp = snd (Cg.get_wp b) in
     let parent_of = I.create 10 in
     List.iter (fun p ->
         match p with
@@ -153,7 +166,7 @@ let js_of_vertices (vs:int array) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
         ("id", Js.Unsafe.inject idx);
         ("y", Js.Unsafe.inject (tid * 150));
         ("x", Js.Unsafe.inject (tid * 50 + offset * 150));
-        ("label", Js.Unsafe.inject (js_of_node_type nt));
+        ("label", Js.Unsafe.inject (js_of_node_type idx nt sp wp));
         ("group", Js.Unsafe.inject tid);
         ("font", Js.Unsafe.inject font)
         |]
@@ -193,7 +206,7 @@ let js_of_edges (cg:Cg.computation_graph) : 'a array =
 
 let js_of_cg (b,cg) ph =
     let tids = Array.of_list (rev (Cg.get_nodes b)) in
-    (js_of_vertices tids (Cg.node_to_op b) ph, js_of_edges cg)
+    (js_of_vertices tids b ph, js_of_edges cg)
 
 let js_new_network container (vs, es) =
     let js_graph = 
