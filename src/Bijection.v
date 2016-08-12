@@ -1,5 +1,5 @@
 Set Implicit Arguments.
-
+Require Import Coq.Arith.Peano_dec.
 Require Import Coq.Lists.List.
 Require Omega.
 
@@ -596,6 +596,53 @@ Section MapsTo.
       apply IHxs.
       unfold not; intros N.
       contradiction H; auto using in_cons.
+    Qed.
+
+    Fixpoint index_of n (l:list A) : option A :=
+    match l with
+    | nil => None
+    | x :: l => if eq_nat_dec n (length l) then Some x else index_of n l
+    end.
+
+    Lemma index_of_some:
+      forall n l x,
+      index_of n l = Some x ->
+      IndexOf (A:=A) x n l.
+    Proof.
+      induction l; intros. {
+        simpl in *.
+        inversion H.
+      }
+      simpl in *.
+      destruct (eq_nat_dec n (length l)). {
+        inversion H; subst.
+        auto using index_of_eq.
+      }
+      auto using index_of_cons.
+    Qed.
+
+    Lemma index_of_prop:
+      forall l n x,
+      IndexOf (A:=A) x n l ->
+      index_of n l = Some x.
+    Proof.
+      induction l; intros. {
+        inversion H.
+      }
+      inversion H; subst; clear H. {
+        simpl.
+        destruct (eq_nat_dec (length l) (length l)). {
+          trivial.
+        }
+        intuition.
+      }
+      simpl.
+      destruct (eq_nat_dec n (length l)). {
+        subst.
+        apply index_of_absurd_length in H2.
+        contradiction.
+      }
+      auto.
     Qed.
 
   End MapsToDec.

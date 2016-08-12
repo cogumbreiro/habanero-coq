@@ -505,6 +505,30 @@ Section MoreProps.
     Qed.
   End Lookup.
 
+  Section TaskOf.
+    Variable A:Type.
+    Definition task_of n (l:list A) := Bijection.index_of (node_id n) l.
+
+    Lemma task_of_some:
+      forall n l x,
+      task_of n l = Some x ->
+      TaskOf (A:=A) n x l.
+    Proof.
+      unfold task_of; intros.
+      apply Bijection.index_of_some in H.
+      auto.
+    Qed.
+
+    Lemma task_of_prop:
+      forall l n x,
+      TaskOf (A:=A) n x l ->
+      task_of n l = Some x.
+    Proof.
+      unfold task_of; intros.
+      apply Bijection.index_of_prop.
+      auto.
+    Qed.
+  End TaskOf.
 End MoreProps.
 
   Ltac simpl_node := 
