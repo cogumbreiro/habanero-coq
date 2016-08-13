@@ -245,7 +245,7 @@ Section Defs.
   Let try_inc vs sp x :=
   if is_registered x sp then inc vs sp x else Some sp.
 
-  Let drop (x:tid) (ws:phases) : phases := let (ns, ps) := ws in (Map_TID.remove x ns, ps).
+  Definition drop (x:tid) (ws:phases) : phases := let (ns, ps) := ws in (Map_TID.remove x ns, ps).
 
   Inductive Copy vs sp x y sp' :=
   | copy_def:
@@ -254,48 +254,20 @@ Section Defs.
     SetPhase vs sp y ph sp' ->
     Copy vs sp x y sp'.
 
-(*
-  Inductive Copy : phases -> tid -> tid -> phases -> Prop :=
-  | copy_def:
-    forall x y n ns ps,
-    Map_TID.MapsTo x n ns ->
-    Copy (ns, ps) x y (Map_TID.add y n ns, ps).
-
-  Let copy x y (wp:phases) :=
-  let (ns, ps) := wp in
-  match Map_TID.find x ns with
-  | Some n => Some (Map_TID.add y n ns, ps)
-  | _ => None
-  end.
-*)
-
   Let copy vs x y sp : option phases :=
   match get_phase x sp with
   | Some ph => set_phase vs sp y ph
   | _ => None
   end.
 
-  Inductive UpdatePhase vs sp x : phases -> Prop :=
-  | update_phase_def:
-    forall ph sp',
-    GetPhase x ph sp ->
-    SetPhase vs sp x ph sp' ->
-    UpdatePhase vs sp x sp'.
-
-  Let update_phase vs x sp : option phases :=
-  match get_phase x sp with
-  | Some ph => set_phase vs sp x ph
-  | _ => None
-  end.
-
-  Inductive TryUpdatePhase vs sp x : phases -> Prop :=
-  | try_update_phase_ok:
+  Inductive TryCopy vs sp x y : phases -> Prop :=
+  | try_copy_ok:
     forall sp',
-    UpdatePhase vs sp x sp' ->
-    TryUpdatePhase vs sp x sp'
-  | try_update_phase_skip:
+    Copy vs sp x y sp' ->
+    TryCopy vs sp x y sp'
+  | try_copy_skip:
     ~ Registered x sp ->
-    TryUpdatePhase vs sp x sp.
+    TryCopy vs sp x y sp.
 
   Let registered x sp :
     { Registered x sp } + { ~ Registered x sp }.
@@ -329,8 +301,8 @@ Section Defs.
     inversion Heqo.
   Defined.
 
-  Let try_update_phase vs x sp : option phases :=
-  if registered x sp then update_phase vs x sp
+  Let try_copy vs x y sp : option phases :=
+  if registered x sp then copy vs x y sp
   else Some sp.
 
   Inductive UpdateWP (vs:list tid) (wp:phases): event -> phases -> Prop :=
@@ -338,16 +310,16 @@ Section Defs.
     forall wp' x r wp'',
     CanWait (get_mode r) ->
     Copy vs wp x (get_task r) wp' ->
-    UpdatePhase vs wp' x wp'' ->
+    Copy vs wp' x x wp'' ->
     UpdateWP vs wp (x, REGISTER r) wp''
   | update_wp_register_skip:
     forall x r wp',
     ~ CanWait (get_mode r) ->
-    TryUpdatePhase vs wp x wp' ->
-    UpdateWP vs wp (x, REGISTER r) wp
+    TryCopy vs wp x x wp' ->
+    UpdateWP vs wp (x, REGISTER r) wp'
   | update_wp_signal:
     forall x wp',
-    TryUpdatePhase vs wp x wp' ->
+    TryCopy vs wp x x wp' ->
     UpdateWP vs wp (x, SIGNAL) wp'
   | update_wp_wait:
     forall x wp',
@@ -363,13 +335,13 @@ Section Defs.
   | REGISTER r =>
     if can_wait (get_mode r) then
       match copy vs x (get_task r) wp with
-      | Some wp => update_phase vs x wp
+      | Some wp => copy vs x x wp
       | _ => None
       end
-    else try_update_phase vs x wp
+    else try_copy vs x x wp
   | WAIT => inc vs wp x
   | DROP => Some (drop x wp)
-  | SIGNAL => try_update_phase vs x wp
+  | SIGNAL => try_copy vs x x wp
   end.
 
   Inductive UpdateSP (vs:list tid) (sp:phases): event -> phases -> Prop :=
@@ -377,12 +349,12 @@ Section Defs.
     forall sp' sp'' x r,
     CanSignal (get_mode r) ->
     Copy vs sp x (get_task r) sp' ->
-    UpdatePhase vs sp' x sp'' ->
+    Copy vs sp' x x sp'' ->
     UpdateSP vs sp (x, REGISTER r) sp''
   | update_sp_register_skip:
     forall x r sp',
     ~ CanSignal (get_mode r) ->
-    TryUpdatePhase vs sp x sp' ->
+    TryCopy vs sp x x sp' ->
     UpdateSP vs sp (x, REGISTER r) sp'
   | update_sp_signal:
     forall x sp',
@@ -390,7 +362,7 @@ Section Defs.
     UpdateSP vs sp (x, SIGNAL) sp'
   | update_sp_wait:
     forall x sp',
-    TryUpdatePhase vs sp x sp' ->
+    TryCopy vs sp x x sp' ->
     UpdateSP vs sp (x, WAIT) sp'
   | update_sp_drop:
     forall x,
@@ -402,11 +374,11 @@ Section Defs.
   | REGISTER r =>
     if can_signal (get_mode r) then
       match copy vs x (get_task r) sp with
-      | Some sp => update_phase vs x sp
+      | Some sp => copy vs x x sp
       | _ => None
       end
-    else try_update_phase vs x sp
-  | WAIT => try_update_phase vs x sp
+    else try_copy vs x x sp
+  | WAIT => try_copy vs x x sp
   | DROP => Some (drop x sp)
   | SIGNAL => inc vs sp x
   end.
@@ -670,12 +642,7 @@ Section Defs.
     Taskview.signal_phase v = n ->
     SignalPhase x n ph.
 
-  Let SP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
-    forall x n,
-    GetPhase x n sp ->
-    SignalPhase x n ph.
-
-  Let set_phase_to_get_phase:
+  Lemma set_phase_to_get_phase:
     forall vs sp t ph sp',
     SetPhase vs sp t ph sp' ->
     GetPhase t ph sp'.
@@ -698,7 +665,7 @@ Section Defs.
     eauto using MN_Facts.MapsTo_fun.
   Qed.
 
-  Let inc_inv:
+  Lemma inc_inv:
     forall vs sp t sp',
     Inc vs sp t sp' ->
     exists n, GetPhase t n sp /\ GetPhase t (S n) sp'.
@@ -716,19 +683,16 @@ Section Defs.
   Proof.
     intros.
     destruct H. {
-      eauto.
+      eauto using inc_inv.
     }
     auto.
   Qed.
-
-  Let NodesDefined (vs:list tid) (m:Map_TID.t node) : Prop :=
-  forall x n, Map_TID.MapsTo x n m -> TaskOf n x vs. (* nodes are mapped to the correct owner *)
 
   Notation WFPhases ts ns :=
   (forall x n, Map_TID.MapsTo x n ts ->
   MN.In n ns).
 
-  Let WF_Phases (sp:phases) := (WFPhases (fst sp) (snd sp)).
+  Definition WF_Phases (sp:phases) := (WFPhases (fst sp) (snd sp)).
 
   Let set_phase_3:
     forall x ps' ps y vs ph ph',
@@ -801,7 +765,7 @@ Section Defs.
     auto.
   Qed.
 
-  Let inc_3:
+  Lemma inc_3:
     forall vs t n sp' sp x,
     WF_Phases sp ->
     GetPhase t n sp' ->
@@ -830,7 +794,7 @@ Section Defs.
     auto.
   Qed.
 
-  Let signal_neq:
+  Lemma signal_phase_signal_2:
     forall x y ph n,
     x <> y ->
     SignalPhase x n ph ->
@@ -841,7 +805,7 @@ Section Defs.
     eauto using signal_phase_def, signal_2.
   Qed.
 
-  Let signal_neq_drop:
+  Lemma signal_phase_drop_2:
     forall x y ph n,
     x <> y ->
     SignalPhase x n ph ->
@@ -852,36 +816,7 @@ Section Defs.
     eauto using signal_phase_def, drop_2.
   Qed.
 
-  Let signal_eq:
-    forall vs sp sp' ph t n,
-    WF_Phases sp ->
-    (forall x n, GetPhase x n sp -> SignalPhase x n ph) ->
-    GetPhase t n sp' ->
-    Phaser.SignalPre t ph ->
-    Inc vs sp t sp' ->
-    SignalPhase t n (Phaser.signal t ph).
-  Proof.
-    intros.
-    apply inc_inv in H3.
-    rename n into n'.
-    destruct H3 as (n, (Hg1, Hg2)).
-    apply H0 in Hg1.
-    assert (n' = S n) by eauto using get_phase_fun; subst.
-    inversion H2; subst; clear H2.
-    apply signal_phase_def with (v:=Taskview.signal v).
-    - rewrite Phaser.signal_rw with (v:=v); auto.
-      auto using Map_TID.add_1.
-    - rewrite Taskview.signal_preserves_mode.
-      auto using signal_pre_to_can_signal.
-    - inversion Hg1.
-      subst.
-      unfold signal.
-      simpl.
-      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-      trivial.
-  Qed.
-
-  Let signal_phase_wait:
+  Lemma signal_phase_wait_2:
     forall x n ph y,
     SignalPhase x n ph ->
     SignalPhase x n (Phaser.wait y ph).
@@ -895,17 +830,6 @@ Section Defs.
     eauto using wait_2, signal_phase_def.
   Qed.
 
-  Let signal_phase_drop:
-    forall x n ph y,
-    x <> y ->
-    SignalPhase x n ph ->
-    SignalPhase x n (Phaser.drop y ph).
-  Proof.
-    intros.
-    inversion H0; subst; clear H0.
-    eauto using drop_2, signal_phase_def.
-  Qed.
-
   Let wait_phase_drop:
     forall x n ph y,
     x <> y ->
@@ -917,7 +841,7 @@ Section Defs.
     eauto using drop_2, wait_phase_def.
   Qed.
 
-  Let drop_inv:
+  Lemma drop_inv:
     forall sp x y n,
     GetPhase y n (drop x sp) ->
     x <> y /\ GetPhase y n sp.
@@ -951,8 +875,8 @@ Section Defs.
     }
     eauto using get_phase_def.
   Qed.
-(*
-  Let copy_3:
+
+  Lemma copy_3:
     forall vs x y z sp sp' n,
     WF_Phases sp ->
     z <> y ->
@@ -964,21 +888,17 @@ Section Defs.
     inversion H2; subst; clear H2; eauto.
   Qed.
 
-  Let copy_inv_eq:
-    forall x y ps ps' n,
+  Lemma copy_inv_eq:
+    forall vs x y ps ps' n,
     GetPhase y n ps' ->
-    Copy ps x y ps' ->
+    Copy vs ps x y ps' ->
     GetPhase x n ps.
   Proof.
     intros.
     inversion H0; subst; clear H0.
-    inversion H; subst; clear H.
-    rewrite Map_TID_Facts.add_mapsto_iff in *.
-    destruct H5 as [(_,?)|(N,_)]. {
-      subst.
-      eauto using get_phase_def.
-    }
-    intuition.
+    apply set_phase_to_get_phase in H2.
+    assert (n=ph) by eauto using get_phase_fun; subst.
+    trivial.
   Qed.
 
   Let get_phase_2:
@@ -994,34 +914,33 @@ Section Defs.
     auto.
   Qed.
 
-  Let copy_2:
-    forall x y z ps ps' n,
+  Lemma copy_2:
+    forall x y z ps ps' n vs,
     WF_Phases ps ->
     z <> y ->
-    Copy ps x y ps' ->
+    Copy vs ps x y ps' ->
     GetPhase z n ps ->
     GetPhase z n ps'.
   Proof.
     intros.
     inversion H1; subst; clear H1.
-    apply get_phase_2; auto.
+    eapply set_phase_2 in H4; eauto.
   Qed.
 
-  Let copy_1:
-    forall wp wp' x y n,
-    Copy wp x y wp' ->
+  Lemma copy_1:
+    forall vs wp wp' x y n,
+    Copy vs wp x y wp' ->
     GetPhase x n wp ->
     GetPhase y n wp'.
   Proof.
     intros.
     inversion H; subst; clear H.
-    apply get_phase_def with (n:=n0); auto using Map_TID.add_1.
-    inversion H0; subst; clear H0.
-    assert (n1 = n0) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+    apply set_phase_to_get_phase in H2.
+    assert (ph=n) by eauto using get_phase_fun;subst.
     assumption.
   Qed.
 
-  Let sp_register:
+  Lemma signal_phase_register_1:
     forall r x ph n,
     RegisterPre r x ph ->
     CanSignal (get_mode r) ->
@@ -1033,7 +952,19 @@ Section Defs.
     eauto using signal_phase_def, register_spec.
   Qed.
 
-  Let sp_register_neq:
+  Lemma wait_phase_register_1:
+    forall r x ph n,
+    RegisterPre r x ph ->
+    CanWait (get_mode r) ->
+    WaitPhase x n ph ->
+    WaitPhase (get_task r) n (register r x ph).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    eauto using wait_phase_def, register_spec.
+  Qed.
+
+  Lemma signal_phase_register_2:
     forall x y n ph r,
     RegisterPre r y ph ->
     SignalPhase x n ph ->
@@ -1048,6 +979,23 @@ Section Defs.
       eauto using Map_TID_Extra.mapsto_to_in.
     }
     eauto using signal_phase_def, register_2.
+  Qed.
+
+  Lemma wait_phase_register_2:
+    forall x y n ph r,
+    RegisterPre r y ph ->
+    WaitPhase x n ph ->
+    WaitPhase x n (register r y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    inversion H; subst; clear H.
+    destruct (TID.eq_dec (get_task r) x). {
+      subst.
+      contradiction H0.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    eauto using wait_phase_def, register_2.
   Qed.
 
   Let get_phase_inv_eq:
@@ -1107,12 +1055,12 @@ Section Defs.
     - auto using Map_TID.add_1.
     - auto using MN.add_1.
   Qed.
-
+(*
   Let update_1:
     forall x n vs sp sp' y,
     WF_Phases sp ->
     GetPhase x n sp ->
-    UpdatePhase vs sp y sp' ->
+    Copy vs sp y y sp' ->
     GetPhase x n sp'.
   Proof.
     intros.
@@ -1155,48 +1103,88 @@ Section Defs.
     inversion H1; subst; clear H1; auto.
     eapply update_3; eauto.
   Qed.
+*)
 
-  Let wf_phases_copy:
-    forall x y sp sp',
+  Lemma wf_phases_copy:
+    forall vs x y sp sp',
     WF_Phases sp ->
-    Copy sp x y sp' ->
+    Copy vs sp x y sp' ->
     WF_Phases sp'.
   Proof.
     intros.
     inversion H0; subst; clear H0.
     unfold WF_Phases.
+    inversion H2; subst; clear H2.
     simpl in *.
     intros.
     rewrite Map_TID_Facts.add_mapsto_iff in *.
-    destruct H0 as [(?,?)|(?,?)]. {
+    rewrite MN_Facts.add_in_iff in *.
+    destruct H2 as [(?,?)|(?,?)]. {
       subst.
-      apply H in H1.
       auto.
     }
-    apply H in H2.
+    apply H in H4.
     auto.
   Qed.
 
-  Let copy_4:
-    forall x y z n sp sp',
-    y <> z ->
-    GetPhase z n sp' ->
-    Copy sp x y sp' ->
-    GetPhase z n sp.
+  Lemma copy_4:
+    forall vs x y n sp sp',
+    WF_Phases sp ->
+    GetPhase y n sp' ->
+    Copy vs sp x x sp' ->
+    GetPhase y n sp.
   Proof.
     intros.
-    inversion H1; subst; clear H1.
-    inversion H0; subst; clear H0.
-    rewrite Map_TID_Facts.add_mapsto_iff in *.
-    destruct H6 as [(?,?)|(?,mt)]. {
+    destruct (TID.eq_dec x y). {
       subst.
-      intuition.
+      inversion H1; subst; clear H1.
+      apply set_phase_to_get_phase in H3.
+      assert (n = ph). {
+        apply get_phase_fun with (t:=y) (sp:=sp'); auto.
+      }
+      subst.
+      assumption.
     }
-    eauto using get_phase_def.
+    apply copy_3 with (vs:=vs) (x:=x) (y:=x) (sp':=sp'); auto.
   Qed.
-*)
+End Defs.
 
-(*
+Section Props.
+
+  Let SP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
+    forall x n,
+    GetPhase x n sp ->
+    SignalPhase x n ph.
+
+  Let signal_eq:
+    forall vs sp sp' ph t n,
+    WF_Phases sp ->
+    (forall x n, GetPhase x n sp -> SignalPhase x n ph) ->
+    GetPhase t n sp' ->
+    Phaser.SignalPre t ph ->
+    Inc vs sp t sp' ->
+    SignalPhase t n (Phaser.signal t ph).
+  Proof.
+    intros.
+    apply inc_inv in H3.
+    rename n into n'.
+    destruct H3 as (n, (Hg1, Hg2)).
+    apply H0 in Hg1.
+    assert (n' = S n) by eauto using get_phase_fun; subst.
+    inversion H2; subst; clear H2.
+    apply signal_phase_def with (v:=Taskview.signal v).
+    - rewrite Phaser.signal_rw with (v:=v); auto.
+      auto using Map_TID.add_1.
+    - rewrite Taskview.signal_preserves_mode.
+      auto using signal_pre_to_can_signal.
+    - inversion Hg1.
+      subst.
+      unfold signal.
+      simpl.
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      trivial.
+  Qed.
+
   Let sp_sound:
     forall vs' sp ph e ph' sp',
     WF_Phases sp ->
@@ -1213,28 +1201,34 @@ Section Defs.
     inversion H3; subst; clear H2 H3.
     - destruct (TID.eq_dec x t). {
         subst.
-        apply signal_eq with (vs:=vs') (sp:=sp) (sp':=sp'); auto.
+        eauto using signal_eq.
       }
-      eapply inc_3 in H6; eauto.
-    - apply signal_phase_wait; eauto.
+      eapply inc_3 in H6; eauto using signal_phase_signal_2.
+    - apply signal_phase_wait_2; inversion H6; subst; auto; clear H6.
+      eauto using copy_4.
     - apply drop_inv with (y:=t) (n:=n) in H4; auto.
       destruct H4 as (Hx,Hy).
-      apply signal_phase_drop; auto.
+      auto using signal_phase_drop_2.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
-        apply sp_register; auto.
-        apply copy_inv_eq with (n:=n) in H9; auto.
-        eapply update_3; eauto.
+        apply signal_phase_register_1; auto.
+        eauto using wf_phases_copy, copy_inv_eq, copy_4.
       }
-      apply sp_register_neq; auto.
-      assert (WF_Phases sp'0) by eauto.
-      apply update_3 with (x:=t) (y:=x) (n:=n) in H11; auto.
-      eapply copy_4 with (z:=t) in H9; eauto.
-    - eapply try_update_4; eauto.
-      destruct (TID.eq_dec (get_task r) t). {
-        subst.
-        eapply try_update_3; eauto.
-      eauto.
+      apply copy_4 with (vs:=vs') (x:=x) (sp:=sp'0) in H4; eauto using wf_phases_copy;
+      clear H11.
+      apply signal_phase_register_2; auto.
+      apply H1.
+      apply copy_3 with (x:=x) (y:=get_task r) (vs:=vs') (sp':=sp'0); eauto.
+    - inversion H10; subst; clear H10. {
+        apply copy_4 with (vs:=vs') (x:=x) (sp:=sp) in H4; eauto using wf_phases_copy.
+        apply signal_phase_register_2; auto.
+      }
+      assert (x <> t). {
+        unfold not; intros; subst.
+        contradiction H2.
+        eauto using registered_def.
+      }
+      apply signal_phase_register_2; auto.
   Qed.
 
   Let WP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
@@ -1252,7 +1246,7 @@ Section Defs.
     SignalPhase x n ph ->
     GetPhase x n wp.
 
-  Let wp_signal:
+  Lemma wait_phase_signal_1:
     forall x y n ph,
     WaitPhase x n ph ->
     WaitPhase x n (Phaser.signal y ph).
@@ -1289,7 +1283,7 @@ Section Defs.
     eauto using wait_phase_def, Phaser.wait_2.
   Qed.
 
-  Let wp_wait_neq_drop:
+  Lemma wait_phase_drop_1:
     forall x y n ph,
     x <> y ->
     WaitPhase x n ph ->
@@ -1331,7 +1325,7 @@ Section Defs.
 
   Let wp_sound:
     forall vs wp ph e ph' wp',
-    WF_Phases vs wp ->
+    WF_Phases wp ->
     WP_Sound ph wp ->
     Phaser.Reduces ph e ph' ->
     UpdateWP vs wp e wp' ->
@@ -1342,7 +1336,10 @@ Section Defs.
     destruct e as  (x, []);
     inversion H1; simpl in *; subst;
     inversion H2; subst; clear H2 H1.
-    - eauto.
+    - inversion H5; subst; clear H5. {
+        eauto using wait_phase_signal_1, copy_4.
+      }
+      eauto using wait_phase_signal_1.
     - destruct (TID.eq_dec t x). {
         subst.
         apply inc_inv in H5.
@@ -1354,13 +1351,25 @@ Section Defs.
       eapply inc_3 in H5; eauto.
     - apply drop_inv in H3; auto.
       destruct H3 as (?, Hg).
-      eapply try_inc_3 in H5; eauto.
+      eauto using wait_phase_drop_1.
     - destruct (TID.eq_dec (get_task r) t). {
         subst.
-        apply copy_inv_eq with (n:=n) in H9; auto.
+        apply wait_phase_register_1; auto.
+        eauto using wf_phases_copy, copy_inv_eq, copy_4.
       }
-      eapply copy_3 in H9; eauto.
-    - eauto.
+      apply copy_4 with (vs:=vs) (x:=x) (sp:=wp'0) in H3; eauto using wf_phases_copy.
+      apply wait_phase_register_2; auto.
+      apply H0.
+      apply copy_3 with (x:=x) (y:=get_task r) (vs:=vs) (sp':=wp'0); eauto.
+    - inversion H9; subst; clear H9. {
+        apply copy_4 with (vs:=vs) (x:=x) (sp:=wp) in H3; eauto using wf_phases_copy.
+      }
+      assert (x <> t). {
+        unfold not; intros; subst.
+        contradiction H1.
+        eauto using registered_def.
+      }
+      apply wait_phase_register_2; auto.
   Qed.
 
   Let wait_phase_inv_signal:
@@ -1442,12 +1451,12 @@ Section Defs.
     intros.
     inversion H0; subst; clear H0.
     assert (ph = n) by eauto using get_phase_fun; subst.
-    eauto.
+    eauto using set_phase_to_get_phase.
   Qed.
 
   Let get_phases_set_phase_neq:
     forall x y n ps ps' n' vs,
-    WF_Phases vs ps ->
+    WF_Phases ps ->
     y <> x ->
     GetPhase x n ps ->
     SetPhase vs ps y n' ps' ->
@@ -1469,7 +1478,7 @@ Section Defs.
 
   Let get_phases_inc_neq:
     forall x y n ps ps' vs,
-    WF_Phases vs ps ->
+    WF_Phases ps ->
     y <> x ->
     GetPhase x n ps ->
     Inc vs ps y ps' ->
@@ -1518,10 +1527,10 @@ Section Defs.
   Qed.
 
   Let get_phase_drop_neq:
-    forall x y n ps,
+    forall x y n sp,
     y <> x ->
-    GetPhase x n ps ->
-    GetPhase x n (drop y ps).
+    GetPhase x n sp ->
+    GetPhase x n (drop y sp).
   Proof.
     intros.
     inversion H0; subst; clear H0.
@@ -1531,8 +1540,8 @@ Section Defs.
   Qed.
 
   Let wp_complete_reg_2:
-    forall vs wp n ph x y r,
-    WF_Phases vs wp ->
+    forall wp n ph x y r,
+    WF_Phases wp ->
     WP_Complete ph wp ->
     WaitPhase x n (register r y ph) ->
     ~ CanWait (get_mode r) ->
@@ -1553,12 +1562,12 @@ Section Defs.
 
   Let wp_complete_reg_3:
     forall vs wp ph t v r x wp',
-    WF_Phases vs wp ->
+    WF_Phases wp ->
     WP_Complete ph wp ->
     Map_TID.MapsTo t v ph ->
     RegisterPre r x ph ->
     CanWait (get_mode r) ->
-    Copy wp x (get_task r) wp' ->
+    Copy vs wp x (get_task r) wp' ->
     CanWait (mode v) ->
     GetPhase t (wait_phase v) wp'.
   Proof.
@@ -1576,12 +1585,12 @@ Section Defs.
 
   Let wp_complete_reg_1:
     forall vs wp x ph t n r wp',
-    WF_Phases vs wp ->
+    WF_Phases wp ->
     WP_Complete ph wp ->
     WaitPhase t n (register r x ph) ->
     RegisterPre r x ph ->
     CanWait (get_mode r) ->
-    Copy wp x (get_task r) wp' ->
+    Copy vs wp x (get_task r) wp' ->
     GetPhase t n wp'.
   Proof.
     intros.
@@ -1605,12 +1614,12 @@ Section Defs.
 
   Let sp_complete_reg_3:
     forall vs wp ph t v r x wp',
-    WF_Phases vs wp ->
+    WF_Phases wp ->
     SP_Complete ph wp ->
     Map_TID.MapsTo t v ph ->
     RegisterPre r x ph ->
     CanSignal (get_mode r) ->
-    Copy wp x (get_task r) wp' ->
+    Copy vs wp x (get_task r) wp' ->
     CanSignal (mode v) ->
     GetPhase t (signal_phase v) wp'.
   Proof.
@@ -1628,12 +1637,12 @@ Section Defs.
 
   Let sp_complete_reg_1:
     forall vs wp x ph t n r wp',
-    WF_Phases vs wp ->
+    WF_Phases wp ->
     SP_Complete ph wp ->
     SignalPhase t n (register r x ph) ->
     RegisterPre r x ph ->
     CanSignal (get_mode r) ->
-    Copy wp x (get_task r) wp' ->
+    Copy vs wp x (get_task r) wp' ->
     GetPhase t n wp'.
   Proof.
     intros.
@@ -1656,8 +1665,8 @@ Section Defs.
   Qed.
 
   Let sp_complete_reg_2:
-    forall vs wp n ph x y r,
-    WF_Phases vs wp ->
+    forall wp n ph x y r,
+    WF_Phases wp ->
     SP_Complete ph wp ->
     SignalPhase x n (register r y ph) ->
     ~ CanSignal (get_mode r) ->
@@ -1678,7 +1687,7 @@ Section Defs.
 
   Let wp_complete:
     forall vs wp ph e ph' wp',
-    WF_Phases vs wp ->
+    WF_Phases wp ->
     WP_Complete ph wp ->
     Phaser.Reduces ph e ph' ->
     UpdateWP vs wp e wp' ->
