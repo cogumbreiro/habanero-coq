@@ -1147,11 +1147,27 @@ Section Defs.
     }
     apply copy_3 with (vs:=vs) (x:=x) (y:=x) (sp':=sp'); auto.
   Qed.
+
+  Lemma copy_5:
+    forall vs x y n wp wp',
+    WF_Phases wp ->
+    GetPhase x n wp ->
+    Copy vs wp y y wp' ->
+    GetPhase x n wp'.
+  Proof.
+    intros.
+    destruct (TID.eq_dec x y). {
+      subst.
+      eauto using copy_1.
+    }
+    eapply copy_2; eauto.
+  Qed.
+
 End Defs.
 
-Section Props.
+Section Sound.
 
-  Let SP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
+  Definition SP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
     forall x n,
     GetPhase x n sp ->
     SignalPhase x n ph.
@@ -1236,16 +1252,6 @@ Section Props.
     GetPhase x n sp ->
     WaitPhase x n ph.
 
-  Let WP_Complete (ph:Phaser.phaser) (sp:phases) : Prop :=
-    forall x n,
-    WaitPhase x n ph ->
-    GetPhase x n sp.
-
-  Let SP_Complete (ph:Phaser.phaser) (wp:phases) : Prop :=
-    forall x n,
-    SignalPhase x n ph ->
-    GetPhase x n wp.
-
   Lemma wait_phase_signal_1:
     forall x y n ph,
     WaitPhase x n ph ->
@@ -1323,7 +1329,7 @@ Section Props.
     eauto using wait_phase_def, register_2.
   Qed.
 
-  Let wp_sound:
+  Lemma wp_sound:
     forall vs wp ph e ph' wp',
     WF_Phases wp ->
     WP_Sound ph wp ->
@@ -1371,8 +1377,12 @@ Section Props.
       }
       apply wait_phase_register_2; auto.
   Qed.
+End Sound.
 
-  Let wait_phase_inv_signal:
+
+Section WP_SP.
+
+  Lemma wait_phase_inv_signal:
     forall x wp ph y,
     WaitPhase x wp (Phaser.signal y ph) ->
     WaitPhase x wp ph.
@@ -1389,7 +1399,7 @@ Section Props.
     eauto using wait_phase_def.
   Qed.
 
-  Let signal_phase_inv_wait:
+  Lemma signal_phase_inv_wait:
     forall x sp ph y,
     SignalPhase x sp (Phaser.wait y ph) ->
     SignalPhase x sp ph.
@@ -1406,7 +1416,7 @@ Section Props.
     eauto using signal_phase_def.
   Qed.
 
-  Let wait_phase_inv_wait:
+  Lemma wait_phase_inv_wait:
     forall x wp ph y,
     WaitPhase x wp (Phaser.wait y ph) ->
     (y = x /\ exists wp', wp = S wp' /\ WaitPhase x wp' ph) \/ (y <> x /\ WaitPhase x wp ph).
@@ -1424,7 +1434,7 @@ Section Props.
     eauto using wait_phase_def.
   Qed.
 
-  Let signal_phase_inv_signal:
+  Lemma signal_phase_inv_signal:
     forall x sp ph y,
     SignalPhase x sp (Phaser.signal y ph) ->
     (y = x /\ exists sp', sp = S sp' /\ SignalPhase x sp' ph) \/ (y <> x /\ SignalPhase x sp ph).
@@ -1441,6 +1451,161 @@ Section Props.
     }
     eauto using signal_phase_def.
   Qed.
+
+  Lemma wait_phase_drop_eq:
+    forall x n y ph,
+    WaitPhase x n (Phaser.drop y ph) ->
+    y <> x /\ WaitPhase x n ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply drop_mapsto_inv in H0.
+    destruct H0.
+    split; auto.
+    apply wait_phase_def with (v:=v); auto.
+  Qed.
+
+  Lemma signal_phase_drop_1:
+    forall x n y ph,
+    SignalPhase x n (Phaser.drop y ph) ->
+    y <> x /\ SignalPhase x n ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply drop_mapsto_inv in H0.
+    destruct H0.
+    split; auto.
+    apply signal_phase_def with (v:=v); auto.
+  Qed.
+
+  Let wait_phase_drop_neq:
+    forall x n y ph,
+    y <> x ->
+    WaitPhase x n ph ->
+    WaitPhase x n (Phaser.drop y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    apply wait_phase_def with (v:=v); auto using drop_2.
+  Qed.
+
+  Lemma signal_phase_inv_register_1:
+    forall r x ph t n,
+    RegisterPre r x ph ->
+    CanSignal (get_mode r) ->
+    SignalPhase t n (register r x ph) ->
+    (t <> get_task r /\ SignalPhase t n ph) \/ (t = get_task r /\ SignalPhase x n ph).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    apply register_inv_mapsto in H2.
+    destruct H2 as [?|(?,(?,(?,?)))].
+    - left.
+      split.
+      + unfold not; intros; subst.
+        inversion H; subst.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      + eauto using signal_phase_def.
+    - right.
+      subst.
+      split; trivial.
+      rewrite set_mode_preserves_signal_phase.
+      rewrite mode_set_mode_rw in *.
+      inversion H; subst; clear H.
+      assert (x0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      eauto using signal_phase_def, can_signal_le.
+  Qed.
+
+  Lemma wait_phase_inv_register_1:
+    forall r x ph t n,
+    RegisterPre r x ph ->
+    CanWait (get_mode r) ->
+    WaitPhase t n (register r x ph) ->
+    (t <> get_task r /\ WaitPhase t n ph) \/ (t = get_task r /\ WaitPhase x n ph).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    apply register_inv_mapsto in H2.
+    destruct H2 as [?|(?,(?,(?,?)))].
+    - left.
+      split.
+      + unfold not; intros; subst.
+        inversion H; subst.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      + eauto using wait_phase_def.
+    - right.
+      subst.
+      split; trivial.
+      rewrite set_mode_preserves_wait_phase.
+      rewrite mode_set_mode_rw in *.
+      inversion H; subst; clear H.
+      assert (x0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      eauto using wait_phase_def, can_wait_le.
+  Qed.
+
+  Lemma signal_phase_inv_register_2:
+    forall x y n ph r,
+    ~ CanSignal (get_mode r) ->
+    RegisterPre r y ph ->
+    SignalPhase x n (register r y ph) ->
+    SignalPhase x n ph /\ x <> get_task r.
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    apply register_inv_mapsto in H2.
+    destruct H2 as [?|(?, (?,(?,?)))]. {
+      split.
+      - eauto using signal_phase_def.
+      - unfold not; intros; subst.
+        inversion H0; subst; clear H0.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    subst.
+    rewrite set_mode_preserves_signal_phase.
+    rewrite mode_set_mode_rw in *.
+    contradiction.
+  Qed.
+
+  Lemma wait_phase_inv_register_2:
+    forall x y n ph r,
+    ~ CanWait (get_mode r) ->
+    RegisterPre r y ph ->
+    WaitPhase x n (register r y ph) ->
+    WaitPhase x n ph /\ x <> get_task r.
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    apply register_inv_mapsto in H2.
+    destruct H2 as [?|(?, (?,(?,?)))]. {
+      split.
+      - eauto using wait_phase_def.
+      - unfold not; intros; subst.
+        inversion H0; subst; clear H0.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    subst.
+    rewrite set_mode_preserves_wait_phase.
+    rewrite mode_set_mode_rw in *.
+    contradiction.
+  Qed.
+
+End WP_SP.
+
+Section Complete.
+
+  Definition WP_Complete (ph:Phaser.phaser) (sp:phases) : Prop :=
+    forall x n,
+    WaitPhase x n ph ->
+    GetPhase x n sp.
+
+  Definition SP_Complete (ph:Phaser.phaser) (wp:phases) : Prop :=
+    forall x n,
+    SignalPhase x n ph ->
+    GetPhase x n wp.
 
   Let get_phases_inc:
     forall x n ps ps' vs,
@@ -1489,43 +1654,6 @@ Section Props.
     eapply get_phases_set_phase_neq; eauto.
   Qed.
 
-  Let wait_phase_drop_eq:
-    forall x n y ph,
-    WaitPhase x n (Phaser.drop y ph) ->
-    y <> x /\ WaitPhase x n ph.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply drop_mapsto_inv in H0.
-    destruct H0.
-    split; auto.
-    apply wait_phase_def with (v:=v); auto.
-  Qed.
-
-  Let signal_phase_drop_eq:
-    forall x n y ph,
-    SignalPhase x n (Phaser.drop y ph) ->
-    y <> x /\ SignalPhase x n ph.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply drop_mapsto_inv in H0.
-    destruct H0.
-    split; auto.
-    apply signal_phase_def with (v:=v); auto.
-  Qed.
-
-  Let wait_phase_drop_neq:
-    forall x n y ph,
-    y <> x ->
-    WaitPhase x n ph ->
-    WaitPhase x n (Phaser.drop y ph).
-  Proof.
-    intros.
-    inversion H0; subst; clear H0.
-    apply wait_phase_def with (v:=v); auto using drop_2.
-  Qed.
-
   Let get_phase_drop_neq:
     forall x y n sp,
     y <> x ->
@@ -1560,6 +1688,27 @@ Section Props.
       contradiction.
   Qed.
 
+  Let sp_complete_reg_1:
+    forall vs wp x ph t n r wp' wp'',
+    WF_Phases wp ->
+    WF_Phases wp' ->
+    SP_Complete ph wp ->
+    SignalPhase t n (register r x ph) ->
+    RegisterPre r x ph ->
+    CanSignal (get_mode r) ->
+    Copy vs wp x (get_task r) wp' ->
+    Copy vs wp' x x wp'' ->
+    GetPhase t n wp''.
+  Proof.
+    intros.
+    apply signal_phase_inv_register_1 in H2; auto.
+    destruct H2 as [(?,?)|(?,?)]. {
+      eapply copy_2 in H5; eauto using copy_5.
+    }
+    subst.
+    eapply copy_1 in H5; eauto using copy_5.
+  Qed.
+
   Let wp_complete_reg_3:
     forall vs wp ph t v r x wp',
     WF_Phases wp ->
@@ -1583,106 +1732,32 @@ Section Props.
     eapply copy_2; eauto.
   Qed.
 
-  Let wp_complete_reg_1:
-    forall vs wp x ph t n r wp',
-    WF_Phases wp ->
-    WP_Complete ph wp ->
-    WaitPhase t n (register r x ph) ->
-    RegisterPre r x ph ->
-    CanWait (get_mode r) ->
-    Copy vs wp x (get_task r) wp' ->
-    GetPhase t n wp'.
-  Proof.
-    intros.
-    destruct H1; subst.
-    apply register_inv_mapsto in H1.
-    destruct H1 as [?|(?, (v', (?,?)))]. {
-      eapply wp_complete_reg_3; eauto.
-    }
-    subst.
-    rewrite mode_set_mode_rw in *.
-    rewrite set_mode_preserves_wait_phase.
-    assert (Hw: WaitPhase x (wait_phase v') ph). {
-      apply wait_phase_def with (v:=v'); auto.
-      inversion H2.
-      assert (v'=v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-      apply can_wait_le with (y:=get_mode r); auto.
-    }
-    apply H0 in Hw.
-    apply copy_1 with (n:=wait_phase v') in H4; auto.
-  Qed.
-
   Let sp_complete_reg_3:
-    forall vs wp ph t v r x wp',
+    forall vs wp ph t v r x wp' wp'',
     WF_Phases wp ->
+    WF_Phases wp' ->
     SP_Complete ph wp ->
     Map_TID.MapsTo t v ph ->
     RegisterPre r x ph ->
     CanSignal (get_mode r) ->
     Copy vs wp x (get_task r) wp' ->
+    Copy vs wp' x x wp'' ->
     CanSignal (mode v) ->
-    GetPhase t (signal_phase v) wp'.
+    GetPhase t (signal_phase v) wp''.
   Proof.
     intros.
     assert (SignalPhase t (signal_phase v) ph) by (apply signal_phase_def with (v:=v); auto).
-    apply H0 in H6.
+    apply H1 in H8.
     destruct (TID.eq_dec t (get_task r)). {
       subst.
-      inversion H2.
-      contradiction H7.
+      inversion H3.
+      contradiction H9.
       eauto using Map_TID_Extra.mapsto_to_in.
     }
-    eapply copy_2; eauto.
-  Qed.
-
-  Let sp_complete_reg_1:
-    forall vs wp x ph t n r wp',
-    WF_Phases wp ->
-    SP_Complete ph wp ->
-    SignalPhase t n (register r x ph) ->
-    RegisterPre r x ph ->
-    CanSignal (get_mode r) ->
-    Copy vs wp x (get_task r) wp' ->
-    GetPhase t n wp'.
-  Proof.
-    intros.
-    destruct H1; subst.
-    apply register_inv_mapsto in H1.
-    destruct H1 as [?|(?, (v', (?,?)))]. {
-      eapply sp_complete_reg_3; eauto.
+    assert (GetPhase t (signal_phase v) wp'). {
+      eapply copy_2 in H5; eauto.
     }
-    subst.
-    rewrite mode_set_mode_rw in *.
-    rewrite set_mode_preserves_signal_phase.
-    assert (Hw: SignalPhase x (signal_phase v') ph). {
-      apply signal_phase_def with (v:=v'); auto.
-      inversion H2.
-      assert (v'=v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-      apply can_signal_le with (y:=get_mode r); auto.
-    }
-    apply H0 in Hw.
-    apply copy_1 with (n:=signal_phase v') in H4; auto.
-  Qed.
-
-  Let sp_complete_reg_2:
-    forall wp n ph x y r,
-    WF_Phases wp ->
-    SP_Complete ph wp ->
-    SignalPhase x n (register r y ph) ->
-    ~ CanSignal (get_mode r) ->
-    GetPhase x n wp.
-  Proof.
-    intros.
-      destruct H1; subst.
-      apply register_inv_mapsto in H1.
-      destruct H1 as [?|(?, (v', (?,?)))]. {
-        assert (SignalPhase x (signal_phase v) ph) by (apply signal_phase_def with (v:=v); auto).
-        auto.
-      }
-      subst.
-      rewrite mode_set_mode_rw in *.
-      rewrite set_mode_preserves_signal_phase.
-      contradiction.
+    eauto using copy_5.
   Qed.
 
   Let wp_complete:
@@ -1698,6 +1773,7 @@ Section Props.
     destruct e as (x,[]); inversion H1; simpl in *; subst;
     inversion H2; subst; clear H2 H1.
     - apply wait_phase_inv_signal in H3; auto.
+      inversion H5; subst; clear H5; eauto using copy_5.
     - apply wait_phase_inv_wait in H3.
       destruct H3 as [(?, (?, (?, ?)))|(?,?)]. {
         subst.
@@ -1708,15 +1784,26 @@ Section Props.
     - apply wait_phase_drop_eq in H3.
       destruct H3.
       apply get_phase_drop_neq; auto.
-      eapply try_inc_2 in H5; eauto.
-    - eapply wp_complete_reg_1; eauto.
-    - eapply wp_complete_reg_2; eauto.
+    - apply wait_phase_inv_register_1 in H3; auto.
+      destruct H3 as [(?,?)|(?,?)]. {
+        assert (Hx := H8).
+        apply copy_2 with (z:=t) (n:=n) in H8; auto.
+        eapply copy_5 in H10; eauto using wf_phases_copy.
+      }
+      subst.
+      assert (Hx := H8).
+      apply copy_1 with (n:=n) in H8; auto.
+      apply copy_5 with (x:=get_task r) (n:=n) in H10; eauto using wf_phases_copy.
+    - apply wait_phase_inv_register_2 in H3; auto.
+      destruct H3.
+      inversion H9; subst; clear H9; auto.
+      eapply copy_5 in H3; eauto.
   Qed.
 
   Let sp_complete:
     forall vs sp ph e ph' sp',
-    WF_Phases vs sp ->
-    WF_Phases (update_nodes vs e) sp ->
+    WF_Phases sp ->
+    WF_Phases sp' ->
     SP_Complete ph sp ->
     Phaser.Reduces ph e ph' ->
     UpdateSP (update_nodes vs e) sp e sp' ->
@@ -1732,12 +1819,26 @@ Section Props.
       }
       apply H1 in H3.
       apply get_phases_inc_neq with (y:=y) (ps':=sp') (vs:=y::vs) in H3; auto.
-    - apply signal_phase_inv_wait in H4; auto.
-    - apply signal_phase_drop_eq in H4.
+    - apply signal_phase_inv_wait in H4.
+      inversion H6; subst; clear H6; auto.
+      eapply copy_5 in H2; eauto.
+    - apply signal_phase_drop_1 in H4.
       destruct H4.
-      eapply try_inc_2 in H6; eauto.
-    - eapply sp_complete_reg_1; eauto.
-    - eapply sp_complete_reg_2; eauto.
+      auto.
+    - apply signal_phase_inv_register_1 in H4; auto.
+      destruct H4 as [(?,?)|(?,?)]. {
+        assert (Hx := H9).
+        apply copy_2 with (z:=x) (n:=n) in Hx; auto.
+        eapply copy_5 in H11; eauto using wf_phases_copy.
+      }
+      subst.
+      assert (Hx := H9).
+      apply copy_1 with (n:=n) in Hx; auto.
+      apply copy_5 with (x:=get_task r) (n:=n) in H11; eauto using wf_phases_copy.
+    - apply signal_phase_inv_register_2 in H4; auto.
+      destruct H4.
+      inversion H10; subst; clear H10; auto.
+      eapply copy_5 in H4; eauto.
   Qed.
 
   Let wf_phases_signal:
