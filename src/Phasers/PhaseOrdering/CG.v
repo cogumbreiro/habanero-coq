@@ -1105,6 +1105,27 @@ Section Defs.
   Qed.
 *)
 
+  Lemma wf_phases_set_phase:
+    forall sp vs x ph sp',
+    WF_Phases sp ->
+    SetPhase vs sp x ph sp' ->
+    WF_Phases sp'.
+  Proof.
+    intros.
+    unfold WF_Phases.
+    inversion H0; subst; clear H0.
+    simpl in *.
+    intros.
+    rewrite Map_TID_Facts.add_mapsto_iff in *.
+    rewrite MN_Facts.add_in_iff in *.
+    destruct H0 as [(?,?)|(?,?)]. {
+      subst.
+      auto.
+    }
+    apply H in H3.
+    auto.
+  Qed.
+
   Lemma wf_phases_copy:
     forall vs x y sp sp',
     WF_Phases sp ->
@@ -1113,18 +1134,60 @@ Section Defs.
   Proof.
     intros.
     inversion H0; subst; clear H0.
-    unfold WF_Phases.
-    inversion H2; subst; clear H2.
-    simpl in *.
+    eauto using wf_phases_set_phase.
+  Qed.
+
+  Lemma wf_phases_try_copy:
+    forall vs x y sp sp',
+    WF_Phases sp ->
+    TryCopy vs sp x y sp' ->
+    WF_Phases sp'.
+  Proof.
     intros.
-    rewrite Map_TID_Facts.add_mapsto_iff in *.
-    rewrite MN_Facts.add_in_iff in *.
-    destruct H2 as [(?,?)|(?,?)]. {
-      subst.
-      auto.
-    }
-    apply H in H4.
-    auto.
+    inversion H0; subst; eauto using wf_phases_copy.
+  Qed.
+
+  Lemma wf_phases_inc:
+    forall vs x sp sp',
+    WF_Phases sp ->
+    Inc vs sp x sp' ->
+    WF_Phases sp'.
+  Proof.
+    intros.
+    inversion H0; subst; eauto using wf_phases_set_phase.
+  Qed.
+
+  Lemma wf_phases_drop:
+    forall x wp,
+    WF_Phases wp ->
+    WF_Phases (drop x wp).
+  Proof.
+    unfold WF_Phases; destruct wp; intros; simpl in *.
+    rewrite Map_TID_Facts.remove_mapsto_iff in *.
+    destruct H0.
+    eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
+  Lemma wf_phases_sp:
+    forall vs sp e sp',
+    WF_Phases sp ->
+    UpdateSP vs sp e sp' ->
+    WF_Phases sp'.
+  Proof.
+    intros.
+    inversion H0; simpl in *; subst; clear H0;
+    eauto using wf_phases_copy, wf_phases_try_copy, wf_phases_inc, wf_phases_drop.
+  Qed.
+
+  Lemma wf_phases_wp:
+    forall vs sp e sp',
+    WF_Phases sp ->
+    UpdateWP vs sp e sp' ->
+    WF_Phases sp'.
+  Proof.
+    intros.
+    inversion H0; simpl in *; subst; clear H0;
+    eauto using wf_phases_copy, wf_phases_try_copy, wf_phases_inc, wf_phases_drop.
   Qed.
 
   Lemma copy_4:
@@ -1329,7 +1392,7 @@ Section Sound.
     eauto using wait_phase_def, register_2.
   Qed.
 
-  Lemma wp_sound:
+  Let wp_sound:
     forall vs wp ph e ph' wp',
     WF_Phases wp ->
     WP_Sound ph wp ->
@@ -1376,6 +1439,46 @@ Section Sound.
         eauto using registered_def.
       }
       apply wait_phase_register_2; auto.
+  Qed.
+
+  Inductive Sound ph b : Prop :=
+  | sound_def:
+    WF_Phases (get_sp b) ->
+    WF_Phases (get_wp b) ->
+    SP_Sound ph (get_sp b) ->
+    WP_Sound ph (get_wp b) ->
+    Sound ph b.
+(*
+  Let wp_phases_up:
+    forall vs ps e,
+    WF_Phases vs ps ->
+    WF_Phases (update_nodes vs e) ps.
+  Proof.
+    unfold WFPhases, NodesDefined; intros.
+    destruct e as (y, []); simpl; 
+    apply H in H0; assumption.
+  Qed.
+*)
+  Lemma soundness:
+    forall b ph e ph' b',
+    Sound ph b ->
+    Phaser.Reduces ph e ph' ->
+    UpdateBuilder b e b' ->
+    Sound ph' b'.
+  Proof.
+    intros.
+    inversion H;  subst; clear H.
+    inversion H1; subst; clear H1.
+    assert (Hsp := H2).
+    assert (Hwp := H3).
+    eapply wf_phases_wp in H3; simpl; eauto.
+    apply sound_def; simpl; auto.
+    - eapply wf_phases_sp in H; eauto.
+    - remember (update_nodes _ _) as vs.
+      apply sp_sound with (vs':=vs) (sp:=get_sp b) (ph:=ph) (e:=e);
+      eauto using wf_phases_sp.
+    - remember (update_nodes _ _) as vs.
+      apply wp_sound with (vs:=vs) (wp:=get_wp b) (ph:=ph) (e:=e); auto.
   Qed.
 End Sound.
 
@@ -1840,10 +1943,10 @@ Section Complete.
       inversion H10; subst; clear H10; auto.
       eapply copy_5 in H4; eauto.
   Qed.
-
+(*
   Let wf_phases_signal:
     forall vs sp t x n sp',
-    WF_Phases vs sp ->
+    WF_Phases sp ->
     Map_TID.MapsTo t n (fst sp') ->
     Inc vs sp x sp' ->
     In n sp'.
@@ -1948,83 +2051,18 @@ Section Complete.
     apply H in mt.
     assumption.
   Qed.
+*)
 
-
-  Let wf_phases_wp:
-    forall vs wp ph e ph' wp',
-    WF_Phases vs wp ->
-    Phaser.Reduces ph e ph' ->
-    UpdateWP (update_nodes vs e) wp e wp' ->
-    WF_Phases (update_nodes vs e) wp'.
-  Proof.
-    intros; unfold WFPhases, NodesDefined; intros.
-    rename x into t.
-    destruct e as (?,[]); inversion H0; simpl in *; subst;
-    inversion H1; subst; clear H0 H1; eauto using task_of_cons.
-  Qed.
-
-  Let wf_phases_sp:
-    forall vs sp ph e ph' sp',
-    WF_Phases vs sp ->
-    Phaser.Reduces ph e ph' ->
-    UpdateSP vs sp e sp' ->
-    WF_Phases (update_nodes vs e) sp'.
-  Proof.
-    intros; unfold WFPhases, NodesDefined; intros.
-    rename x into t.
-    destruct e as (?,[]); inversion H0; simpl in *; subst;
-    inversion H1; subst; clear H0 H1; eauto.
-  Qed.
-
-  Inductive Sound ph b : Prop :=
-  | sound_def:
-    WF_Phases (get_nodes b) (get_sp b) ->
-    WF_Phases (get_nodes b) (get_wp b) ->
-    SP_Sound ph (get_sp b) ->
-    WP_Sound ph (get_wp b) ->
-    Sound ph b.
-
-  Let wp_phases_up:
-    forall vs ps e,
-    WF_Phases vs ps ->
-    WF_Phases (update_nodes vs e) ps.
-  Proof.
-    unfold WFPhases, NodesDefined; intros.
-    destruct e as (y, []); simpl; 
-    apply H in H0; assumption.
-  Qed.
-
-  Let soundness:
-    forall b ph e ph' b',
-    Sound ph b ->
-    Phaser.Reduces ph e ph' ->
-    UpdateBuilder b e b' ->
-    Sound ph' b'.
-  Proof.
-    intros.
-    inversion H;  subst; clear H.
-    inversion H1; subst; clear H1.
-    assert (Hsp := H2).
-    assert (Hwp := H3).
-    eapply wf_phases_wp in H3; simpl; eauto.
-    apply sound_def; simpl; auto.
-    - eapply wf_phases_sp in H; eauto.
-    - remember (update_nodes _ _) as vs.
-      apply sp_sound with (vs:=get_nodes b) (vs':=vs) (sp:=get_sp b) (ph:=ph) (e:=e);
-      auto.
-    - remember (update_nodes _ _) as vs.
-      apply wp_sound with (vs:=vs) (wp:=get_wp b) (ph:=ph) (e:=e); auto.
-  Qed.
 
   Inductive Complete ph b : Prop :=
   | complete_def:
-    WF_Phases (get_nodes b) (get_sp b) ->
-    WF_Phases (get_nodes b) (get_wp b) ->
+    WF_Phases (get_sp b) ->
+    WF_Phases (get_wp b) ->
     SP_Complete ph (get_sp b) ->
     WP_Complete ph (get_wp b) ->
     Complete ph b.
 
-  Let completeness:
+  Lemma completeness:
     forall b ph e ph' b',
     Complete ph b ->
     Phaser.Reduces ph e ph' ->
@@ -2039,18 +2077,23 @@ Section Complete.
     eapply wf_phases_wp in H3; simpl; eauto.
     apply complete_def; simpl; auto.
     - eapply wf_phases_sp in H; eauto.
-    - apply sp_complete with (vs:=get_nodes b) (sp:=get_sp b) (ph:=ph) (e:=e); auto.
+    - apply sp_complete with (vs:=get_nodes b) (sp:=get_sp b) (ph:=ph) (e:=e);
+      eauto using wf_phases_sp.
     - apply wp_complete with (vs:=vs') (wp:=get_wp b) (ph:=ph) (e:=e); subst; auto.
   Qed.
 
+End Complete.
+
+Section Correctness.
   Let NodesSpec b := forall n, MN.In n (node_to_op b) -> Node n (get_nodes b).
 
   Structure WF ph b := wf_def {
     wf_sound: Sound ph b;
-    wf_complete: Complete ph b;
-    wf_nodes: NodesSpec b
+    wf_complete: Complete ph b
+    (*;
+    wf_nodes: NodesSpec b*)
   }.
-
+(*
   Let wf_nodes_2:
     forall n b e m,
     NodesSpec b ->
@@ -2090,7 +2133,7 @@ Section Complete.
     replace vs' with (update_nodes (get_nodes b) e) in *; trivial; clear vs'.
     eapply wf_nodes_2; eauto.
   Qed.
-
+*)
   Theorem correctness:
     forall b ph e ph' b',
     WF ph b ->
@@ -2100,7 +2143,7 @@ Section Complete.
   Proof.
     intros.
     destruct H.
-    eapply wf_def; eauto.
+    eapply wf_def; eauto using soundness, completeness.
   Qed.
 
   Let wf_sp_1:
