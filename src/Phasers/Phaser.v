@@ -208,17 +208,12 @@ Section Defs.
    *)
 
   Inductive Sync : phaser -> tid -> Prop :=
-    | sync_so:
-      forall t v ph,
-      MapsTo t v ph ->
-      mode v = SIGNAL_ONLY ->
-      Sync ph t
-    | sync_wait:
-      forall ph t v,
-      MapsTo t v ph ->
-      CanWait (mode v) ->
-      Phase ph (S (wait_phase v)) ->
-      Sync ph t.
+  | sync_def:
+    forall ph t v,
+    MapsTo t v ph ->
+    CanWait (mode v) ->
+    Phase ph (S (wait_phase v)) ->
+    Sync ph t.
 
   Definition sync x ph:
     { Sync ph x } + { ~ Sync ph x }.
@@ -230,16 +225,16 @@ Section Defs.
       rewrite <- Map_TID_Facts.find_mapsto_iff in *.
       destruct (can_wait_so (mode v)). {
         destruct (phase ph (S (wait_phase v))). {
-          eauto using sync_wait.
+          eauto using sync_def.
         }
         right; unfold not; intros N; inversion N; subst; clear N;
-        assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst. {
-          rewrite H0 in *.
-          inversion c.
-        }
+        assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
         contradiction.
       }
-      eauto using sync_so.
+      right; unfold not; intros N; inversion N; subst; clear N;
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      rewrite e in *.
+      inversion H0.
     }
     right; unfold not; intros N.
     inversion N; subst; clear N;

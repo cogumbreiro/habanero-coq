@@ -162,17 +162,16 @@ Import Phasermap.
 Variable WF : WellFormed pm.
 
 Lemma smallest_to_sync:
-  forall t p ph,
+  forall t p ph v,
   Smallest t tids ->
   Map_PHID.MapsTo p ph pm ->
-  Map_TID.In t ph ->
-  Sync ph t.
+  Map_TID.MapsTo t v ph ->
+  Sync ph t \/ mode v = SIGNAL_ONLY.
 Proof.
   intros.
-  apply Map_TID_Extra.in_to_mapsto in H1.
-  destruct H1 as (v, mt).
+  rename H1 into mt.
   destruct (can_wait_so(mode v)).
-  - apply sync_wait with (v:=v); auto.
+  - left; apply sync_def with (v:=v); auto.
     apply phase_def.
     intros t' v' Hmt'; intros.
     (* show that: n <= WP(v') *)
@@ -194,7 +193,7 @@ Proof.
     + apply so_to_not_can_wait in H3; contradiction.
     + intros.
       intuition. 
-  - eauto using sync_so.
+  - auto.
 Qed.
 
 Theorem has_unblocked:
@@ -230,7 +229,7 @@ Proof.
   }
   destruct (can_wait_so (mode v)). {
     apply try_wait_pre_can_wait.
-    apply wait_pre_def with (v:=v); eauto using smallest_to_sync.
+    apply wait_pre_def with (v:=v); auto. {
     inversion c;
     symmetry in H2.
     - apply Taskview.wait_pre_sw; auto.
@@ -242,6 +241,11 @@ Proof.
       }
       contradiction.
     - apply Taskview.wait_pre_wo; auto.
+    }
+    eapply smallest_to_sync in mt; eauto.
+    destruct mt; auto.
+    rewrite H1 in *.
+    inversion c.
   }
   eauto using try_wait_pre_so.
 Qed.

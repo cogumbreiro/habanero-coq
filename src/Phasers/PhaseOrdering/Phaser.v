@@ -218,21 +218,14 @@ Section Facts.
             inversion H7; subst; clear H7.
             assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
             inversion H8; subst; clear H8.
-            {
-              assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun.
-              subst.
-              auto using tv_nhb_so.
+            assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+            destruct (Regmode.can_signal_wo (mode v1)). {
+              apply tv_nhb_ge.
+              assert (signal_phase v1 >= S (wait_phase v)) by (inversion H11; eauto).
+              rewrite wait_wait_phase.
+              intuition.
             }
-            {
-              assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-              destruct (Regmode.can_signal_wo (mode v1)). {
-                apply tv_nhb_ge.
-                assert (signal_phase v1 >= S (wait_phase v)) by (inversion H11; eauto).
-                rewrite wait_wait_phase.
-                intuition.
-              }
-              auto using tv_nhb_wo.
-            }
+            auto using tv_nhb_wo.
           - apply tv_nhb_so.
             rewrite eval_preserves_mode.
             assumption.
@@ -717,14 +710,10 @@ Section Facts.
       assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H6.
       assert (Taskview.Facilitates v1 v) by eauto using well_ordered_to_facilitates.
       inversion H3; subst.
-      + assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
-        apply tv_nhb_so.
-        rewrite wait_preserves_mode.
-        assumption.
-      + assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
-        inversion H7.
-        assert (Hx := H5 _ _ H0); clear H5 H7.
-        apply wait_preserves_rhs; auto.
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst; clear H5.
+      inversion H7.
+      assert (Hx := H5 _ _ H0); clear H5 H7.
+      apply wait_preserves_rhs; auto.
     - eauto using well_ordered_to_facilitates.
   Qed.
 
