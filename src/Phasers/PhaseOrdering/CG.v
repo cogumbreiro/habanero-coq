@@ -12,6 +12,410 @@ Require Import Vars.
 Require Import Node.
 Require Import Phasers.Phaser.
 
+Section WP_SP.
+
+  Inductive WaitPhase x n ph : Prop :=
+  | wait_phase_def:
+    forall v,
+    Map_TID.MapsTo x v ph ->
+    CanWait (Taskview.mode v) ->
+    Taskview.wait_phase v = n ->
+    WaitPhase x n ph.
+
+  Inductive SignalPhase x n ph : Prop :=
+  | signal_phase_def:
+    forall v,
+    Map_TID.MapsTo x v ph ->
+    CanSignal (Taskview.mode v) ->
+    Taskview.signal_phase v = n ->
+    SignalPhase x n ph.
+
+(*
+  Definition wp x ph :=
+  match Map_TID.find x ph with
+  | Some v => if can_wait (mode v) then Some (wait_phase v) else None
+  | _ => None
+  end.
+
+  Lemma wp_some:
+    forall x ph n,
+    wp x ph = Some n ->
+    WaitPhase x n ph.
+  Proof.
+    unfold wp; intros.
+    destruct (Map_TID_Extra.find_rw x ph) as [(R,?)|(?,(R,?))];
+    rewrite R in *. {
+      inversion H.
+    }
+    rename x0 into v.
+    destruct (can_wait (mode v)). {
+      inversion H; subst; clear H.
+      eauto using wait_phase_def.
+    }
+    inversion H.
+  Qed.
+
+  Lemma wp_prop:
+    forall x ph n,
+    WaitPhase x n ph ->
+    wp x ph = Some n.
+  Proof.
+    unfold wp; intros.
+    destruct (Map_TID_Extra.find_rw x ph) as [(R,?)|(?,(R,?))];
+    rewrite R in *. {
+      inversion H.
+      contradiction H0.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    rename x0 into v.
+    destruct (can_wait (mode v)). {
+      inversion H.
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      trivial.
+    }
+    inversion H.
+    assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+    contradiction.
+  Qed.
+
+  Definition sp x ph :=
+  match Map_TID.find x ph with
+  | Some v => if can_signal (mode v) then Some (signal_phase v) else None
+  | _ => None
+  end.
+
+  Inductive Waiter x ph : Prop :=
+  | waiter_def:
+    forall n,
+    WaitPhase x n ph ->
+    Waiter x ph.
+
+  Inductive Signaler x ph : Prop :=
+  | signaler_def:
+    forall n,
+    SignalPhase x n ph ->
+    Signaler x ph.
+ *)
+
+  Lemma wait_phase_inv_signal:
+    forall x wp ph y,
+    WaitPhase x wp (Phaser.signal y ph) ->
+    WaitPhase x wp ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply signal_mapsto_inv in H0.
+    destruct H0 as [(?,(v',(Heq,mt)))|(?,mt)]. {
+      subst.
+      rewrite signal_preserves_mode in *.
+      rewrite signal_preserves_wait_phase.
+      eauto using wait_phase_def.
+    }
+    eauto using wait_phase_def.
+  Qed.
+
+  Lemma signal_phase_inv_wait:
+    forall x sp ph y,
+    SignalPhase x sp (Phaser.wait y ph) ->
+    SignalPhase x sp ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply wait_mapsto_inv in H0.
+    destruct H0 as [(?,(v',(Heq,mt)))|(?,mt)]. {
+      subst.
+      rewrite wait_preserves_mode in *.
+      rewrite wait_preserves_signal_phase.
+      eauto using signal_phase_def.
+    }
+    eauto using signal_phase_def.
+  Qed.
+
+  Lemma wait_phase_inv_wait:
+    forall x wp ph y,
+    WaitPhase x wp (Phaser.wait y ph) ->
+    (y = x /\ exists wp', wp = S wp' /\ WaitPhase x wp' ph) \/ (y <> x /\ WaitPhase x wp ph).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply wait_mapsto_inv in H0.
+    destruct H0 as [(?, (v', (?, ?)))|(?,?)]. {
+      subst; left; split; auto.
+      rewrite wait_preserves_mode in *.
+      exists (wait_phase v').
+      split; auto.
+      apply wait_phase_def with (v:=v'); auto.
+    }
+    eauto using wait_phase_def.
+  Qed.
+
+  Lemma signal_phase_inv_signal:
+    forall x sp ph y,
+    SignalPhase x sp (Phaser.signal y ph) ->
+    (y = x /\ exists sp', sp = S sp' /\ SignalPhase x sp' ph) \/ (y <> x /\ SignalPhase x sp ph).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply signal_mapsto_inv in H0.
+    destruct H0 as [(?, (v', (?, ?)))|(?,?)]. {
+      subst; left; split; auto.
+      rewrite signal_preserves_mode in *.
+      exists (signal_phase v').
+      split; auto.
+      apply signal_phase_def with (v:=v'); auto.
+    }
+    eauto using signal_phase_def.
+  Qed.
+
+  Lemma wait_phase_drop_eq:
+    forall x n y ph,
+    WaitPhase x n (Phaser.drop y ph) ->
+    y <> x /\ WaitPhase x n ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply drop_mapsto_inv in H0.
+    destruct H0.
+    split; auto.
+    apply wait_phase_def with (v:=v); auto.
+  Qed.
+
+  Lemma signal_phase_drop_1:
+    forall x n y ph,
+    SignalPhase x n (Phaser.drop y ph) ->
+    y <> x /\ SignalPhase x n ph.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply drop_mapsto_inv in H0.
+    destruct H0.
+    split; auto.
+    apply signal_phase_def with (v:=v); auto.
+  Qed.
+
+  Let wait_phase_drop_neq:
+    forall x n y ph,
+    y <> x ->
+    WaitPhase x n ph ->
+    WaitPhase x n (Phaser.drop y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    apply wait_phase_def with (v:=v); auto using drop_2.
+  Qed.
+
+  Lemma signal_phase_inv_register_1:
+    forall r x ph t n,
+    RegisterPre r x ph ->
+    CanSignal (get_mode r) ->
+    SignalPhase t n (register r x ph) ->
+    (t <> get_task r /\ SignalPhase t n ph) \/ (t = get_task r /\ SignalPhase x n ph).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    apply register_inv_mapsto in H2.
+    destruct H2 as [?|(?,(?,(?,?)))].
+    - left.
+      split.
+      + unfold not; intros; subst.
+        inversion H; subst.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      + eauto using signal_phase_def.
+    - right.
+      subst.
+      split; trivial.
+      rewrite set_mode_preserves_signal_phase.
+      rewrite mode_set_mode_rw in *.
+      inversion H; subst; clear H.
+      assert (x0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      eauto using signal_phase_def, can_signal_le.
+  Qed.
+
+  Lemma wait_phase_inv_register_1:
+    forall r x ph t n,
+    RegisterPre r x ph ->
+    CanWait (get_mode r) ->
+    WaitPhase t n (register r x ph) ->
+    (t <> get_task r /\ WaitPhase t n ph) \/ (t = get_task r /\ WaitPhase x n ph).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    apply register_inv_mapsto in H2.
+    destruct H2 as [?|(?,(?,(?,?)))].
+    - left.
+      split.
+      + unfold not; intros; subst.
+        inversion H; subst.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      + eauto using wait_phase_def.
+    - right.
+      subst.
+      split; trivial.
+      rewrite set_mode_preserves_wait_phase.
+      rewrite mode_set_mode_rw in *.
+      inversion H; subst; clear H.
+      assert (x0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      eauto using wait_phase_def, can_wait_le.
+  Qed.
+
+  Lemma signal_phase_inv_register_2:
+    forall x y n ph r,
+    ~ CanSignal (get_mode r) ->
+    RegisterPre r y ph ->
+    SignalPhase x n (register r y ph) ->
+    SignalPhase x n ph /\ x <> get_task r.
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    apply register_inv_mapsto in H2.
+    destruct H2 as [?|(?, (?,(?,?)))]. {
+      split.
+      - eauto using signal_phase_def.
+      - unfold not; intros; subst.
+        inversion H0; subst; clear H0.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    subst.
+    rewrite set_mode_preserves_signal_phase.
+    rewrite mode_set_mode_rw in *.
+    contradiction.
+  Qed.
+
+  Lemma wait_phase_inv_register_2:
+    forall x y n ph r,
+    ~ CanWait (get_mode r) ->
+    RegisterPre r y ph ->
+    WaitPhase x n (register r y ph) ->
+    WaitPhase x n ph /\ x <> get_task r.
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    apply register_inv_mapsto in H2.
+    destruct H2 as [?|(?, (?,(?,?)))]. {
+      split.
+      - eauto using wait_phase_def.
+      - unfold not; intros; subst.
+        inversion H0; subst; clear H0.
+        contradiction H2.
+        eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    subst.
+    rewrite set_mode_preserves_wait_phase.
+    rewrite mode_set_mode_rw in *.
+    contradiction.
+  Qed.
+
+
+  Lemma signal_phase_signal_2:
+    forall x y ph n,
+    x <> y ->
+    SignalPhase x n ph ->
+    SignalPhase x n (Phaser.signal y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using signal_phase_def, signal_2.
+  Qed.
+
+  Lemma signal_phase_drop_2:
+    forall x y ph n,
+    x <> y ->
+    SignalPhase x n ph ->
+    SignalPhase x n (Phaser.drop y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using signal_phase_def, drop_2.
+  Qed.
+
+  Lemma signal_phase_wait_2:
+    forall x n ph y,
+    SignalPhase x n ph ->
+    SignalPhase x n (Phaser.wait y ph).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    destruct (TID.eq_dec x y). {
+      subst.
+      eauto using signal_phase_def, wait_mapsto_spec.
+    }
+    eauto using wait_2, signal_phase_def.
+  Qed.
+
+  Lemma signal_phase_register_1:
+    forall r x ph n,
+    RegisterPre r x ph ->
+    CanSignal (get_mode r) ->
+    SignalPhase x n ph ->
+    SignalPhase (get_task r) n (register r x ph).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    eauto using signal_phase_def, register_spec.
+  Qed.
+
+  Lemma wait_phase_register_1:
+    forall r x ph n,
+    RegisterPre r x ph ->
+    CanWait (get_mode r) ->
+    WaitPhase x n ph ->
+    WaitPhase (get_task r) n (register r x ph).
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    eauto using wait_phase_def, register_spec.
+  Qed.
+
+  Lemma signal_phase_register_2:
+    forall x y n ph r,
+    RegisterPre r y ph ->
+    SignalPhase x n ph ->
+    SignalPhase x n (register r y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    inversion H; subst; clear H.
+    destruct (TID.eq_dec (get_task r) x). {
+      subst.
+      contradiction H0.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    eauto using signal_phase_def, register_2.
+  Qed.
+
+  Lemma wait_phase_register_2:
+    forall x y n ph r,
+    RegisterPre r y ph ->
+    WaitPhase x n ph ->
+    WaitPhase x n (register r y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    inversion H; subst; clear H.
+    destruct (TID.eq_dec (get_task r) x). {
+      subst.
+      contradiction H0.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    eauto using wait_phase_def, register_2.
+  Qed.
+
+  Let wait_phase_drop:
+    forall x n ph y,
+    x <> y ->
+    WaitPhase x n ph ->
+    WaitPhase x n (Phaser.drop y ph).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using drop_2, wait_phase_def.
+  Qed.
+
+End WP_SP.
+
 Section Defs.
 
   Notation edge := (node * node) %type.
@@ -24,7 +428,7 @@ Section Defs.
   Inductive IsPar : op -> tid -> Prop :=
   | is_par_def: forall r, IsPar (REGISTER r) (get_task r).
 
-  Let is_par o :=
+  Definition is_par o :=
   match o with
   | REGISTER r => Some (get_task r)
   | _ => None
@@ -626,22 +1030,6 @@ Section Defs.
   | _ => None
   end.
 
-  Inductive WaitPhase x n ph : Prop :=
-  | wait_phase_def:
-    forall v,
-    Map_TID.MapsTo x v ph ->
-    CanWait (Taskview.mode v) ->
-    Taskview.wait_phase v = n ->
-    WaitPhase x n ph.
-
-  Inductive SignalPhase x n ph : Prop :=
-  | signal_phase_def:
-    forall v,
-    Map_TID.MapsTo x v ph ->
-    CanSignal (Taskview.mode v) ->
-    Taskview.signal_phase v = n ->
-    SignalPhase x n ph.
-
   Lemma set_phase_to_get_phase:
     forall vs sp t ph sp',
     SetPhase vs sp t ph sp' ->
@@ -794,53 +1182,6 @@ Section Defs.
     auto.
   Qed.
 
-  Lemma signal_phase_signal_2:
-    forall x y ph n,
-    x <> y ->
-    SignalPhase x n ph ->
-    SignalPhase x n (Phaser.signal y ph).
-  Proof.
-    intros.
-    inversion H0; subst; clear H0.
-    eauto using signal_phase_def, signal_2.
-  Qed.
-
-  Lemma signal_phase_drop_2:
-    forall x y ph n,
-    x <> y ->
-    SignalPhase x n ph ->
-    SignalPhase x n (Phaser.drop y ph).
-  Proof.
-    intros.
-    inversion H0; subst; clear H0.
-    eauto using signal_phase_def, drop_2.
-  Qed.
-
-  Lemma signal_phase_wait_2:
-    forall x n ph y,
-    SignalPhase x n ph ->
-    SignalPhase x n (Phaser.wait y ph).
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    destruct (TID.eq_dec x y). {
-      subst.
-      eauto using signal_phase_def, wait_mapsto_spec.
-    }
-    eauto using wait_2, signal_phase_def.
-  Qed.
-
-  Let wait_phase_drop:
-    forall x n ph y,
-    x <> y ->
-    WaitPhase x n ph ->
-    WaitPhase x n (Phaser.drop y ph).
-  Proof.
-    intros.
-    inversion H0; subst; clear H0.
-    eauto using drop_2, wait_phase_def.
-  Qed.
-
   Lemma drop_inv:
     forall sp x y n,
     GetPhase y n (drop x sp) ->
@@ -938,64 +1279,6 @@ Section Defs.
     apply set_phase_to_get_phase in H2.
     assert (ph=n) by eauto using get_phase_fun;subst.
     assumption.
-  Qed.
-
-  Lemma signal_phase_register_1:
-    forall r x ph n,
-    RegisterPre r x ph ->
-    CanSignal (get_mode r) ->
-    SignalPhase x n ph ->
-    SignalPhase (get_task r) n (register r x ph).
-  Proof.
-    intros.
-    inversion H1; subst; clear H1.
-    eauto using signal_phase_def, register_spec.
-  Qed.
-
-  Lemma wait_phase_register_1:
-    forall r x ph n,
-    RegisterPre r x ph ->
-    CanWait (get_mode r) ->
-    WaitPhase x n ph ->
-    WaitPhase (get_task r) n (register r x ph).
-  Proof.
-    intros.
-    inversion H1; subst; clear H1.
-    eauto using wait_phase_def, register_spec.
-  Qed.
-
-  Lemma signal_phase_register_2:
-    forall x y n ph r,
-    RegisterPre r y ph ->
-    SignalPhase x n ph ->
-    SignalPhase x n (register r y ph).
-  Proof.
-    intros.
-    inversion H0; subst; clear H0.
-    inversion H; subst; clear H.
-    destruct (TID.eq_dec (get_task r) x). {
-      subst.
-      contradiction H0.
-      eauto using Map_TID_Extra.mapsto_to_in.
-    }
-    eauto using signal_phase_def, register_2.
-  Qed.
-
-  Lemma wait_phase_register_2:
-    forall x y n ph r,
-    RegisterPre r y ph ->
-    WaitPhase x n ph ->
-    WaitPhase x n (register r y ph).
-  Proof.
-    intros.
-    inversion H0; subst; clear H0.
-    inversion H; subst; clear H.
-    destruct (TID.eq_dec (get_task r) x). {
-      subst.
-      contradiction H0.
-      eauto using Map_TID_Extra.mapsto_to_in.
-    }
-    eauto using wait_phase_def, register_2.
   Qed.
 
   Let get_phase_inv_eq:
@@ -1241,7 +1524,7 @@ End Defs.
 
 Section Sound.
 
-  Definition SP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
+  Let SP_Sound (ph:Phaser.phaser) (sp:phases) : Prop :=
     forall x n,
     GetPhase x n sp ->
     SignalPhase x n ph.
@@ -1484,221 +1767,6 @@ Section Sound.
 End Sound.
 
 
-Section WP_SP.
-
-  Lemma wait_phase_inv_signal:
-    forall x wp ph y,
-    WaitPhase x wp (Phaser.signal y ph) ->
-    WaitPhase x wp ph.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply signal_mapsto_inv in H0.
-    destruct H0 as [(?,(v',(Heq,mt)))|(?,mt)]. {
-      subst.
-      rewrite signal_preserves_mode in *.
-      rewrite signal_preserves_wait_phase.
-      eauto using wait_phase_def.
-    }
-    eauto using wait_phase_def.
-  Qed.
-
-  Lemma signal_phase_inv_wait:
-    forall x sp ph y,
-    SignalPhase x sp (Phaser.wait y ph) ->
-    SignalPhase x sp ph.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply wait_mapsto_inv in H0.
-    destruct H0 as [(?,(v',(Heq,mt)))|(?,mt)]. {
-      subst.
-      rewrite wait_preserves_mode in *.
-      rewrite wait_preserves_signal_phase.
-      eauto using signal_phase_def.
-    }
-    eauto using signal_phase_def.
-  Qed.
-
-  Lemma wait_phase_inv_wait:
-    forall x wp ph y,
-    WaitPhase x wp (Phaser.wait y ph) ->
-    (y = x /\ exists wp', wp = S wp' /\ WaitPhase x wp' ph) \/ (y <> x /\ WaitPhase x wp ph).
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply wait_mapsto_inv in H0.
-    destruct H0 as [(?, (v', (?, ?)))|(?,?)]. {
-      subst; left; split; auto.
-      rewrite wait_preserves_mode in *.
-      exists (wait_phase v').
-      split; auto.
-      apply wait_phase_def with (v:=v'); auto.
-    }
-    eauto using wait_phase_def.
-  Qed.
-
-  Lemma signal_phase_inv_signal:
-    forall x sp ph y,
-    SignalPhase x sp (Phaser.signal y ph) ->
-    (y = x /\ exists sp', sp = S sp' /\ SignalPhase x sp' ph) \/ (y <> x /\ SignalPhase x sp ph).
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply signal_mapsto_inv in H0.
-    destruct H0 as [(?, (v', (?, ?)))|(?,?)]. {
-      subst; left; split; auto.
-      rewrite signal_preserves_mode in *.
-      exists (signal_phase v').
-      split; auto.
-      apply signal_phase_def with (v:=v'); auto.
-    }
-    eauto using signal_phase_def.
-  Qed.
-
-  Lemma wait_phase_drop_eq:
-    forall x n y ph,
-    WaitPhase x n (Phaser.drop y ph) ->
-    y <> x /\ WaitPhase x n ph.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply drop_mapsto_inv in H0.
-    destruct H0.
-    split; auto.
-    apply wait_phase_def with (v:=v); auto.
-  Qed.
-
-  Lemma signal_phase_drop_1:
-    forall x n y ph,
-    SignalPhase x n (Phaser.drop y ph) ->
-    y <> x /\ SignalPhase x n ph.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply drop_mapsto_inv in H0.
-    destruct H0.
-    split; auto.
-    apply signal_phase_def with (v:=v); auto.
-  Qed.
-
-  Let wait_phase_drop_neq:
-    forall x n y ph,
-    y <> x ->
-    WaitPhase x n ph ->
-    WaitPhase x n (Phaser.drop y ph).
-  Proof.
-    intros.
-    inversion H0; subst; clear H0.
-    apply wait_phase_def with (v:=v); auto using drop_2.
-  Qed.
-
-  Lemma signal_phase_inv_register_1:
-    forall r x ph t n,
-    RegisterPre r x ph ->
-    CanSignal (get_mode r) ->
-    SignalPhase t n (register r x ph) ->
-    (t <> get_task r /\ SignalPhase t n ph) \/ (t = get_task r /\ SignalPhase x n ph).
-  Proof.
-    intros.
-    inversion H1; subst; clear H1.
-    apply register_inv_mapsto in H2.
-    destruct H2 as [?|(?,(?,(?,?)))].
-    - left.
-      split.
-      + unfold not; intros; subst.
-        inversion H; subst.
-        contradiction H2.
-        eauto using Map_TID_Extra.mapsto_to_in.
-      + eauto using signal_phase_def.
-    - right.
-      subst.
-      split; trivial.
-      rewrite set_mode_preserves_signal_phase.
-      rewrite mode_set_mode_rw in *.
-      inversion H; subst; clear H.
-      assert (x0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-      eauto using signal_phase_def, can_signal_le.
-  Qed.
-
-  Lemma wait_phase_inv_register_1:
-    forall r x ph t n,
-    RegisterPre r x ph ->
-    CanWait (get_mode r) ->
-    WaitPhase t n (register r x ph) ->
-    (t <> get_task r /\ WaitPhase t n ph) \/ (t = get_task r /\ WaitPhase x n ph).
-  Proof.
-    intros.
-    inversion H1; subst; clear H1.
-    apply register_inv_mapsto in H2.
-    destruct H2 as [?|(?,(?,(?,?)))].
-    - left.
-      split.
-      + unfold not; intros; subst.
-        inversion H; subst.
-        contradiction H2.
-        eauto using Map_TID_Extra.mapsto_to_in.
-      + eauto using wait_phase_def.
-    - right.
-      subst.
-      split; trivial.
-      rewrite set_mode_preserves_wait_phase.
-      rewrite mode_set_mode_rw in *.
-      inversion H; subst; clear H.
-      assert (x0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-      eauto using wait_phase_def, can_wait_le.
-  Qed.
-
-  Lemma signal_phase_inv_register_2:
-    forall x y n ph r,
-    ~ CanSignal (get_mode r) ->
-    RegisterPre r y ph ->
-    SignalPhase x n (register r y ph) ->
-    SignalPhase x n ph /\ x <> get_task r.
-  Proof.
-    intros.
-    inversion H1; subst; clear H1.
-    apply register_inv_mapsto in H2.
-    destruct H2 as [?|(?, (?,(?,?)))]. {
-      split.
-      - eauto using signal_phase_def.
-      - unfold not; intros; subst.
-        inversion H0; subst; clear H0.
-        contradiction H2.
-        eauto using Map_TID_Extra.mapsto_to_in.
-    }
-    subst.
-    rewrite set_mode_preserves_signal_phase.
-    rewrite mode_set_mode_rw in *.
-    contradiction.
-  Qed.
-
-  Lemma wait_phase_inv_register_2:
-    forall x y n ph r,
-    ~ CanWait (get_mode r) ->
-    RegisterPre r y ph ->
-    WaitPhase x n (register r y ph) ->
-    WaitPhase x n ph /\ x <> get_task r.
-  Proof.
-    intros.
-    inversion H1; subst; clear H1.
-    apply register_inv_mapsto in H2.
-    destruct H2 as [?|(?, (?,(?,?)))]. {
-      split.
-      - eauto using wait_phase_def.
-      - unfold not; intros; subst.
-        inversion H0; subst; clear H0.
-        contradiction H2.
-        eauto using Map_TID_Extra.mapsto_to_in.
-    }
-    subst.
-    rewrite set_mode_preserves_wait_phase.
-    rewrite mode_set_mode_rw in *.
-    contradiction.
-  Qed.
-
-End WP_SP.
-
 Section Complete.
 
   Definition WP_Complete (ph:Phaser.phaser) (sp:phases) : Prop :=
@@ -1827,11 +1895,10 @@ Section Correctness.
 
   Structure WF ph b := wf_def {
     wf_sound: Sound ph b;
-    wf_complete: Complete ph b
-    (*;
-    wf_nodes: NodesSpec b*)
+    wf_complete: Complete ph b;
+    wf_nodes: NodesSpec b
   }.
-(*
+
   Let wf_nodes_2:
     forall n b e m,
     NodesSpec b ->
@@ -1871,7 +1938,7 @@ Section Correctness.
     replace vs' with (update_nodes (get_nodes b) e) in *; trivial; clear vs'.
     eapply wf_nodes_2; eauto.
   Qed.
-*)
+
   Theorem correctness:
     forall b ph e ph' b',
     WF ph b ->
@@ -1884,11 +1951,11 @@ Section Correctness.
     eapply wf_def; eauto using soundness, completeness.
   Qed.
 
-  Let wf_sp_1:
-    forall ph b x v,
+  Lemma wf_sp_1:
+    forall ph b x n,
     WF ph b ->
-    SignalPhase x (signal_phase v) ph ->
-    GetPhase x (signal_phase v) (get_sp b).
+    SignalPhase x n ph ->
+    GetPhase x n (get_sp b).
   Proof.
     intros.
     apply wf_complete in H.
@@ -1896,11 +1963,11 @@ Section Correctness.
     assumption.
   Qed.
 
-  Let wf_sp_2:
-    forall ph b x v,
+  Lemma wf_sp_2:
+    forall ph b x n,
     WF ph b ->
-    GetPhase x (signal_phase v) (get_sp b) ->
-    SignalPhase x (signal_phase v) ph.
+    GetPhase x n (get_sp b) ->
+    SignalPhase x n ph.
   Proof.
     intros.
     apply wf_sound in H.
@@ -1908,11 +1975,11 @@ Section Correctness.
     assumption.
   Qed.
 
-  Let wf_wp_1:
-    forall ph b x v,
+  Lemma wf_wp_1:
+    forall ph b x n,
     WF ph b ->
-    WaitPhase x (wait_phase v) ph ->
-    GetPhase x (wait_phase v) (get_wp b).
+    WaitPhase x n ph ->
+    GetPhase x n (get_wp b).
   Proof.
     intros.
     apply wf_complete in H.
@@ -1920,43 +1987,20 @@ Section Correctness.
     assumption.
   Qed.
 
-  Let wf_wp_2:
-    forall ph b x v,
+  Lemma wf_wp_2:
+    forall ph b x n,
     WF ph b ->
-    GetPhase x (wait_phase v) (get_wp b) ->
-    WaitPhase x (wait_phase v) ph.
+    GetPhase x n (get_wp b) ->
+    WaitPhase x n ph.
   Proof.
     intros.
     apply wf_sound in H.
     apply H.
     assumption.
   Qed.
+End Correctness.
 
-  Let wf_get_sp:
-    forall ph x b v,
-    WF ph b ->
-    Map_TID.MapsTo x v ph ->
-    CanSignal (mode v) ->
-    GetPhase x (signal_phase v) (get_sp b).
-  Proof.
-    intros.
-    assert (Hsp: SignalPhase x (signal_phase v) ph) by
-    (apply signal_phase_def with (v:=v); auto).
-    eauto.
-  Qed.
-
-  Let wf_get_wp:
-    forall ph x b v,
-    WF ph b ->
-    Map_TID.MapsTo x v ph ->
-    CanWait (mode v) ->
-    GetPhase x (wait_phase v) (get_wp b).
-  Proof.
-    intros.
-    assert (Hsp: WaitPhase x (wait_phase v) ph) by
-    (apply wait_phase_def with (v:=v); auto).
-    eauto.
-  Qed.
+Section Props.
 (*
   Let get_phase_to_set_phase:
     forall x n n' ph ws vs,
@@ -2421,7 +2465,7 @@ Section Correctness.
 *)
 *)
 
-End Defs.
+End Props.
 
 (* bools *)
 Extract Inductive bool => "bool" [ "true" "false" ].
