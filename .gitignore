@@ -2,6 +2,7 @@
 *.vo
 *.v.d
 *~
+*.aux
 /Makefile
 /Makefile.bak
 /all.pdf
