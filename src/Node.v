@@ -1,5 +1,6 @@
 Set Implicit Arguments.
 
+Require Import Coq.omega.Omega.
 Require Import Coq.Structures.OrderedType.
 Require Import Coq.Structures.OrderedTypeEx.
 Require Import Coq.FSets.FMapAVL.

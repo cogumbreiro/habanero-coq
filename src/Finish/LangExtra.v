@@ -231,10 +231,9 @@ Section Sem.
     apply lt_inv_cons in H.
     destruct H as [?|[(f',(?,?))|?]].
     + inversion H; subst.
-      simpl in *; intuition.
+      auto using le_refl.
     + inversion H; subst.
-      assert (x <= f') by auto using lt_to_le.
-      intuition.
+      auto using lt_to_le.
     + simpl in *.
       rewrite get_tasks_rw in *.
       eauto using lt_remove_1.

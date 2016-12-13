@@ -213,13 +213,11 @@ Proof.
     eauto using reduce_nested.
   - eauto.
   - apply IHHf'1 in H.
-    + clear IHHf'1.
-      destruct H as (y', R1).
-      apply IHHf'2 with (y'); auto.
-      intuition.
-    + intuition.
+    + destruct H as (y', R1).
+      eauto using Relation_Operators.rt_trans, le_def.
+    + eauto using Relation_Operators.rt_trans, le_def.
     + apply le_disjoint with (z); auto.
-      intuition.
+      eauto using Relation_Operators.rt_trans, le_def.
 Qed.
 
 Lemma flat_le:
@@ -241,7 +239,9 @@ Proof.
     + subst.
       auto.
     + subst.
-      assert (Hle : x <= []) by intuition.
+      assert (Hle : x <= []). {
+        eauto using Relation_Operators.rt_trans, le_def.
+      }
       apply le_inv_nil in  Hle.
       intuition.
 Qed.

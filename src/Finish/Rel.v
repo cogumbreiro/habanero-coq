@@ -76,8 +76,9 @@ Lemma le_to_ge:
   f' >= f.
 Proof.
   intros.
-  intuition.
-  induction H0.
+  destruct H.
+  apply ge_def.
+  induction H.
   - auto using rt_step.
   - auto using rt_refl.
   - eauto using rt_trans.
@@ -88,8 +89,18 @@ Lemma lt_sub:
   Sub x y ->
   x < y.
 Proof.
+  auto using t_step, lt_def.
+Qed.
+
+Lemma trans_to_refl_trans:
+  forall A R x y,
+  clos_trans A R x y ->
+  clos_refl_trans A R x y.
+Proof.
   intros.
-  intuition.
+  induction H.
+  - auto using rt_step.
+  - eauto using rt_trans.
 Qed.
 
 Lemma lt_to_le:
@@ -98,10 +109,9 @@ Lemma lt_to_le:
   f <= f'.
 Proof.
   intros.
-  intuition.
-  induction H0.
-  - auto using rt_step.
-  - eauto using rt_trans.
+  apply le_def.
+  destruct H.
+  auto using trans_to_refl_trans.
 Qed.
 
 Lemma le_sub:
@@ -118,10 +128,9 @@ Lemma gt_to_ge:
   f >= f'.
 Proof.
   intros.
-  intuition.
-  induction H0.
-  - auto using rt_step.
-  - eauto using rt_trans.
+  destruct H.
+  apply ge_def.
+  auto using trans_to_refl_trans.
 Qed.
 
 Lemma ge_to_le:
@@ -130,8 +139,9 @@ Lemma ge_to_le:
   f' <= f.
 Proof.
   intros.
-  intuition.
-  induction H0.
+  destruct H.
+  apply le_def.
+  induction H.
   - auto using rt_step.
   - auto using rt_refl.
   - eauto using rt_trans.
@@ -144,23 +154,31 @@ Proof.
   intros; split; auto using ge_to_le, le_to_ge.
 Qed.
 
+Lemma lt_trans:
+  forall x y z,
+  x < y ->
+  y < z ->
+  x < z.
+Proof.
+  intros.
+  destruct H, H0.
+  apply lt_def.
+  eauto using clos_trans.
+Qed.
+
 Lemma le_inv:
   forall f f',
   f <= f' ->
   f < f' \/ f = f'.
 Proof.
   intros.
-  intuition.
-  induction H0.
-  - intuition.
-  - intuition.
-  - destruct IHclos_refl_trans1, IHclos_refl_trans2.
-    + left; intuition.
-      eauto using t_trans.
-    + subst.
-      intuition.
-    + subst; intuition.
-    + subst; intuition.
+  destruct H.
+  induction H.
+  - auto using lt_sub.
+  - auto.
+  - destruct IHclos_refl_trans1, IHclos_refl_trans2;
+    subst;
+    eauto using lt_trans.
 Qed.
 
 Lemma le_trans:
@@ -170,8 +188,8 @@ Lemma le_trans:
   f1 <= f3.
 Proof.
   intros.
-  intuition.
-  eauto using rt_trans.
+  destruct H, H0.
+  eauto using rt_trans, le_def.
 Qed.
 
 Lemma le_refl:
@@ -179,26 +197,25 @@ Lemma le_refl:
   f <= f.
 Proof.
   intros.
-  intuition.
+  apply le_def, rt_refl.
+Qed.
+
+Lemma lt_iff_gt:
+  forall x y,
+  x < y <-> y > x.
+Proof.
+  split; auto using lt_to_gt, gt_to_lt.
 Qed.
 
 Lemma ge_inv:
   forall f f',
   f >= f' ->
-  f > f' \/ f = f'.
+  f > f' \/ f' = f.
 Proof.
   intros.
-  intuition.
-  induction H0.
-  - intuition.
-  - intuition.
-  - destruct IHclos_refl_trans1, IHclos_refl_trans2.
-    + left; intuition.
-      eauto using t_trans.
-    + subst.
-      intuition.
-    + subst; intuition.
-    + subst; intuition.
+  apply ge_to_le in H.
+  rewrite <- lt_iff_gt.
+  auto using le_inv.
 Qed.
 
 Lemma sub_inv_cons_ready:
@@ -230,7 +247,7 @@ Lemma lt_child:
 Proof.
   intros.
   apply sub_def in H.
-  intuition.
+  auto using lt_sub.
 Qed.
 
 Lemma lt_eq:
@@ -239,16 +256,6 @@ Lemma lt_eq:
 Proof.
   intros.
   auto using lt_def, t_step, sub_eq.
-Qed.
-
-Lemma lt_trans:
-  forall f1 f2 f3,
-  f1 < f2 ->
-  f2 < f3 ->
-  f1 < f3.
-Proof.
-  intros; intuition.
-  eauto using t_trans.
 Qed.
 
 Lemma lt_inv_cons_ready:
@@ -301,8 +308,9 @@ Proof.
   intros.
   rewrite gt_lt_spec.
   intuition.
-  rewrite clos_trans_tn1_iff in H0.
-  induction H0.
+  destruct H.
+  rewrite clos_trans_tn1_iff in H.
+  induction H.
   - apply sub_absurd_nil in H; assumption.
   - assumption.
 Qed.
@@ -393,23 +401,23 @@ Lemma gt_inv_cons:
   a = Blocked f \/ (exists f', a = Blocked f' /\ f' > f) \/ Node l > f.
 Proof.
   intros.
-  intuition.
-  apply clos_trans_t1n in H0.
-  inversion H0.
+  destruct H.
+  apply clos_trans_t1n in H.
+  inversion H; subst; clear H.
   - subst.
-    apply sub_inv_cons in H.
-    destruct H.
-    + left; auto.
+    apply sub_inv_cons in H0.
+    destruct H0.
+    + left; auto using lt_sub.
     + right; right. auto using gt_def, t_step.
   - subst.
-    apply sub_inv_cons in H.
-    destruct H.
+    apply sub_inv_cons in H0.
+    destruct H0.
     + simpl in H.
       subst.
       right; left.
       exists y.
       intuition.
-      eauto using clos_t1n_trans.
+      eauto using clos_t1n_trans, gt_def.
     + right; right.
       eauto using gt_def, t_step, t_trans, clos_t1n_trans.
 Qed.
@@ -473,6 +481,7 @@ Proof.
   - subst.
     apply any_def with (Node (p :: l)); auto.
     intuition.
+    auto using le_refl.
 Qed.
 
 Lemma any_cons_lt:

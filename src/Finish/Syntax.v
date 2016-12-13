@@ -107,6 +107,8 @@ Lemma child_absurd_nil:
 Proof.
   intros.
   intuition.
+  inversion H; simpl in *.
+  contradiction.
 Qed.
 
 Lemma child_inv_cons:

@@ -99,7 +99,7 @@ Section Facts.
     destruct (regmode_eq (mode v1) WAIT_ONLY).
     { left; auto using tv_nhb_wo. }
     right.
-    intuition.
+    unfold not; intros; inversion H; contradiction.
   Defined.
 
   Lemma tv_hb_dec:
@@ -112,11 +112,14 @@ Section Facts.
         destruct (lt_dec (signal_phase v1) (wait_phase v2)). {
           left; auto using tv_hb_def.
         }
-        right; intuition.
+        right.
+        unfold not; intros N; inversion N; contradiction.
       }
-      right; intuition.
+      right.
+      unfold not; intros N; inversion N; contradiction.
     }
-    right; intuition.
+    right.
+    unfold not; intros N; inversion N; contradiction.
   Defined.
 
   Lemma tv_nhb_to_not_lt:
@@ -125,8 +128,12 @@ Section Facts.
   Proof.
     intros.
     intuition.
-    - destruct H0; inversion H3.
-    - destruct H2; inversion H3.
+    destruct H0. destruct H.
+    + auto with *.
+    + rewrite H in *.
+      inversion H2.
+    + rewrite H in *.
+      inversion H1.
   Qed.
 
   Lemma tv_hb_to_not_ge:
@@ -135,8 +142,12 @@ Section Facts.
   Proof.
     intros.
     intuition.
-    - destruct H; inversion H3.
-    - inversion H2; rewrite H3 in *; inversion H4.
+    destruct H; destruct H0.
+    - auto with *.
+    - rewrite H0 in *.
+      inversion H2.
+    - rewrite H0 in *.
+      inversion H1.
   Qed.
 
   Lemma tv_not_lt_to_ge:
@@ -540,10 +551,9 @@ Section Facts.
   Proof.
     intros.
     inversion H; subst.
-    apply tv_hb_def.
+    apply tv_hb_def; auto with *.
     - assert (wait_phase v1 <= wait_phase (union v1 v2))%nat by eauto.
-      omega.
-    - assumption.
+      auto with *.
     - unfold union; simpl.
       auto.
   Qed.
@@ -557,7 +567,7 @@ Section Facts.
     inversion H; subst.
     apply tv_hb_def.
     - assert (wait_phase v2 <= wait_phase (union v1 v2))%nat by eauto.
-      omega.
+      auto with *.
     - assumption.
     - unfold union; simpl.
       auto.
@@ -592,8 +602,7 @@ Section Facts.
       }
       simpl in *.
       assert (signal_phase v < wait_phase v2) % nat. {
-        destruct (mode v2); auto.
-        omega.
+        destruct (mode v2); auto with *.
       }
       auto using tv_hb_def.
     }

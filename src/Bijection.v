@@ -1,7 +1,7 @@
 Set Implicit Arguments.
 Require Import Coq.Arith.Peano_dec.
 Require Import Coq.Lists.List.
-Require Omega.
+Require Import Coq.omega.Omega.
 
 Section Defs.
   Variable A:Type.

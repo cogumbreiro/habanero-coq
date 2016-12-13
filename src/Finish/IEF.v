@@ -17,6 +17,33 @@ Section IEF.
       ~ Registered t x ->
       IEF t f.
 
+(*
+  Require Import Coq.Lists.List.
+  Require Import Coq.Lists.ListSet.
+
+  Definition disjoint (l1 l2:list tid) := forallb (fun x=> set_mem TID.eq_dec x l2) l1. 
+
+  Definition Intersect {A:Type} l1 l2 := @incl A l1 l2 \/ @incl A l2 l1. 
+
+  Definition Disjoint {A:Type} l1 l2 := ~ @Intersect A l1 l2.
+
+  Inductive WF : finish -> list tid -> Prop :=
+  | wf_nil:
+    WF (Node nil) nil
+  | wf_cons_ready:
+    forall t l l',
+    WF (Node l) l' ->
+    ~ List.In t l' ->
+    WF (Node ((t,Ready)::l)) (t::l')
+  | wf_cons_blocked_neq:
+    forall t l1 l2 l1' l2',
+    WF (Node l1) l1' ->
+    WF (Node l2) l2' ->
+    Disjoint l1' l2' ->
+    ~ List.In t l1' ->
+    ~ List.In t l2' ->
+    WF (Node ((t,Blocked (Node l1))::l2)) ((t::l1') ++ l2').
+*)
   (** [IEF] behaves as a function in the whole tree [f]. *)
 
   Inductive IEFFun f : Prop :=

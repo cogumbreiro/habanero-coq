@@ -1,7 +1,23 @@
 #!/bin/bash
-version=8.4
+set -x
+version=8.5 # `opam show --field=version coq`
+
+check_pkg() {
+    opam search $@ > /dev/null
+}
+
+install_coq() {
+  echo "Installing Coq over OPAM..."
+  opam repo add coq-released https://coq.inria.fr/opam/released &&
+  (opam install coq || true)
+}
+
+install_aniceto() {
+  echo "Installing Aniceto..." &&
+  opam pin add --dev-repo coq-aniceto https://bitbucket.org/cogumbreiro/aniceto-coq.git
+}
 coq_shell_url="https://raw.githubusercontent.com/gares/opam-coq-shell/master/src/opam-coq"
-curl -s "${coq_shell_url}" | bash /dev/stdin init $version && # Install Coq dependencies
-eval `opam config env --switch=coq-shell-$version` &&
-coq_makefile -f _CoqProject -o Makefile &&
-opam install coq:aniceto || (echo "Install https://bitbucket.org/cogumbreiro/aniceto-coq first."; exit 1)
+(check_pkg coq || install_coq) &&
+(check_pkg coq-aniceto || install_aniceto) &&
+(test -f Makefile || coq_makefile -f _CoqProject -o Makefile)
+
