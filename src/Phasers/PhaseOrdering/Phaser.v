@@ -1,3 +1,4 @@
+Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Arith.Compare_dec.
 Require Import Coq.Arith.Peano_dec.
 
@@ -249,6 +250,122 @@ Section Facts.
     apply Map_TID.remove_3 in H1.
     apply Map_TID.remove_3 in H2.
     eauto using well_ordered_to_facilitates.
+  Qed.
+
+  Definition wo_phaser := { ph: phaser | WellOrdered ph }.
+
+  Instance HappensBefore_StrictOrder : StrictOrder
+    (fun (x y:wo_phaser) => HappensBefore (proj1_sig x) (proj1_sig y)).
+  Proof.
+    apply Build_StrictOrder.
+    - unfold Irreflexive, Reflexive, complement.
+      intros.
+      destruct x; simpl in *.
+      apply ph_hb_irreflexive in H; auto.
+    - unfold Transitive.
+      intros.
+      destruct x as (x, ?), y as (y, ?), z as (z, ?);
+      simpl in *.
+      eauto using ph_hb_trans.
+  Qed.
+
+  Let exists_dec := Map_TID_Extra.exists_dec (elt:=taskview) tid_eq_rw.
+
+  Let tv_hb x y := if tv_hb_dec x y then true else false.
+
+  Let hb_dec x y :=
+  exists_dec
+  (fun _ v1 =>
+    match exists_dec (fun _ v2 => tv_hb v1 v2) y with
+    | inl _ => true
+    | inr _ => false
+    end
+  )
+  x.
+
+  Lemma hb_mhp_dec x y:
+    { HappensBefore x y}
+    +
+    { MayHappenParallel y x }.
+  Proof.
+    destruct (hb_dec x y). {
+      left.
+      destruct s as ((?,v1), (?,?)); simpl in *.
+      destruct (exists_dec _ y). {
+        destruct s as ((?,v2),(?,?)); simpl in *.
+        unfold tv_hb in H2.
+        destruct (tv_hb_dec v1 v2). {
+          eauto using ph_happens_before_def.
+        }
+        inversion H2.
+      }
+      inversion H0.
+    }
+    right.
+    destruct s.
+    apply ph_rel_def.
+    intros.
+    apply e in H.
+    destruct (exists_dec _ y). {
+      inversion H.
+    }
+    destruct s.
+    apply e0 in H0.
+    unfold tv_hb in *.
+    destruct (tv_hb_dec v1 v2). {
+      inversion H0.
+    }
+    auto using tv_not_lt_to_ge.
+  Defined.
+
+  Lemma hb_to_not_mhp:
+    forall x y,
+    HappensBefore x y ->
+    ~ MayHappenParallel y x.
+  Proof.
+    intros.
+    inversion H.
+    unfold not; intros N.
+    inversion N.
+    assert (Taskview.Facilitates v1 v2) by eauto.
+    apply tv_hb_to_not_ge in H2.
+    contradiction.
+  Qed.
+
+  Lemma not_mhp_to_hb:
+    forall x y,
+    ~ MayHappenParallel y x ->
+    HappensBefore x y.
+  Proof.
+    intros.
+    destruct (hb_mhp_dec x y); auto.
+    contradiction.
+  Qed.
+
+  Lemma mhp_to_not_hb:
+    forall x y,
+    MayHappenParallel x y ->
+    ~ HappensBefore y x.
+  Proof.
+    unfold not; intros.
+    destruct H0, H.
+    assert (Taskview.Facilitates v1 v2) by eauto.
+    apply tv_hb_to_not_ge in H2.
+    contradiction.
+  Qed.
+
+  Lemma not_hb_to_mhp:
+    forall x y,
+    ~ HappensBefore y x ->
+    MayHappenParallel x y.
+  Proof.
+    intros.
+    apply ph_rel_def; intros.
+    destruct (Taskview.tv_hb_ge_dec v1 v2). {
+      contradiction H.
+      eauto using ph_happens_before_def.
+    }
+    assumption.
   Qed.
 
   Let tv_nhb_register_left:
