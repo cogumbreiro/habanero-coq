@@ -68,7 +68,7 @@ Module Notations.
 End Notations.
 
 
-Section Facts.    
+Section Facts.
   Open Scope phaser_scope.
   Import Notations.
   Import WellFormed.Taskview.
