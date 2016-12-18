@@ -162,6 +162,55 @@ Import Phasermap.
 
 Variable WF : WellFormed pm.
 
+
+  (**
+    Predicate [Sync] defines what happens when a
+    task synchronizes with the other members of a phaser, which is triggered when
+    a task performs either wait on a phaser, or next.
+    The semantics of [Sync] depends on the registration mode of the task.
+    Tasks registered in [SIGNAL_ONLY] mode do not block, so predicate [Sync] always
+    holds. Tasks that are not registered in [SIGNAL_ONLY] mode
+    (that is tasks with a wait capability) only holds once all 
+    members with a signal capability issued at least as many signals as the task
+    synchronizing.
+   *)
+
+  Inductive Sync : phaser -> tid -> Prop :=
+  | sync_def:
+    forall ph t v,
+    Map_TID.MapsTo t v ph ->
+    CanWait (mode v) ->
+    Phase ph (S (wait_phase v)) ->
+    Sync ph t.
+
+  Definition sync x ph:
+    { Sync ph x } + { ~ Sync ph x }.
+  Proof.
+    intros.
+    remember (Map_TID.find x ph).
+    symmetry in Heqo.
+    destruct o as [v|]. {
+      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
+      destruct (can_wait_so (mode v)). {
+        destruct (phase ph (S (wait_phase v))). {
+          eauto using sync_def.
+        }
+        right; unfold not; intros N; inversion N; subst; clear N;
+        assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+        contradiction.
+      }
+      right; unfold not; intros N; inversion N; subst; clear N;
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      rewrite e in *.
+      inversion H0.
+    }
+    right; unfold not; intros N.
+    inversion N; subst; clear N;
+    rewrite Map_TID_Facts.find_mapsto_iff in *;
+    rewrite H in *;
+    inversion Heqo.
+  Defined.
+
 Lemma smallest_to_sync:
   forall t p ph v,
   Smallest t tids ->
@@ -231,22 +280,26 @@ Proof.
   destruct (can_wait_so (mode v)). {
     apply try_wait_pre_can_wait.
     apply wait_pre_def with (v:=v); auto. {
-    inversion c;
-    symmetry in H2.
-    - apply Taskview.wait_pre_sw; auto.
-      apply Taskview.tv_well_formed_inv_sw in H2; auto.
-      destruct H2; auto.
-      assert (wait_phase v <> signal_phase v). {
-        assert (wait_phase v < signal_phase v) by eauto.
-        intuition.
-      }
-      contradiction.
-    - apply Taskview.wait_pre_wo; auto.
+      inversion c;
+      symmetry in H2.
+      - apply Taskview.wait_pre_sw; auto.
+        apply Taskview.tv_well_formed_inv_sw in H2; auto.
+        destruct H2; auto.
+        assert (wait_phase v <> signal_phase v). {
+          assert (wait_phase v < signal_phase v) by eauto.
+          intuition.
+        }
+        contradiction.
+      - apply Taskview.wait_pre_wo; auto.
     }
-    eapply smallest_to_sync in mt; eauto.
-    destruct mt; auto.
-    rewrite H1 in *.
-    inversion c.
+    assert (Hs := mt).
+    eapply smallest_to_sync in Hs; eauto.
+    destruct Hs as [Hs|Hs].
+    - destruct Hs.
+      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      assumption.
+    - rewrite Hs in *.
+      inversion c.
   }
   eauto using try_wait_pre_so.
 Qed.
