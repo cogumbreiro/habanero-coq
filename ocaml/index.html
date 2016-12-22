@@ -8,6 +8,10 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
     <link href="https://fonts.googleapis.com/css?family=Droid+Sans+Mono" rel="stylesheet" />
+    <link rel="stylesheet" href="split-pane.css" />
+    <script type="text/javascript" src="jquery.js" data-embed></script>
+    <script src="split-pane.js"></script>
+    <script type="text/javascript" src="http://visjs.org/dist/vis.js" data-embed></script>
 
     <style type="text/css">
 body {
@@ -15,6 +19,13 @@ body {
 	margin: 0;
 }
 
+html, body {
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+/*
 #MySplitter {
 	height: 100%;
 	width: 100%;
@@ -39,7 +50,7 @@ body {
 
 #MySplitter .vsplitbar:hover {
 	background: #e77;
-}
+}*/
 
 #trace_in {
     padding: 1em;
@@ -59,11 +70,23 @@ body {
     width: 100%;
     height: 100%;
 }
-    </style>
-    <script type="text/javascript" src="http://visjs.org/dist/vis.js" data-embed></script>
-    <script type="text/javascript" src="http://methvin.com/jquery/jquery.js" data-embed></script>
-    <script type="text/javascript" src="http://methvin.com/splitter/jquery.cookie.js" data-embed></script>
-    <script type="text/javascript" src="http://methvin.com/splitter/splitter.js" data-embed></script>
+
+            .split-pane-divider {
+                background: #aaa;
+            }
+            #left-component {
+                width: 20vw;
+            }
+            #divider {
+                left: 20vw; /* Same as left component width */
+                width: 5px;
+            }
+            #right-component {
+                left: 20vw;  /* Same as left component width */
+                margin-left: 5px;  /* Same as divider width */
+                background: red;
+            }
+            </style>
     <script type="text/javascript">
         var OPTS = {
           edges: {
@@ -89,22 +112,18 @@ body {
     </script>
     <script type="text/javascript" src="cg.js" data-embed></script>
 <script type="text/javascript">
-
-$().ready(function() {
-	$("#MySplitter").splitter({
-		type: "v",
-		sizeLeft: 200,
-		dock: true,
-		resizeToWidth: true
-	});
+$(function() {
+    $('div.split-pane').splitPane();
 });
 </script>
     <link href="http://visjs.org/dist/vis.css" rel="stylesheet" type="text/css" />
   </head>
   <body id="main">
-  <div id="MySplitter">
-  <div id="LeftPane">
-  <textarea id="trace_in" class="ui-widget-content">
+  
+    <div class="split-pane fixed-left">
+      <div class="split-pane-component" id="left-component">
+
+        <textarea id="trace_in" class="ui-widget-content">
 2: reg 1 WO
 2: reg 3 SW
 2: drop
@@ -113,12 +132,14 @@ $().ready(function() {
 1: wait
 3: signal
 1: wait
-</textarea>
-</div>
+        </textarea>
 
-  <div id="RightPane">
-  <div id="graph_out" />
-  </div>
-  </div>
+      </div>
+       <div class="split-pane-divider" id="divider"></div>
+      <div  class="split-pane-component" id="right-component">
+        <div id="graph_out" />
+      </div>
+    </div>
+  
   </body>
 </html>
