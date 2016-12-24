@@ -4,8 +4,17 @@ open List
 open Printf
 open String
 open Stringext
+open Ezjsonm
 
-let js = Js.string
+type node_type =
+    | Past of Cg.op
+    | Current of Cg.taskview
+
+type edge_type =
+| FORK
+| SYNC
+| CONTINUE
+
 
 module IntHash =
     struct
@@ -16,10 +25,16 @@ module IntHash =
 
 module I = Hashtbl.Make(IntHash)
 
+let js = Js.string
+let js_array a =
+    let arr = jsnew Js.array_empty () in
+    Array.iteri (fun idx v -> Js.array_set arr idx v) a;
+    arr
+
 let _REG = "reg"
-let _SO = "SO";;
-let _WO = "WO";;
-let _SW = "SW";;
+let _SO = "SO"
+let _WO = "WO"
+let _SW = "SW"
 
 let reg_of_string s : Cg.regmode =
     let s = trim s in
@@ -27,15 +42,20 @@ let reg_of_string s : Cg.regmode =
     else if s = _SO then Cg.SIGNAL_ONLY
     else if s = _SW then Cg.SIGNAL_WAIT
     else raise (Failure "reg_of_string")
-  
-let op_of_string s : Cg.op =
+
+let string_of_reg r =
+    match r with
+    | Cg.SIGNAL_ONLY -> _SO
+    | Cg.SIGNAL_WAIT -> _SW
+    | Cg.WAIT_ONLY -> _WO
+
+let op_of_string s =
     match split (trim s) ' ' with
     | "reg" :: x :: r :: [] -> Cg.REGISTER { Cg.get_task = int_of_string x; Cg.get_mode = reg_of_string r }
     | "signal" :: [] -> Cg.SIGNAL
     | "wait" :: [] -> Cg.WAIT
     | "drop" :: [] -> Cg.DROP
     | _ -> raise (Failure "op_of_string")
-    ;;
 
 let event_of_string s : Cg.event =
     let s = trim s in
@@ -43,11 +63,20 @@ let event_of_string s : Cg.event =
     | s::o::[] -> (int_of_string s, op_of_string o)
     | _ -> raise (Failure "op_of_string")
 
-let string_of_reg r =
-    match r with
-    | Cg.SIGNAL_ONLY -> _SO
-    | Cg.SIGNAL_WAIT -> _SW
-    | Cg.WAIT_ONLY -> _WO;;
+let registry_to_js_aux (r:Cg.registry) =
+    [
+        ("dst", Cg.get_task r |> Js.Unsafe.inject);
+        ("mode", Cg.get_mode r |> string_of_reg |> js |> Js.Unsafe.inject)
+    ]
+
+let registry_to_js (r:Cg.registry) =
+    r |> registry_to_js_aux |> Array.of_list |> Js.Unsafe.obj
+
+let js_to_registry j: Cg.registry =
+    {
+        Cg.get_task = (Js.Unsafe.coerce j)##dst;
+        Cg.get_mode = (Js.Unsafe.coerce j)##mode |> Js.to_string |> reg_of_string;
+    }
 
 let string_of_op o =
     match o with
@@ -55,16 +84,68 @@ let string_of_op o =
     | Cg.SIGNAL -> "signal"
     | Cg.WAIT -> "wait"
     | Cg.DROP -> "drop"
-    ;;
+
+let op_name o =
+    match o with
+    | Cg.REGISTER _ -> "reg"
+    | Cg.SIGNAL -> "signal"
+    | Cg.WAIT -> "wait"
+    | Cg.DROP -> "drop"
+
+let op_to_js (o:Cg.op) =
+    let l = ("name", o |> op_name |> js |> Js.Unsafe.inject) :: match o with
+        | Cg.REGISTER r -> r |> registry_to_js_aux
+        | _ -> []
+    in
+    l |> Array.of_list |> Js.Unsafe.obj
+
+let js_to_op j =
+    match trim ((Js.Unsafe.coerce j)##name |> Js.to_string) with
+    | "reg" -> Cg.REGISTER (js_to_registry j)
+    | "signal" -> Cg.SIGNAL
+    | "wait" -> Cg.WAIT
+    | "drop"-> Cg.DROP
+    | _ -> raise (Failure "js_to_op")
+
+let event_to_js ((t,o):Cg.event) =
+    Js.Unsafe.obj [|
+        ("src", t |> Js.Unsafe.inject);
+        ("op", op_to_js o |> Js.Unsafe.inject);
+    |]
+
+let js_to_event j : Cg.event =
+    ((Js.Unsafe.coerce j)##src, (Js.Unsafe.coerce j)##op |> js_to_op)
+
+let trace_to_js (t:Cg.event list) =
+    List.map event_to_js t |> Array.of_list |> js_array
+
+let js_to_trace j =
+    Js.to_array j |> Array.to_list |> List.map js_to_event
+
+let taskview_to_js (v:Cg.taskview) =
+    Js.Unsafe.obj [|
+        ("wp", Cg.wait_phase v |> Js.Unsafe.inject);
+        ("sp", Cg.signal_phase v |> Js.Unsafe.inject);
+        ("mode", Cg.mode v |> string_of_reg |> js |> Js.Unsafe.inject)
+    |]
+
+let js_to_taskview j : Cg.taskview =
+    {
+        Cg.wait_phase = (Js.Unsafe.coerce j)##wp;
+        Cg.signal_phase = (Js.Unsafe.coerce j)##sp;
+        Cg.mode = (Js.Unsafe.coerce j)##mode |> Js.to_string |> reg_of_string;
+    }
+
+let phaser_to_js (ph:Cg.phaser) =
+    let handle (k,v) = (string_of_int k, v |> taskview_to_js |> Js.Unsafe.inject) in
+    ph |> Cg.Map_TID.elements |> List.map handle |> Array.of_list |> Js.Unsafe.obj
 
 let string_of_event e =
     match e with
     | (x, o) -> (string_of_int x) ^ ": " ^ (string_of_op o)
-    ;;
 
 let string_of_trace t =
     concat "\n" (List.map string_of_event (rev t))
-
 
 let filter_duplicates lst =
   let rec is_member n mlst =
@@ -89,26 +170,17 @@ let filter_duplicates lst =
   in
   loop lst
 
-let trace_of_string s =
+let parse_trace s =
     let to_evt x : Cg.event list = 
         try [event_of_string x]
         with | Failure _ -> []
     in
     rev (flatten (List.map to_evt (split s '\n')))
 
-let js_array a =
-    let arr = jsnew Js.array_empty () in
-    Array.iteri (fun idx v -> Js.array_set arr idx v) a;
-    arr
-
 let string_of_taskview v =
-    "sp: " ^ string_of_int (Cg.signal_phase v) ^
+    ("sp: " ^ string_of_int (Cg.signal_phase v) ^
     "\nwp: " ^ string_of_int (Cg.wait_phase v) ^
-    "\nmode: " ^ string_of_reg (Cg.mode v)
-
-type node_type =
-    | Past of Cg.op
-    | Current of Cg.taskview
+    "\nmode: " ^ string_of_reg (Cg.mode v))
 
 let get_node_type (tid:int) (idx:int) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
     match Cg.MN.find idx ns with
@@ -121,6 +193,8 @@ let get_node_type (tid:int) (idx:int) (ns:Cg.op Cg.MN.t) (ph:Cg.phaser option) =
             | _ -> None
             )
         | _ -> None)
+
+
 
 let js_of_node_type (n:int) (nt:node_type option) sp wp =
     let phase_of sp label n : string =
@@ -175,11 +249,6 @@ let js_of_vertices (vs:int array) b (ph:Cg.phaser option) =
 
 let js_of_bool b = if b then Js._true else Js._false
 
-type edge_type =
-| FORK
-| SYNC
-| CONTINUE
-
 let js_of_edges (cg:Cg.computation_graph) : 'a array =
     let is_enabled b =
         Js.Unsafe.obj [| ("enabled", Js.Unsafe.inject (js_of_bool b)) |]
@@ -204,7 +273,7 @@ let js_of_edges (cg:Cg.computation_graph) : 'a array =
     let es = List.map (to_js SYNC) (Cg.s_edges cg) in
     Array.of_list (ec @ ej @ es)
 
-let js_of_cg (b,cg) ph =
+let js_of_cg (b,cg) (ph:Cg.phaser option) =
     let tids = Array.of_list (rev (Cg.get_nodes b)) in
     (js_of_vertices tids b ph, js_of_edges cg)
 
@@ -221,15 +290,50 @@ let js_new_network container (vs, es) =
        Js.Unsafe.variable "OPTS"|] in
     ()
 
-let string_of_phaser ph =
-    let string_of_entry (t, v) =
-        string_of_int t ^ ": " ^ string_of_taskview v
-    in
-    "{\n" ^
-    String.concat ",\n" (List.map string_of_entry (Cg.Map_TID.elements ph)) ^
-    "\n}"
-    ;;
+let string_of_phaser (ph:Cg.phaser) =
+    let string_of_tv v =
+        "{sp: " ^ string_of_int (Cg.signal_phase v) ^
+        " wp: " ^ string_of_int (Cg.wait_phase v) ^
+        " mode: " ^ string_of_reg (Cg.mode v) ^ "}" in
+    let string_of_entry (t,v) = " " ^ string_of_int t ^ ": " ^ string_of_tv v in
+    let ph_str = String.concat ",\n" (List.map string_of_entry (Cg.Map_TID.elements ph)) in
+    "{\n" ^ ph_str ^ "\n}"
 
+let string_of_maybe_phaser (ph:Cg.phaser option) =
+    match ph with
+    | Some ph -> string_of_phaser ph
+    | None -> "Invalid trace."
+
+
+
+let _ =
+    let run_trace = Js.wrap_callback (fun t -> 
+        match t |> js_to_trace |> Cg.eval_trace with
+        | Some ph -> phaser_to_js ph
+        | _ -> raise (Failure "Invalid trace!")
+    ) in
+    let build_cg = Js.wrap_callback (fun t ->
+        let t = js_to_trace t in
+        match Cg.build t with
+        | Some g -> js_of_cg g (Cg.eval_trace t)
+        | _ -> raise (Failure "Invalid trace!")
+        )
+    in
+    let open Js.Unsafe in
+    global##hj <-
+    obj [|
+        ("run_trace", inject run_trace);
+        ("build_graph", inject build_cg);
+        ("graph", [(1,op_of_string "reg 2 SW")] |> trace_to_js |> js_to_trace |> trace_to_js |> inject);
+        ("zero", Cg.Map_TID.empty |> Cg.Map_TID.add 1 {Cg.wait_phase= 3; Cg.signal_phase=1; Cg.mode=Cg.SIGNAL_ONLY } |> phaser_to_js |> inject )
+    |]
+
+(*
+(*
+
+
+*)
+(*
 let onload _ =
     let txt =
         Dom_html.getElementById "trace_in"
@@ -239,7 +343,15 @@ let onload _ =
         (fun () -> assert false)
         (fun div -> div)
     in
-    let last_trace = ref (trace_of_string "") in
+    let txt_out =
+        Dom_html.getElementById "state_out"
+        |> Dom_html.CoerceTo.textarea
+        |> fun opt ->
+        Js.Opt.case opt 
+        (fun () -> assert false)
+        (fun div -> div)
+    in
+    let last_trace = ref (parse_trace "") in
     let trace_out =
         Js.Opt.get (Html.document##getElementById(Js.string "graph_out"))
         (fun () -> assert false) in
@@ -247,13 +359,14 @@ let onload _ =
     js_new_network trace_out ([||], [||]);
     let handler = (fun _ ->
         let trace_txt = Js.to_string (txt##value) in
-        let t = trace_of_string trace_txt in
+        let t = parse_trace trace_txt in
         if !last_trace <> t then (
             last_trace := t;
             match Cg.build t with
             | Some bcg -> (
                 let ph = Cg.eval_trace t in
-                js_new_network trace_out (js_of_cg bcg ph)
+                js_new_network trace_out (js_of_cg bcg ph);
+                txt_out##value <- Js.string (string_of_maybe_phaser ph)
             )
             | None -> print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
         ) else ();
@@ -266,3 +379,6 @@ let onload _ =
 let _ =
     Html.window##onload <- Html.handler onload
 
+*)
+
+*)
