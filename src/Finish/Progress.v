@@ -308,14 +308,15 @@ Lemma in_to_registered:
 Proof.
   intros ? ? Hf Hin.
   inversion Hf as (He, Hn).
-  destruct Hin as (f', (a, ?)).
+  destruct Hin.
   apply flat_le in H0; auto.
   destruct H0.
   - subst.
     eauto using registered_def.
   - subst.
-    apply child_absurd_nil in H.
     inversion H.
+    inversion H0.
+    inversion H1.
 Qed.
 (*
 (**

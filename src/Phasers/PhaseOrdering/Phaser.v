@@ -12,7 +12,7 @@ Import WellFormed.Taskview.
 Import WellFormed.Phaser.
 Import PhaseOrdering.Taskview.
 
-Set Implict Arguments.
+Set Implicit Arguments.
 
 Section Defs.
   Inductive Forall (R: taskview -> taskview -> Prop) (ph1 ph2:phaser) : Prop := 
@@ -182,9 +182,9 @@ Section Facts.
     assert (Hin : Map_TID.In t ph) by eauto using register_inv_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
-    assert (Taskview.Reduces v o' (Taskview.eval o' v)) by
+    assert (Taskview.Reduces v o' (Taskview.reduces o' v)) by
         eauto using ph_reduces_to_tv_reduce.
-      assert (ph' = Map_TID.add t (Taskview.eval o' v) ph) by
+      assert (ph' = Map_TID.add t (Taskview.reduces o' v) ph) by
         eauto using ph_to_tv_correct.
       subst.
       apply ph_rel_def.
@@ -227,7 +227,7 @@ Section Facts.
             }
             auto using tv_nhb_wo.
           - apply tv_nhb_so.
-            rewrite eval_preserves_mode.
+            rewrite reduces_preserves_mode.
             assumption.
           - auto using tv_nhb_wo.
         * eauto using well_ordered_to_facilitates.
@@ -315,6 +315,19 @@ Section Facts.
       inversion H0.
     }
     auto using tv_not_lt_to_ge.
+  Defined.
+
+  Lemma well_ordered_dec x:
+    { WellOrdered x } + { ~ WellOrdered x }.
+  Proof.
+    destruct (hb_mhp_dec x x). {
+      right.
+      unfold not; intros.
+      destruct H.
+      apply ph_hb_to_not_chb in h.
+      contradiction.
+    }
+    auto using well_ordered_def.
   Defined.
 
   Lemma hb_to_not_mhp:
@@ -480,9 +493,9 @@ Section Facts.
     assert (Hin : Map_TID.In t ph) by eauto using register_inv_in.
     apply Map_TID_Extra.in_to_mapsto in Hin.
     destruct Hin as (v, Hmt).
-    assert (Taskview.Reduces v o' (Taskview.eval o' v)) by
+    assert (Taskview.Reduces v o' (Taskview.reduces o' v)) by
     eauto using ph_reduces_to_tv_reduce.
-    assert (ph' = Map_TID.add t (Taskview.eval o' v) ph) by
+    assert (ph' = Map_TID.add t (Taskview.reduces o' v) ph) by
     eauto using ph_to_tv_correct.
     subst.
     apply ph_rel_def.
@@ -634,7 +647,7 @@ Section Facts.
       forall t v ph1 t' o ph2,
       Map_TID.MapsTo t v ph1 ->
       ReducesUpdates ph1 (t', o) ph2 ->
-      { Map_TID.MapsTo t v ph2 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Taskview.eval o' v) ph2) }.
+      { Map_TID.MapsTo t v ph2 } + { exists o', (as_tv_op o = Some o' /\ t' = t /\ Map_TID.MapsTo t (Taskview.reduces o' v) ph2) }.
     Proof.
       intros.
       destruct (TID.eq_dec t' t). {
@@ -688,9 +701,9 @@ Section Facts.
         inversion H0; eauto.
       }
       destruct e as (o', (Hv, (_, Hmt))).
-      assert (vz = Taskview.eval o' v) by eauto using Map_TID_Facts.MapsTo_fun.
+      assert (vz = Taskview.reduces o' v) by eauto using Map_TID_Facts.MapsTo_fun.
       subst.
-      assert (Taskview.Reduces v o' (Taskview.eval o' v))
+      assert (Taskview.Reduces v o' (Taskview.reduces o' v))
       by (inversion R; eauto using ph_reduces_to_tv_reduce).
       assert (Taskview.Facilitates v vx) by (inversion H0; eauto).
       assert (Taskview.WellFormed v) by (inversion H; eauto).

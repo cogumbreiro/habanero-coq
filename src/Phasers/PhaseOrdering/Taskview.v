@@ -4,7 +4,7 @@ Require Import Coq.Arith.Peano_dec.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.WellFormed.
 
-Set Implict Arguments.
+Set Implicit Arguments.
 
 (** Phase-ordering corresponds to a happens-before relation between taskviews. *)
 
@@ -370,7 +370,7 @@ Section Facts.
     forall v1 v2 o,
     WellFormed v1 ->
     (signal_phase v1 >= wait_phase v2)%nat ->
-    (signal_phase (eval o v1) >= wait_phase v2)%nat.
+    (signal_phase (reduces o v1) >= wait_phase v2)%nat.
   Proof.
     intros.
     destruct o; simpl.
@@ -393,7 +393,7 @@ Section Facts.
       subst.
       auto using tv_eval_preserves_le.
     - auto using tv_nhb_so.
-    - apply reduces_preserves_mode in H1.
+    - apply reduces_prop_preserves_mode in H1.
       rewrite H2 in H1.
       auto using tv_nhb_wo.
   Qed.
@@ -402,8 +402,8 @@ Section Facts.
     forall v1 v2 o,
     WellFormed v1 ->
     Facilitates v1 v2 ->
-    Reduces v1 o (eval o v1) ->
-    Facilitates (eval o v1) v2.
+    Reduces v1 o (reduces o v1) ->
+    Facilitates (reduces o v1) v2.
   Proof.
     intros.
     inversion H0.
@@ -413,7 +413,7 @@ Section Facts.
       + assumption.
     - auto using tv_nhb_so.
     - apply tv_nhb_wo.
-      rewrite eval_preserves_mode.
+      rewrite reduces_preserves_mode.
       assumption.
   Qed.
 

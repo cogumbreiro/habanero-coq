@@ -986,13 +986,11 @@ Section PhNew.
       }
       destruct a as (x, y).
       apply skip_self_inv_false in Heqb.
-      inversion H.
-      destruct Heqb.
+      inversion H; subst; clear H.
+      destruct Heqb; subst.
       subst.
-      rewrite <- H4 in *.
-      rewrite <- H3 in *.
-      clear H3 H4 H.
-      auto.
+      apply IHw in H1.
+      destruct H1; auto.
   Qed.
 
   Let diff_sum_2_sieve:

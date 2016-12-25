@@ -9,13 +9,21 @@ Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.LEDec.
-Require HJ.Phasers.Rel.
+
 Require Import HJ.Phasers.TransDiff.
 Require Import HJ.Phasers.Typesystem.
 
+Require Coq.FSets.FMapFacts.
+
+Require HJ.Phasers.PhaseDiff.
+Require HJ.Phasers.Rel.
+Require HJ.Phasers.SubjectReduction.
+Require HJ.Phasers.Typesystem.
+Require HJ.Phasers.WellFormed.
+
 Module S := HJ.Phasers.Lang.
 
-Open Local Scope Z.
+Open Scope Z.
 
 Section HAS_SMALLEST.
 Variable pm: phasermap.
@@ -140,7 +148,7 @@ Proof.
 Qed.
 
 
-Open Local Scope nat.
+Open Scope nat.
 
 (**
   A crucial precondition to the wait-all working is that all tasks must have
@@ -156,7 +164,7 @@ Definition AllSignalled : Prop  :=
 
 Variable AS : AllSignalled.
 
-Require Import HJ.Phasers.WellFormed.
+Import HJ.Phasers.WellFormed.
 
 Import Phasermap.
 
@@ -306,9 +314,8 @@ Qed.
 
 End HAS_SMALLEST.
 
-Require Import HJ.Phasers.Typesystem.
+Import HJ.Phasers.Typesystem.
 
-Require Coq.FSets.FMapFacts.
 Module M := FMapFacts.WProperties_fun TID Map_TID.
 
 Section PROGRESS.
@@ -332,7 +339,7 @@ Variable reqs: Map_TID.t op.
 Variable pm: phasermap.
 Variable IsValid: Valid pm.
 
-Require Import HJ.Phasers.PhaseDiff.
+Import HJ.Phasers.PhaseDiff.
 
 Variable reqs_spec_1:
   forall t,
@@ -347,7 +354,7 @@ Variable reqs_spec_3:
   Map_TID.MapsTo t i reqs ->
   Check pm t i.
 
-Require Import HJ.Phasers.WellFormed.
+Import HJ.Phasers.WellFormed.
 
 Variable WF: Phasermap.WellFormed pm.
 Let tids := pm_tids pm.  
@@ -474,14 +481,14 @@ Proof.
   destruct Hin as (i, mt).
     destruct (in_dec pm t).
     + apply pm_tids_spec_2 in i0.
-    right.
-    split.
-    * 
-    intuition.
-    subst.
-    rewrite H in *.
-    inversion i0.
-    * intros.
+      right.
+      split. {
+        intuition.
+        unfold tids in *.
+        rewrite H in *.
+        contradiction.
+      }
+      intros.
       assert (Hx: negb (eq_wait_all o) = false) by eauto.
       rewrite Bool.negb_false_iff in Hx.
       apply eq_wait_all_true in Hx.
@@ -560,11 +567,12 @@ Proof.
 Qed.
 End PROGRESS.
 Module ProgressSpec.
-  Require Import HJ.Phasers.SubjectReduction.
-  Require Import HJ.Phasers.WellFormed.
-  Require Import HJ.Phasers.Typesystem.
+
+  Import HJ.Phasers.SubjectReduction.
+  Import HJ.Phasers.WellFormed.
+  Import HJ.Phasers.Typesystem.
   Import WellFormed.Phasermap.
-  
+
   Section ValidPRequest.
     Set Implicit Arguments.
     Unset Strict Implicit.

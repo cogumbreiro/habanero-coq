@@ -401,7 +401,7 @@ Section Defs.
 
   Inductive op := SIGNAL | WAIT | DROP | REGISTER : registry -> op.
 
-  (** Function [eval] interprets operation [o] as its operation specification [Op]. *)
+  (** Function [reduces] interprets operation [o] as its operation specification [Op]. *)
 
   Definition select_rule o :=
     match o with
@@ -423,17 +423,17 @@ Section Defs.
       pre (select_rule o) t ph ->
       Reduces ph (t, o) (exec (select_rule o) t ph).
 
-  Definition eval (e:event) ph : option phaser :=
+  Definition reduces (e:event) ph : option phaser :=
   if pre_dec (select_rule (snd e)) (fst e) ph
   then Some (exec (select_rule (snd e)) (fst e) ph)
   else None.
 
-  Lemma eval_1:
+  Lemma reduces_1:
     forall e ph ph',
-    eval e ph = Some ph' ->
+    reduces e ph = Some ph' ->
     Reduces ph e ph'.
   Proof.
-    unfold eval; intros.
+    unfold reduces; intros.
     destruct e as (x, o).
     simpl in *.
     destruct (pre_dec (select_rule o)). {
@@ -443,13 +443,13 @@ Section Defs.
     inversion H.
   Qed.
 
-  Lemma eval_2:
+  Lemma reduces_2:
     forall e ph ph',
     Reduces ph e ph' ->
-    eval e ph = Some ph'.
+    reduces e ph = Some ph'.
   Proof.
     intros.
-    unfold eval.
+    unfold reduces.
     destruct e as (x, o).
     inversion H; subst; clear H.
     simpl.
@@ -459,25 +459,25 @@ Section Defs.
     contradiction.
   Qed.
 
-  Lemma eval_3:
+  Lemma reduces_3:
     forall e ph,
-    eval e ph = None ->
+    reduces e ph = None ->
     forall ph', ~ Reduces ph e ph'.
   Proof.
     intros.
     unfold not; intros N.
-    apply eval_2 in N.
+    apply reduces_2 in N.
     rewrite N in *.
     inversion H.
   Qed.
 
-  Fixpoint eval_trace (l:list event) :=
+  Fixpoint reduces_trace (l:list event) :=
   match l with
   | nil => Some (Map_TID.empty taskview)
-  | (e :: nil) % list => eval e (make (fst e))
+  | (e :: nil) % list => reduces e (make (fst e))
   | (e::l) % list =>
-    match eval_trace l with
-    | Some ph => eval e ph
+    match reduces_trace l with
+    | Some ph => reduces e ph
     | _ => None
     end
   end.
@@ -523,7 +523,7 @@ Section Facts.
     destruct o; auto; simpl in *; try (inversion H).
   Qed.
 
-  Let reduces_spec:
+  Lemma reduces_spec:
     forall ph t o ph',
     Reduces ph (t, o) ph' ->
     ph' = exec (select_rule o) t ph.
@@ -1041,7 +1041,7 @@ Section Facts.
   (**
     The importance of function [as_tv_op] is captured by the following two properties.
     If the phaser operation is convertible to a taskview operation, then
-    then resulting taskview update is [Taskview.Semantics.eval o' v].
+    then resulting taskview update is [Taskview.Semantics.reduces o' v].
   *)
 
   Lemma ph_to_tv_correct:
@@ -1049,7 +1049,7 @@ Section Facts.
     Reduces ph (t, o) ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
-    ph' = Map_TID.add t (Taskview.eval o' v) ph.
+    ph' = Map_TID.add t (Taskview.reduces o' v) ph.
   Proof.
     intros.
     destruct o'; simpl.
@@ -1071,7 +1071,7 @@ Section Facts.
     Reduces ph (t, o) ph' ->
     as_tv_op o = Some o' ->
     Map_TID.MapsTo t v ph ->
-    Taskview.Reduces v o' (Taskview.eval o' v).
+    Taskview.Reduces v o' (Taskview.reduces o' v).
   Proof.
     intros.
     destruct o'; simpl.
@@ -1088,6 +1088,18 @@ Section Facts.
       subst.
       intuition.
   Qed.
+
+  Theorem reduces_dec e ph:
+    {ph':phaser| Reduces ph e ph'}+{x:unit| forall ph', ~ Reduces ph e ph' }.
+  Proof.
+    remember (reduces e ph).
+    symmetry in Heqo.
+    destruct o.
+    + eauto using reduces_1.
+    + right.
+      exists tt.
+      eauto using reduces_3.
+  Defined.
 
 End Facts.
 

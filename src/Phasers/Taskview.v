@@ -147,7 +147,7 @@ Section Defs.
     The operational semantics not only defines a closed set of operations that
     can operate on a value (here a taskview), but also defines the preconditions of
     each operation.
-    Contrary to [eval], relation [Reduces] defines a precondition
+    Contrary to [reduces], relation [Reduces] defines a precondition
     to [wait], called [WaitPre]: in order to issue a wait, the wait phase must be
     behind (smaller than) the signal phase. We define [CanWait] so it can be reused
     in other developments.
@@ -159,10 +159,10 @@ Section Defs.
   Inductive op := SIGNAL | WAIT.
 
   (**
-  Function [eval] interprets the given operation [o] as the appropriate function.
+  Function [reduces] interprets the given operation [o] as the appropriate function.
   *)
 
-  Definition eval o :=
+  Definition reduces o :=
   match o with
   | SIGNAL => signal
   | WAIT => wait
@@ -379,13 +379,13 @@ Section Semantics.
 
   (**
   A trivial property we choose to highlight is that [Reduces]
-  performs an [eval] on the right-hand side.
+  performs an [reduces] on the right-hand side.
   *)
 
   Lemma reduces_spec:
     forall v o v',
     Reduces v o v' ->
-    v' = eval o v.
+    v' = reduces o v.
   Proof.
     intros.
     inversion H; subst; simpl; trivial.
@@ -411,9 +411,9 @@ Section Semantics.
     trivial.
   Qed.
 
-  Lemma eval_preserves_mode:
+  Lemma reduces_preserves_mode:
     forall v o,
-    mode (eval o v) = mode v.
+    mode (reduces o v) = mode v.
   Proof.
     intros.
     destruct o;
@@ -421,7 +421,7 @@ Section Semantics.
     auto using signal_preserves_mode, wait_preserves_mode.
   Qed.
 
-  Lemma reduces_preserves_mode:
+  Lemma reduces_prop_preserves_mode:
     forall v o v',
     Reduces v o v' ->
     mode v' = mode v.
@@ -429,7 +429,7 @@ Section Semantics.
     intros.
     apply reduces_spec in H.
     subst.
-    auto using eval_preserves_mode.
+    auto using reduces_preserves_mode.
   Qed.
 
   Lemma reduces_signal_inv_sw:

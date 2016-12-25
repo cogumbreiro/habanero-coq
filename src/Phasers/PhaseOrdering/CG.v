@@ -6,6 +6,8 @@ Require Import Coq.Lists.ListSet.
 Require Import Aniceto.Pair.
 Require Import Aniceto.List.
 
+Require PhaseOrdering.Phaser.
+
 Require Import Phasers.Taskview.
 Require Import Regmode.
 Require Import Vars.
@@ -2497,7 +2499,9 @@ Extract Inlined Constant plus => "( + )".
 Extract Inlined Constant mult => "( * )".
 Extract Inlined Constant eq_nat_dec => "( = )".
 
-Extraction "ocaml/cg.ml" build Phaser.eval_trace.
+Extraction "ocaml/cg.ml" build Phaser.reduces_trace
+  Phaser.reduces_dec PhaseOrdering.Phaser.hb_mhp_dec.
+  
 (*
 Section Props.
   Notation Phase n ph sp := (MN.MapsTo n ph (snd sp)).

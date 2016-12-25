@@ -2,6 +2,11 @@ Require Import HJ.Vars.
 
 Require Import Coq.Lists.List.
 
+Require HJ.Phasers.Regmode.
+Require HJ.Phasers.Taskview.
+Require HJ.Phasers.Phaser.
+Require HJ.Phasers.Lang.
+
 (**
   WellFormedness catpures a local property of taskviews: the relationship between
   signal-phase, wait-phase, and mode.
@@ -11,8 +16,8 @@ Require Import Coq.Lists.List.
   We, first, define the notion of well_formed for taskviews. *)
 
 Module Taskview.
-  Require Import HJ.Phasers.Regmode.
-  Require Import HJ.Phasers.Taskview.
+  Import HJ.Phasers.Regmode.
+  Import HJ.Phasers.Taskview.
 
   (** A well_formed taskview has three possible cases:
   (i) the task has wait-capability and is ready to issue a signal,
@@ -254,7 +259,7 @@ End Taskview.
 
 Module Phaser.
   Import Taskview.
-  Require Import HJ.Phasers.Phaser.
+  Import HJ.Phasers.Phaser.
 
   Inductive WellFormed (ph:phaser) : Prop :=
     ph_well_formed_def:
@@ -440,7 +445,7 @@ End Phaser.
 
 
 Module Phasermap.
-  Require Import HJ.Phasers.Lang.
+  Import HJ.Phasers.Lang.
   Import Phaser.
 
   Inductive WellFormed (m:phasermap) : Prop :=

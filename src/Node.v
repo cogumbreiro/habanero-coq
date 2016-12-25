@@ -9,7 +9,12 @@ Require Import Coq.Arith.Peano_dec.
 
 Require Import Aniceto.Map.
 
+(* requires *)
+
 Require Coq.FSets.FMapFacts.
+Require Coq.Arith.Compare_dec.
+
+Require Bijection.
 
 Inductive node := make : nat -> node.
 
@@ -48,7 +53,7 @@ Module NODE <: UsualOrderedType.
     inversion H.
   Qed.
 
-  Require Import Coq.Arith.Compare_dec.
+  Import Coq.Arith.Compare_dec.
   Lemma compare:
     forall x y, Compare lt eq x y.
   Proof.
@@ -96,7 +101,7 @@ Lemma node_eq_dec:
   forall x y : node, {x = y} + {x <> y}.
 Proof.
   auto using node_eq_rw, NODE.eq_dec.
-Qed.
+Defined.
 
 Section NotIn.
   Variable elt:Type.
@@ -139,7 +144,6 @@ Section NotIn.
 End NotIn.
 
 Section Props.
-  Require Bijection.
 
   Variable A:Type.
 
