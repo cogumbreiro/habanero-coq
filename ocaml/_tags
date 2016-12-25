@@ -1,0 +1,2 @@
+<main.*>: package(stringext),package(js_of_ocaml.syntax),package(js_of_ocaml.deriving.syntax),package(js_of_ocaml.deriving),package(deriving),package(js_of_ocaml),package(js_of_ocaml),syntax(camlp4o)
+
