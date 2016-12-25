@@ -4,7 +4,6 @@ open List
 open Printf
 open String
 open Stringext
-open Ezjsonm
 
 type node_type =
     | Past of Cg.op
@@ -140,42 +139,11 @@ let phaser_to_js (ph:Cg.phaser) =
     let handle (k,v) = (string_of_int k, v |> taskview_to_js |> Js.Unsafe.inject) in
     ph |> Cg.Map_TID.elements |> List.map handle |> Array.of_list |> Js.Unsafe.obj
 
-let string_of_event e =
-    match e with
-    | (x, o) -> (string_of_int x) ^ ": " ^ (string_of_op o)
-
-let string_of_trace t =
-    concat "\n" (List.map string_of_event (rev t))
-
-let filter_duplicates lst =
-  let rec is_member n mlst =
-    match mlst with
-    | [] -> false
-    | h::tl ->
-        begin
-          if h=n then true
-          else is_member n tl
-        end
-  in
-  let rec loop lbuf =
-    match lbuf with
-    | [] -> []
-    | h::tl ->
-        begin
-        let rbuf = loop tl
-        in
-          if is_member h rbuf then rbuf
-          else h::rbuf
-        end
-  in
-  loop lst
-
-let parse_trace s =
-    let to_evt x : Cg.event list = 
-        try [event_of_string x]
-        with | Failure _ -> []
+let js_to_phaser j : Cg.phaser =
+    let handle (ph:Cg.phaser) (k:Js.js_string Js.t) =
+        Cg.Map_TID.add (Js.to_string k |> int_of_string) (Js.Unsafe.get j k |> js_to_taskview) ph
     in
-    rev (flatten (List.map to_evt (split s '\n')))
+    List.fold_left handle Cg.Map_TID.empty (Js.object_keys j |> Js.to_array |> Array.to_list)
 
 let string_of_taskview v =
     ("sp: " ^ string_of_int (Cg.signal_phase v) ^
@@ -273,112 +241,40 @@ let js_of_edges (cg:Cg.computation_graph) : 'a array =
     let es = List.map (to_js SYNC) (Cg.s_edges cg) in
     Array.of_list (ec @ ej @ es)
 
+(** Build a graph from a given trace *)
 let js_of_cg (b,cg) (ph:Cg.phaser option) =
     let tids = Array.of_list (rev (Cg.get_nodes b)) in
-    (js_of_vertices tids b ph, js_of_edges cg)
-
-let js_new_network container (vs, es) =
-    let js_graph = 
-        Js.Unsafe.obj [|
-            ("nodes", Js.Unsafe.inject (js_array vs));
-            ("edges", Js.Unsafe.inject (js_array es))
-        |]
-    in
-    let _ = Js.Unsafe.new_obj (Js.Unsafe.variable "vis.Network")
-    [| Js.Unsafe.inject container; 
-       Js.Unsafe.inject js_graph;
-       Js.Unsafe.variable "OPTS"|] in
-    ()
-
-let string_of_phaser (ph:Cg.phaser) =
-    let string_of_tv v =
-        "{sp: " ^ string_of_int (Cg.signal_phase v) ^
-        " wp: " ^ string_of_int (Cg.wait_phase v) ^
-        " mode: " ^ string_of_reg (Cg.mode v) ^ "}" in
-    let string_of_entry (t,v) = " " ^ string_of_int t ^ ": " ^ string_of_tv v in
-    let ph_str = String.concat ",\n" (List.map string_of_entry (Cg.Map_TID.elements ph)) in
-    "{\n" ^ ph_str ^ "\n}"
-
-let string_of_maybe_phaser (ph:Cg.phaser option) =
-    match ph with
-    | Some ph -> string_of_phaser ph
-    | None -> "Invalid trace."
-
-
+    Js.Unsafe.obj [|
+        ("nodes", js_of_vertices tids b ph |> js_array |> Js.Unsafe.inject);
+        ("edges", js_of_edges cg |> js_array |> Js.Unsafe.inject)
+    |]
 
 let _ =
     let run_trace = Js.wrap_callback (fun t -> 
-        match t |> js_to_trace |> Cg.eval_trace with
+        match t |> js_to_trace |> Cg.reduces_trace with
         | Some ph -> phaser_to_js ph
         | _ -> raise (Failure "Invalid trace!")
     ) in
     let build_cg = Js.wrap_callback (fun t ->
         let t = js_to_trace t in
         match Cg.build t with
-        | Some g -> js_of_cg g (Cg.eval_trace t)
+        | Some g -> js_of_cg g (Cg.reduces_trace t)
         | _ -> raise (Failure "Invalid trace!")
-        )
-    in
-    let open Js.Unsafe in
-    global##hj <-
-    obj [|
-        ("run_trace", inject run_trace);
-        ("build_graph", inject build_cg);
-        ("graph", [(1,op_of_string "reg 2 SW")] |> trace_to_js |> js_to_trace |> trace_to_js |> inject);
-        ("zero", Cg.Map_TID.empty |> Cg.Map_TID.add 1 {Cg.wait_phase= 3; Cg.signal_phase=1; Cg.mode=Cg.SIGNAL_ONLY } |> phaser_to_js |> inject )
+    ) in
+    let run = Js.wrap_callback (fun e ph ->
+        match Cg.reduces_dec (js_to_event e) (js_to_phaser ph) with
+        | Cg.Inl ph -> phaser_to_js ph
+        | _ -> raise (Failure "Cannot reduce!")
+    ) in
+    let hb = Js.wrap_callback (fun x y ->
+        Cg.hb_mhp_dec (js_to_phaser x) (js_to_phaser y) |> js_of_bool
+    ) in
+    Js.Unsafe.obj [|
+        ("run_trace", Js.Unsafe.inject run_trace);
+        ("build_graph", Js.Unsafe.inject build_cg);
+        ("run", Js.Unsafe.inject run);
+        ("hb", Js.Unsafe.inject hb);
+        ("trace0", [(1,op_of_string "reg 2 SW")] |> trace_to_js |> js_to_trace |> trace_to_js |> Js.Unsafe.inject);
     |]
+    |> Js.export_all
 
-(*
-(*
-
-
-*)
-(*
-let onload _ =
-    let txt =
-        Dom_html.getElementById "trace_in"
-        |> Dom_html.CoerceTo.textarea
-        |> fun opt ->
-        Js.Opt.case opt 
-        (fun () -> assert false)
-        (fun div -> div)
-    in
-    let txt_out =
-        Dom_html.getElementById "state_out"
-        |> Dom_html.CoerceTo.textarea
-        |> fun opt ->
-        Js.Opt.case opt 
-        (fun () -> assert false)
-        (fun div -> div)
-    in
-    let last_trace = ref (parse_trace "") in
-    let trace_out =
-        Js.Opt.get (Html.document##getElementById(Js.string "graph_out"))
-        (fun () -> assert false) in
-
-    js_new_network trace_out ([||], [||]);
-    let handler = (fun _ ->
-        let trace_txt = Js.to_string (txt##value) in
-        let t = parse_trace trace_txt in
-        if !last_trace <> t then (
-            last_trace := t;
-            match Cg.build t with
-            | Some bcg -> (
-                let ph = Cg.eval_trace t in
-                js_new_network trace_out (js_of_cg bcg ph);
-                txt_out##value <- Js.string (string_of_maybe_phaser ph)
-            )
-            | None -> print_string ("Parsed string:\n" ^ string_of_trace t ^ "\n")
-        ) else ();
-        Js._false)
-    in
-    txt##onkeyup <- Html.handler handler;
-    let _ = handler () in
-    Js._false
-
-let _ =
-    Html.window##onload <- Html.handler onload
-
-*)
-
-*)

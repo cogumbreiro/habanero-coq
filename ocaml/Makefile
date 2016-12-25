@@ -1,28 +1,35 @@
-OCAMLC = ocamlfind ocamlc -g -package stringext,js_of_ocaml.syntax,js_of_ocaml.deriving.syntax,js_of_ocaml.deriving,deriving -syntax camlp4o -package js_of_ocaml 
+# - The -I flag introduces sub-directories 
+# - -use-ocamlfind is required to find packages (from Opam)
+# - _tags file introduces packages, bin_annot flag for tool chain
 
-OBJS = $(NAME).cmo main.cmo
+OCB_FLAGS = -use-ocamlfind -I . -plugin-tag "package(js_of_ocaml.ocamlbuild)"
+OCB = 		ocamlbuild $(OCB_FLAGS)
 
-NAME = cg
-
-JSC = js_of_ocaml --disable genprim --debuginfo --no-inline --pretty --source-map
-
-
-all: $(NAME).html
-
-$(NAME).html: $(NAME).js
-	./embed-js
-
-%.cmi: %.mli
-	$(OCAMLC) -c $<
-
-%.cmo: %.ml %.cmi
-	$(OCAMLC) -c $<
-
-$(NAME).byte: $(OBJS)
-	$(OCAMLC) -linkpkg -o $@ $^
+all: 		byte js # profile debug
 
 clean:
-	rm -f *.cmo *.cmi *.cmx $(NAME).byte $(NAME).js *.o
+			$(OCB) -clean
 
-$(NAME).js: $(NAME).byte
-	$(JSC) $<
+#native: 	sanity
+#			$(OCB) main.native
+
+byte:		sanity
+			$(OCB) main.byte
+
+js:		sanity
+			$(OCB) main.js
+
+profile: 	sanity
+			$(OCB) -tag profile main.native
+
+debug: 		sanity
+			$(OCB) -tag debug main.byte
+
+sanity:
+			# check that packages can be found
+			ocamlfind query yojson 
+
+test: 		native
+			echo '[1, 2, "three", {"four": 4}]' | ./main.native 
+
+.PHONY: 	all clean byte native profile debug sanity test
