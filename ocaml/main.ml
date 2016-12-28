@@ -267,10 +267,16 @@ let _ =
         | _ -> raise (Failure "Cannot reduce!")
     ) in
     let hb = Js.wrap_callback (fun x y ->
-        Cg.hb_mhp_dec (js_to_phaser x) (js_to_phaser y) |> js_of_bool
+        Cg.hb_dec (js_to_phaser x) (js_to_phaser y) |> js_of_bool
+    ) in
+    let par = Js.wrap_callback (fun x y ->
+        Cg.par_dec (js_to_phaser x) (js_to_phaser y) |> js_of_bool
     ) in
     let wf = Js.wrap_callback (fun x ->
         Cg.Phaser.well_formed_dec (js_to_phaser x) |> js_of_bool
+    ) in
+    let wo = Js.wrap_callback (fun x ->
+        Cg.well_ordered_dec (js_to_phaser x) |> js_of_bool
     ) in
     Js.Unsafe.global##hj <-
     Js.Unsafe.obj [|
@@ -278,7 +284,9 @@ let _ =
         ("graph", Js.Unsafe.inject build_cg);
         ("run", Js.Unsafe.inject run);
         ("hb", Js.Unsafe.inject hb);
+        ("par", Js.Unsafe.inject par);
         ("wf", Js.Unsafe.inject wf);
+        ("wo", Js.Unsafe.inject wo);
     |]
     (*|> Js.export_all*)
 

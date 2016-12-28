@@ -34,8 +34,6 @@ Section Defs.
       HappensBefore ph1 ph2.
 
 
-  Definition MayHappenParallel x y := Facilitates y x.
-
   Definition BlockedBy x y := HappensBefore x y.
 
   Inductive WellOrdered x : Prop :=
@@ -54,7 +52,7 @@ End Defs.
 Module Notations.
   Infix "<" := HappensBefore : phaser_scope.
   Infix ">" := BlockedBy : phaser_scope.
-  Infix "<=" := MayHappenParallel : phaser_scope.
+  Infix "<=" := (fun x y => Facilitates y x) : phaser_scope.
   Infix ">=" := Facilitates : phaser_scope.
   Infix "||" := Par : phaser_scope.
 End Notations.
@@ -272,7 +270,7 @@ Section Facts.
 
   Let tv_hb x y := if tv_hb_dec x y then true else false.
 
-  Let hb_dec x y :=
+  Let hb x y :=
   exists_dec
   (fun _ v1 =>
     match exists_dec (fun _ v2 => tv_hb v1 v2) y with
@@ -282,12 +280,12 @@ Section Facts.
   )
   x.
 
-  Lemma hb_mhp_dec x y:
+  Lemma hb_dec x y:
     { HappensBefore x y}
     +
-    { MayHappenParallel y x }.
+    { Facilitates x y }.
   Proof.
-    destruct (hb_dec x y). {
+    destruct (hb x y). {
       left.
       destruct s as ((?,v1), (?,?)); simpl in *.
       destruct (exists_dec _ y). {
@@ -317,10 +315,32 @@ Section Facts.
     auto using tv_not_lt_to_ge.
   Defined.
 
+  Lemma par_dec x y:
+    { Par x y } + { ~ Par x y }.
+  Proof.
+    destruct (hb_dec x y). {
+      right.
+      unfold not; intros.
+      destruct H, h.
+      destruct H.
+      apply tv_hb_to_not_ge in H3.
+      contradiction H3; eauto.
+    }
+    destruct (hb_dec y x). {
+      right.
+      unfold not; intros.
+      destruct H, h.
+      destruct H0.
+      apply tv_hb_to_not_ge in H3.
+      contradiction H3; eauto.
+    }
+    auto using par_def.
+  Defined.
+
   Lemma well_ordered_dec x:
     { WellOrdered x } + { ~ WellOrdered x }.
   Proof.
-    destruct (hb_mhp_dec x x). {
+    destruct (hb_dec x x). {
       right.
       unfold not; intros.
       destruct H.
@@ -333,7 +353,7 @@ Section Facts.
   Lemma hb_to_not_mhp:
     forall x y,
     HappensBefore x y ->
-    ~ MayHappenParallel y x.
+    ~ Facilitates x y.
   Proof.
     intros.
     inversion H.
@@ -346,17 +366,17 @@ Section Facts.
 
   Lemma not_mhp_to_hb:
     forall x y,
-    ~ MayHappenParallel y x ->
+    ~ Facilitates x y ->
     HappensBefore x y.
   Proof.
     intros.
-    destruct (hb_mhp_dec x y); auto.
+    destruct (hb_dec x y); auto.
     contradiction.
   Qed.
 
   Lemma mhp_to_not_hb:
     forall x y,
-    MayHappenParallel x y ->
+    Facilitates y x ->
     ~ HappensBefore y x.
   Proof.
     unfold not; intros.
@@ -368,8 +388,8 @@ Section Facts.
 
   Lemma not_hb_to_mhp:
     forall x y,
-    ~ HappensBefore y x ->
-    MayHappenParallel x y.
+    ~ HappensBefore x y ->
+    Facilitates x y.
   Proof.
     intros.
     apply ph_rel_def; intros.
