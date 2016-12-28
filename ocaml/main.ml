@@ -269,12 +269,16 @@ let _ =
     let hb = Js.wrap_callback (fun x y ->
         Cg.hb_mhp_dec (js_to_phaser x) (js_to_phaser y) |> js_of_bool
     ) in
+    let wf = Js.wrap_callback (fun x ->
+        Cg.Phaser.well_formed_dec (js_to_phaser x) |> js_of_bool
+    ) in
+    Js.Unsafe.global##hj <-
     Js.Unsafe.obj [|
         ("run_trace", Js.Unsafe.inject run_trace);
-        ("build_graph", Js.Unsafe.inject build_cg);
+        ("graph", Js.Unsafe.inject build_cg);
         ("run", Js.Unsafe.inject run);
         ("hb", Js.Unsafe.inject hb);
-        ("trace0", [(1,op_of_string "reg 2 SW")] |> trace_to_js |> js_to_trace |> trace_to_js |> Js.Unsafe.inject);
+        ("wf", Js.Unsafe.inject wf);
     |]
-    |> Js.export_all
+    (*|> Js.export_all*)
 
