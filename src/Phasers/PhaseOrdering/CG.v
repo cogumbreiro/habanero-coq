@@ -2500,7 +2500,8 @@ Extract Inlined Constant mult => "( * )".
 Extract Inlined Constant eq_nat_dec => "( = )".
 
 Extraction "ocaml/cg.ml" build Phaser.reduces_trace
-  Phaser.reduces_dec PhaseOrdering.Phaser.hb_mhp_dec.
+  Phaser.reduces_dec PhaseOrdering.Phaser.hb_mhp_dec
+  WellFormed.Phaser.well_formed_dec.
   
 (*
 Section Props.

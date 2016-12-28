@@ -1,5 +1,6 @@
 Require Import HJ.Vars.
 
+Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Lists.List.
 
 Require HJ.Phasers.Regmode.
@@ -43,6 +44,22 @@ Module Taskview.
       mode v = WAIT_ONLY ->
       WellFormed v.
 
+  Lemma well_formed_dec v:
+    { WellFormed v } + { ~ WellFormed v }.
+  Proof.
+    destruct v as (sp, wp, []);
+    auto using tv_well_formed_so, tv_well_formed_wo.
+    destruct (Nat.eq_dec sp wp). {
+      subst; auto using tv_well_formed_sw_eq.
+    }
+    destruct (Nat.eq_dec sp (S wp)). {
+      subst; auto using tv_well_formed_sw_succ.
+    }
+    right.
+    unfold not; intros N; inversion N; subst; simpl in *; clear N;
+    inversion H;
+    auto with *.
+  Defined.
 
   Hint Constructors WellFormed.
   Section Facts.
@@ -267,6 +284,41 @@ Module Phaser.
         Map_TID.MapsTo t v ph ->
         Taskview.WellFormed v) ->
       WellFormed ph.
+
+  Section DEC.
+
+  Let exists_dec := Map_TID_Extra.exists_dec (elt:=Taskview.taskview) tid_eq_rw.
+
+  Let find_ill_formed x :=
+  exists_dec
+  (fun _ v =>
+    if well_formed_dec v then false else true
+  )
+  x.
+
+  Lemma well_formed_dec x:
+    { WellFormed x } + { ~ WellFormed x }.
+  Proof.
+    destruct (find_ill_formed x) as [((k,v),(Mt,?))|(?,?)]. {
+      simpl in *.
+      destruct (well_formed_dec v). {
+        inversion H.
+      }
+      right.
+      unfold not; intros N; destruct N as (N).
+      apply N in Mt.
+      contradiction.
+    }
+    left.
+    apply ph_well_formed_def.
+    intros.
+    apply e in H.
+    destruct (well_formed_dec v). {
+      assumption.
+    }
+    inversion H.
+  Defined.
+  End DEC.
 
   Lemma ph_well_formed_add:
     forall t v ph,
