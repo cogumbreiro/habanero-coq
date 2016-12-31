@@ -68,7 +68,7 @@ let registry_to_js_aux (r:Cg.registry) =
         ("mode", Cg.get_mode r |> string_of_reg |> js |> Js.Unsafe.inject)
     ]
 
-let registry_to_js (r:Cg.registry) =
+let registry_to_js (r:Cg.registry) : 'a Js.t =
     r |> registry_to_js_aux |> Array.of_list |> Js.Unsafe.obj
 
 let js_to_registry j: Cg.registry =
@@ -106,14 +106,13 @@ let js_to_op j =
     | "drop"-> Cg.DROP
     | _ -> raise (Failure "js_to_op")
 
-let event_to_js ((t,o):Cg.event) =
-    Js.Unsafe.obj [|
-        ("src", t |> Js.Unsafe.inject);
-        ("op", op_to_js o |> Js.Unsafe.inject);
-    |]
+let event_to_js ((t,o):Cg.event) : 'a Js.t =
+    js_array [| t |> Js.Unsafe.inject; o |> op_to_js |> Js.Unsafe.inject |]
 
-let js_to_event j : Cg.event =
-    ((Js.Unsafe.coerce j)##src, (Js.Unsafe.coerce j)##op |> js_to_op)
+let js_to_event (j:'a Js.t) : Cg.event =
+    match Js.to_array (Js.Unsafe.coerce j)  with
+    | [| t; o |] -> (Js.Unsafe.coerce t |> Js.parseInt, js_to_op o)
+    | _ -> raise (Failure "js_to_event")
 
 let trace_to_js (t:Cg.event list) =
     List.map event_to_js t |> Array.of_list |> js_array
