@@ -36,10 +36,6 @@ Section Defs.
       mode v1 = WAIT_ONLY ->
       Facilitates v1 v2.
 
-  Definition MayHappenParallel v1 v2 := Facilitates v2 v1.
-
-  Definition BlockedBy v1 v2 := HappensBefore v2 v1.
-
   Definition get_wait_phase v :=
   match (mode v) with
   | SIGNAL_ONLY => 0
@@ -57,14 +53,22 @@ Section Defs.
      signal_phase := max (get_signal_phase v1) (get_signal_phase v2);
      wait_phase:=max (get_wait_phase v1) (get_wait_phase v2) |}.
 
+  Inductive Par x y : Prop :=
+  | par_def:
+    x <> y ->
+    Facilitates x y ->
+    Facilitates y x ->
+    Par x y.
+
 End Defs.
 
 
 Module Notations.
   Infix "<" := HappensBefore : phaser_scope.
-  Infix ">" := BlockedBy : phaser_scope.
-  Infix "<=" := MayHappenParallel : phaser_scope.
+  Infix ">" := (fun x y => HappensBefore y x) : phaser_scope.
   Infix ">=" := Facilitates : phaser_scope.
+  Infix "<=" := (fun x y => Facilitates y x) : phaser_scope.
+  Infix "||" := Par : phaser_scope.
 End Notations.
 
 
@@ -155,8 +159,7 @@ Section Facts.
     ~ v1 < v2 -> v1 >= v2.
   Proof.
     intros.
-    destruct (ge_dec (signal_phase v1) (wait_phase v2)).
-    { auto using tv_nhb_ge. }
+    destruct (ge_dec (signal_phase v1) (wait_phase v2)); auto using tv_nhb_ge.
     destruct (regmode_eq (mode v2) SIGNAL_ONLY).
     { auto using tv_nhb_so. }
     destruct (regmode_eq (mode v1) WAIT_ONLY).
@@ -446,6 +449,8 @@ Section Facts.
     intuition.
   Qed.
 
+  Definition wf_taskview := { x: taskview | WellFormed x }.
+
   Section Antisym.
 
   Variable x y:taskview.
@@ -480,6 +485,31 @@ Section Facts.
     auto using tv_nhb_so.
   Qed.
   End Antisym.
+
+  Lemma tv_eq_dec (x y:taskview):
+    { x = y } + { x <> y }.
+  Proof.
+    destruct x as (s1,w1,m1), y as (s2,w2,m2).
+    destruct (eq_nat_dec s1 s2). {
+      destruct (eq_nat_dec w1 w2). {
+        destruct (regmode_eq m1 m2). {
+          subst; auto.
+        }
+        subst; right; unfold not; intros N; inversion N; contradiction.
+      }
+      subst; right; unfold not; intros N; inversion N; contradiction.
+    }
+    subst; right; unfold not; intros N; inversion N; contradiction.
+  Defined.
+
+  Lemma quadrochtomy_dec x y (_:WellFormed x) (_:WellFormed y):
+    { x = y } + { x < y } + { y < x } + { x || y }.
+  Proof.
+    destruct (tv_hb_ge_dec x y); auto;
+    destruct (tv_hb_ge_dec y x); auto;
+    destruct (tv_eq_dec x y);
+    auto using par_def.
+  Defined.
 
   Lemma lt_trans_ex:
     forall x y y' z,

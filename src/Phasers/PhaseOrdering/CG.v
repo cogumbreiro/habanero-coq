@@ -2499,12 +2499,15 @@ Extract Inlined Constant plus => "( + )".
 Extract Inlined Constant mult => "( * )".
 Extract Inlined Constant eq_nat_dec => "( = )".
 
-Extraction "ocaml/cg.ml" build Phaser.reduces_trace
-  Phaser.reduces_dec PhaseOrdering.Phaser.hb_dec
-  WellFormed.Phaser.well_formed_dec
-  Phaser.well_ordered_dec
-  Phaser.par_dec.
-  
+Extraction "ocaml/cg.ml"
+  build (* graph generation *)
+  Phaser.reduces_trace (* given a trace produce a state *)
+  Phaser.reduces_dec (* performs a reduction step *)
+  PhaseOrdering.Phaser.hb_dec (* checks if phaser p1 happens-before p2 *)
+  WellFormed.Phaser.well_formed_dec (* checks if phaser is well-formed *)
+  Phaser.well_ordered_dec (* checks if phaser is well-ordered *)
+  Phaser.par_dec (* checks if p1 is concurrent with p2 *).
+
 (*
 Section Props.
   Notation Phase n ph sp := (MN.MapsTo n ph (snd sp)).

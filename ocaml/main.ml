@@ -3,7 +3,6 @@ module Html = Dom_html
 open List
 open Printf
 open String
-open Stringext
 
 type node_type =
     | Past of Cg.op
@@ -24,7 +23,6 @@ module IntHash =
 
 module I = Hashtbl.Make(IntHash)
 
-let js = Js.string
 let js_array a =
     let arr = jsnew Js.array_empty () in
     Array.iteri (fun idx v -> Js.array_set arr idx v) a;
@@ -48,24 +46,10 @@ let string_of_reg r =
     | Cg.SIGNAL_WAIT -> _SW
     | Cg.WAIT_ONLY -> _WO
 
-let op_of_string s =
-    match split (trim s) ' ' with
-    | "reg" :: x :: r :: [] -> Cg.REGISTER { Cg.get_task = int_of_string x; Cg.get_mode = reg_of_string r }
-    | "signal" :: [] -> Cg.SIGNAL
-    | "wait" :: [] -> Cg.WAIT
-    | "drop" :: [] -> Cg.DROP
-    | _ -> raise (Failure "op_of_string")
-
-let event_of_string s : Cg.event =
-    let s = trim s in
-    match split s ':' with
-    | s::o::[] -> (int_of_string s, op_of_string o)
-    | _ -> raise (Failure "op_of_string")
-
 let registry_to_js_aux (r:Cg.registry) =
     [
         ("dst", Cg.get_task r |> Js.Unsafe.inject);
-        ("mode", Cg.get_mode r |> string_of_reg |> js |> Js.Unsafe.inject)
+        ("mode", Cg.get_mode r |> string_of_reg |> Js.string |> Js.Unsafe.inject)
     ]
 
 let registry_to_js (r:Cg.registry) : 'a Js.t =
@@ -92,7 +76,7 @@ let op_name o =
     | Cg.DROP -> "drop"
 
 let op_to_js (o:Cg.op) =
-    let l = ("name", o |> op_name |> js |> Js.Unsafe.inject) :: match o with
+    let l = ("name", o |> op_name |> Js.string |> Js.Unsafe.inject) :: match o with
         | Cg.REGISTER r -> r |> registry_to_js_aux
         | _ -> []
     in
@@ -124,14 +108,14 @@ let taskview_to_js (v:Cg.taskview) =
     Js.Unsafe.obj [|
         ("wp", Cg.wait_phase v |> Js.Unsafe.inject);
         ("sp", Cg.signal_phase v |> Js.Unsafe.inject);
-        ("mode", Cg.mode v |> string_of_reg |> js |> Js.Unsafe.inject)
+        ("mode", Cg.mode v |> string_of_reg |> Js.string |> Js.Unsafe.inject)
     |]
 
 let js_to_taskview j : Cg.taskview =
     {
-        Cg.wait_phase = (Js.Unsafe.coerce j)##wp;
-        Cg.signal_phase = (Js.Unsafe.coerce j)##sp;
-        Cg.mode = (Js.Unsafe.coerce j)##mode |> Js.to_string |> reg_of_string;
+        Cg.wait_phase = j##wp;
+        Cg.signal_phase = j##sp;
+        Cg.mode = j##mode |> Js.to_string |> reg_of_string;
     }
 
 let phaser_to_js (ph:Cg.phaser) =
@@ -174,7 +158,7 @@ let js_of_node_type (n:int) (nt:node_type option) sp wp =
         let o_wp = phase_of wp "wp" n in
         (string_of_op o) ^ o_sp ^ o_wp
     in
-    js (
+    Js.string (
         match nt with
         | Some (Past o) -> handle_op o 
         | Some (Current v) -> "\n\n" ^ string_of_taskview v
@@ -231,7 +215,7 @@ let js_of_edges (cg:Cg.computation_graph) : 'a array =
         ("from", Js.Unsafe.inject n1);
         ("to", Js.Unsafe.inject n2);
         ("dashes", Js.Unsafe.inject (js_dash t));
-        ("arrows", Js.Unsafe.inject (js "to"));
+        ("arrows", Js.Unsafe.inject (Js.string "to"));
         ("smooth", Js.Unsafe.inject (is_enabled (t <> CONTINUE)))
         |]
     in
