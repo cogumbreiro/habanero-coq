@@ -1,7 +1,7 @@
+Set Implicit Arguments.
+
 Require Import HJ.Finish.Lang.
 Require Import HJ.Vars.
-
-Set Arguments Implicit.
 
 Section IEF.
   Import Finish.Lang.FinishNotations.
@@ -323,7 +323,6 @@ Section Sem.
 End Sem.
 
 Section LeToFid.
-  Set Arguments Implicit.
   Require Finish.Find.
   Require Import Coq.Lists.List.
   Require Import Aniceto.List.

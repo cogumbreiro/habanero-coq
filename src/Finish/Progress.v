@@ -1,3 +1,5 @@
+Set Implicit Arguments.
+
 Require Import Coq.Lists.SetoidList.
 
 Require Import HJ.Vars.
@@ -5,7 +7,7 @@ Require Import HJ.Finish.Lang.
 
 Import FinishNotations.
 
-Open Local Scope finish_scope.
+Open Scope finish_scope.
 
 Inductive Nonempty : finish -> Prop :=
   nonempty_def:

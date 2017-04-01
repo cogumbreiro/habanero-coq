@@ -7,7 +7,7 @@ Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.PhaseDiff.
 
-Open Local Scope Z.
+Open Scope Z.
 
 (**
 
@@ -327,11 +327,11 @@ Proof.
 Qed.
 
 End DIFF_SUM.
-
-Implicit Arguments DiffSum.
-Implicit Arguments HasDiff.
-Implicit Arguments NegDiff.
-
+(*
+Arguments DiffSum.
+Arguments HasDiff.
+Arguments NegDiff.
+*)
 Lemma diff_sum_impl_weak:
   forall {A:Type} (D D': (A*A) -> Z -> Prop) ,
   forall l,

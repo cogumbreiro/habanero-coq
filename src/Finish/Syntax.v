@@ -366,7 +366,7 @@ Section FINDA.
 End FINDA.
 
 Require Import Aniceto.EqDec.
-
+Section Defs.
   Let tid_eqb x y := if TID.eq_dec x y then true else false.
 
   Let tid_eqb_true:
@@ -482,7 +482,7 @@ Require Import Aniceto.EqDec.
       refine tt.
       auto.
   Defined.
-
+End Defs.
 Inductive Sub (f:finish) (f':finish) : Prop :=
   sub_def:
     forall t,

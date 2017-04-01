@@ -8,7 +8,7 @@ Require Import Aniceto.ListSet.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 
-Open Local Scope Z.
+Open Scope Z.
 
 (* end hide *)
 
