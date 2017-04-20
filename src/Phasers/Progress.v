@@ -51,7 +51,7 @@ Definition Smallest (t:tid) (ts:list tid)  :=
   List.In t ts /\
   forall t', List.In t' ts -> (~ LE pm t t' /\ ~ LE pm t' t) \/ LE pm t t'.
 
-Theorem has_smallest:
+Let has_smallest:
   forall ts,
   ts <> nil ->
   Forall IsA ts ->
@@ -79,7 +79,7 @@ Proof.
   intuition.
 Qed.
 
-Lemma in_tids:
+Let in_tids:
   forall p ph t,
   Map_PHID.MapsTo p ph pm ->
   Map_TID.In t ph ->
@@ -91,7 +91,7 @@ Proof.
   eauto using in_def.
 Qed.
 
-Lemma Smallest_to_LE :
+Let Smallest_to_LE :
   forall t t' p ph,
   Smallest t tids ->
   Map_PHID.MapsTo p ph pm ->
@@ -155,15 +155,6 @@ Open Scope nat.
   performed a signal prior to waiting.
 *)
 
-Definition AllSignalled : Prop  :=
-  forall p ph,
-  Map_PHID.MapsTo p ph pm ->
-  forall t v,
-  Map_TID.MapsTo t v ph ->
-  wait_phase v < signal_phase v.
-
-Variable AS : AllSignalled.
-
 Import HJ.Phasers.WellFormed.
 
 Import Phasermap.
@@ -219,98 +210,76 @@ Variable WF : WellFormed pm.
     inversion Heqo.
   Defined.
 
-Lemma smallest_to_sync:
-  forall t p ph v,
-  Smallest t tids ->
-  Map_PHID.MapsTo p ph pm ->
-  Map_TID.MapsTo t v ph ->
-  Sync ph t \/ mode v = SIGNAL_ONLY.
-Proof.
-  intros.
-  rename H1 into mt.
-  destruct (can_wait_so(mode v)).
-  - left; apply sync_def with (v:=v); auto.
-    apply phase_def.
-    intros t' v' Hmt'; intros.
-    (* show that: n <= WP(v') *)
-    assert (Hle : wait_phase v <= wait_phase v')
-    by eauto using Smallest_to_WaitPhase.
-    assert (wait_phase v' < signal_phase v') by eauto using AS.
-    assert (wf: Taskview.WellFormed v). {
-      assert (WF1: Phaser.WellFormed ph) by (inversion WF; eauto).
-      inversion WF1; eauto.
-    }
-    destruct wf.
-    + assert (wait_phase v <> signal_phase v). {
-        unfold AllSignalled in *.
-        assert (wait_phase v < signal_phase v) by eauto.
-        intuition.
-      }
-      contradiction.
-    + intuition.
-    + apply so_to_not_can_wait in H3; contradiction.
-    + intros.
-      intuition. 
-  - auto.
-Qed.
+  Variable check_def:
+    forall t,
+    List.In t tids ->
+    Check pm t WAIT_ALL.
 
-Theorem has_unblocked:
-  tids <> nil ->
-  exists t, List.In t tids /\
-  exists m, Reduces pm t WAIT_ALL m.
-Proof.
-  intros.
-  assert (Hisa : Forall IsA tids). {
-    apply Forall_forall.
+  Theorem has_unblocked:
+    tids <> nil ->
+    exists t,
+    List.In t tids /\ exists m, Reduces pm t WAIT_ALL m.
+  Proof.
     intros.
-    unfold IsA, tids in *.
-    auto using pm_tids_spec_1.
-  }
-  assert (Hsmall := has_smallest H Hisa).
-  destruct Hsmall as (t, Hsmall).
-  exists t.
-  intuition.
-  exists (Phasermap.wait_all t pm).
-  apply reduces.
-  simpl.
-  apply wait_all_pre.
-  intros.
-  unfold AllSignalled in *.
-  assert (i := H1).
-  apply Map_TID_Extra.in_to_mapsto in H1.
-  destruct H1 as (v, mt).
-  assert (v_wf:Taskview.WellFormed v). {
-    inversion WF.
-    assert (Phaser.WellFormed ph) by eauto.
-    inversion H2.
-    eauto.
-  }
-  destruct (can_wait_so (mode v)). {
-    apply try_wait_pre_can_wait.
-    apply wait_pre_def with (v:=v); auto. {
-      inversion c;
-      symmetry in H2.
-      - apply Taskview.wait_pre_sw; auto.
-        apply Taskview.tv_well_formed_inv_sw in H2; auto.
-        destruct H2; auto.
-        assert (wait_phase v <> signal_phase v). {
-          assert (wait_phase v < signal_phase v) by eauto.
-          intuition.
-        }
-        contradiction.
-      - apply Taskview.wait_pre_wo; auto.
+    assert (Hisa : Forall IsA tids). {
+      apply Forall_forall.
+      intros.
+      unfold IsA, tids in *.
+      auto using pm_tids_spec_1.
     }
-    assert (Hs := mt).
-    eapply smallest_to_sync in Hs; eauto.
-    destruct Hs as [Hs|Hs].
-    - destruct Hs.
-      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-      assumption.
-    - rewrite Hs in *.
-      inversion c.
-  }
-  eauto using try_wait_pre_so.
-Qed.
+    assert (Hsmall := has_smallest H Hisa).
+    destruct Hsmall as (t, Hsmall).
+    exists t.
+    split; auto.
+    exists (Phasermap.wait_all t pm).
+    apply reduces.
+    simpl.
+    apply wait_all_pre.
+    intros.
+    assert (i := H1).
+    apply Map_TID_Extra.in_to_mapsto in H1.
+    destruct H1 as (v, mt).
+    assert (v_wf:Taskview.WellFormed v). {
+      inversion WF.
+      assert (Phaser.WellFormed ph) by eauto.
+      inversion H2.
+      eauto.
+    }
+    destruct (can_wait_so (mode v)). {
+      apply try_wait_pre_can_wait.
+      apply wait_pre_def with (v:=v); auto. {
+        inversion c;
+        symmetry in H2.
+        - apply Taskview.wait_pre_sw; auto.
+          apply Taskview.tv_well_formed_inv_sw in H2; auto.
+          destruct H2; auto.
+          assert (wait_phase v <> signal_phase v). {
+            assert (Hk : Check pm t WAIT_ALL) by eauto.
+            inversion Hk.
+            assert (wait_phase v < signal_phase v) by eauto.
+            intuition.
+          }
+          contradiction.
+        - apply Taskview.wait_pre_wo; auto.
+      }
+      assert (Hs := mt).
+      (* -- *)
+      apply phase_def.
+      intros x w; intros.
+      assert (wait_phase w < signal_phase w). {
+        assert (Hk : Check pm x WAIT_ALL). {
+          eauto using in_tids, Map_TID_Extra.mapsto_to_in.
+        }
+        inversion Hk.
+        eauto.
+      }
+      assert (wait_phase v <= wait_phase w). {
+        eauto using Smallest_to_WaitPhase.
+      }
+      auto with *.
+    }
+    eauto using try_wait_pre_so.
+  Qed.
 
 End HAS_SMALLEST.
 
@@ -320,7 +289,7 @@ Module M := FMapFacts.WProperties_fun TID Map_TID.
 
 Section PROGRESS.
 
-Lemma progress_unblocking_simple:
+Let progress_unblocking_simple:
   forall pm t i,
   Valid pm ->
   Check pm t i ->
@@ -344,11 +313,7 @@ Import HJ.Phasers.PhaseDiff.
 Variable reqs_spec_1:
   forall t,
   In t pm -> Map_TID.In t reqs.
-(*
-Variable reqs_spec_1:
-  forall t,
-  In t pm <-> Map_TID.In t reqs.
-*)
+
 Variable reqs_spec_3:
   forall t i,
   Map_TID.MapsTo t i reqs ->
@@ -357,7 +322,7 @@ Variable reqs_spec_3:
 Import HJ.Phasers.WellFormed.
 
 Variable WF: Phasermap.WellFormed pm.
-Let tids := pm_tids pm.  
+Let tids := pm_tids pm.
 
 
 Definition eq_wait_all (i:op) :=
@@ -402,30 +367,6 @@ Proof.
   intros.
   rewrite Bool.negb_false_iff, eq_wait_all_true.
   tauto.
-Qed.
-
-Let all_sig:
-  (forall t o, Map_TID.MapsTo t o reqs -> o = WAIT_ALL) ->
-  AllSignalled pm.
-Proof.
-  unfold AllSignalled.
-  intros.
-  assert (Hin : In t pm). {
-    eauto using in_def, Map_TID_Extra.mapsto_to_in.
-  }
-  assert (Hcheck : Check pm t WAIT_ALL). {
-    apply reqs_spec_3.
-    apply reqs_spec_1 in Hin.
-    destruct Hin as (?, Hmt).
-    assert (Heq : x = WAIT_ALL). {
-      apply H in Hmt.
-      assumption.
-    }
-    subst.
-    assumption.
- }
- inversion Hcheck; subst.
- eauto.
 Qed.
 
 Let eq_wait_all_dec:
@@ -500,32 +441,50 @@ Proof.
       destruct Hx as (m, Hx).
       eauto.
 Qed.
+  Let in_tids_to_in:
+    forall t,
+    List.In t (pm_tids pm) ->
+    In t pm.
+  Proof.
+    intros.
+    unfold pm_tids in *.
+    apply in_flat_map in H.
+    destruct H as (ph, (Hi, Hj)).
+    apply ph_tids_spec in Hj.
+    apply Map_PHID_Extra.values_spec in Hi.
+    destruct Hi as (p, Hmt).
+    eauto using in_def.
+  Qed.
 
-Lemma progress_blocking:
+Let progress_blocking:
   ~ Map_TID.Empty reqs ->
   (forall t o, Map_TID.MapsTo t o reqs -> negb (eq_wait_all o) = false) ->
   exists t i m, Map_TID.MapsTo t i reqs /\ Reduces pm t i m.
 Proof.
   intros.
-  assert (AllSig: AllSignalled pm). {
-    eapply all_sig.
-    intros.
-    apply H0 in H1.
-    rewrite negb_eq_wait_all in *.
-    assumption.
+  assert (AllWait: forall t : Map_TID.key, List.In t (pm_tids pm) -> Check pm t WAIT_ALL). {
+    intros ? Hin.
+    assert (i: In t pm) by eauto.
+    apply reqs_spec_1 in i.
+    apply Map_TID_Extra.in_to_mapsto in i.
+    destruct i as (o, mt).
+    assert (o = WAIT_ALL). {
+      apply H0 in mt.
+      destruct o; simpl in *; inversion mt.
+      trivial.
+    }
+    subst.
+    auto.
   }
   destruct (nonempty_to_tids_not_nil H); auto.
   destruct H1 as (Hnil, Hall).
-  destruct (has_unblocked IsValid AllSig WF Hnil) as (t, (Hin, (m, Hred))).
-  exists t.
-  assert (In t pm). {
-    auto using pm_tids_spec_1.
-  }
-  exists WAIT_ALL.
+  edestruct has_unblocked as (t, (Hin, (m, Hred))); eauto.
+  exists t; exists WAIT_ALL.
   exists m.
   assert (Map_TID.MapsTo t WAIT_ALL reqs). {
-    apply reqs_spec_1 in H1.
-    destruct H1 as (o, Hmt).
+    assert (i: In t pm) by eauto.
+    apply reqs_spec_1 in i.
+    destruct i as (o, Hmt).
     assert (Heq : o = WAIT_ALL). {
       eauto.
     }
