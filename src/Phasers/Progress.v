@@ -161,55 +161,6 @@ Import Phasermap.
 
 Variable WF : WellFormed pm.
 
-
-  (**
-    Predicate [Sync] defines what happens when a
-    task synchronizes with the other members of a phaser, which is triggered when
-    a task performs either wait on a phaser, or next.
-    The semantics of [Sync] depends on the registration mode of the task.
-    Tasks registered in [SIGNAL_ONLY] mode do not block, so predicate [Sync] always
-    holds. Tasks that are not registered in [SIGNAL_ONLY] mode
-    (that is tasks with a wait capability) only holds once all 
-    members with a signal capability issued at least as many signals as the task
-    synchronizing.
-   *)
-
-  Inductive Sync : phaser -> tid -> Prop :=
-  | sync_def:
-    forall ph t v,
-    Map_TID.MapsTo t v ph ->
-    CanWait (mode v) ->
-    Phase ph (S (wait_phase v)) ->
-    Sync ph t.
-
-  Definition sync x ph:
-    { Sync ph x } + { ~ Sync ph x }.
-  Proof.
-    intros.
-    remember (Map_TID.find x ph).
-    symmetry in Heqo.
-    destruct o as [v|]. {
-      rewrite <- Map_TID_Facts.find_mapsto_iff in *.
-      destruct (can_wait_so (mode v)). {
-        destruct (phase ph (S (wait_phase v))). {
-          eauto using sync_def.
-        }
-        right; unfold not; intros N; inversion N; subst; clear N;
-        assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-        contradiction.
-      }
-      right; unfold not; intros N; inversion N; subst; clear N;
-      assert (v0 = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-      rewrite e in *.
-      inversion H0.
-    }
-    right; unfold not; intros N.
-    inversion N; subst; clear N;
-    rewrite Map_TID_Facts.find_mapsto_iff in *;
-    rewrite H in *;
-    inversion Heqo.
-  Defined.
-
   Variable check_def:
     forall t,
     List.In t tids ->
@@ -494,7 +445,7 @@ Proof.
   auto using reduces.
 Qed.
 
-Lemma tids_nonempty:
+Let tids_nonempty:
   forall t,
   In t pm -> tids <> nil.
 Proof.
@@ -522,9 +473,10 @@ Proof.
     destruct R as (m, R).
     exists m.
     intuition.
-  - eauto using progress_blocking.
 Qed.
+
 End PROGRESS.
+
 Module ProgressSpec.
 
   Import HJ.Phasers.SubjectReduction.
@@ -562,7 +514,7 @@ Module ProgressSpec.
     eauto using progress.
   Qed.
 
-  Lemma progress:
+  Theorem progress:
     forall (m: phasermap_t) (r:pm_request (pm_t_value m)),
     exists t i (m':phasermap_t), Map_TID.MapsTo t i (pm_request_value r) /\ Reduces (pm_t_value m) t i (pm_t_value m').
   Proof.
