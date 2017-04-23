@@ -64,6 +64,13 @@ Module Map_PHID_Extra := MapUtil Map_PHID.
 Definition phid := PHID.t.
 Definition set_phid := Set_PHID.t.
 
+Lemma phid_eq_rw:
+  forall k k' : phid, k = k' <-> k = k'.
+Proof.
+  intros.
+  auto with *.
+Qed.
+
 Inductive lt : list tid -> list tid -> Prop :=
 | lt_nil:
   forall t l,

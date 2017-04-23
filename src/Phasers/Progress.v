@@ -25,6 +25,25 @@ Module S := HJ.Phasers.Lang.
 
 Open Scope Z.
 
+Section SIMPLE.
+
+Lemma progress_unblocking_simple:
+  forall pm t i,
+  Valid pm ->
+  Check pm t i ->
+  i <> WAIT_ALL ->
+  exists m, Reduces pm t i m.
+Proof.
+  intros.
+  exists (run (get_impl i) t pm).
+  apply reduces.
+  destruct i; simpl; inversion H0; auto.
+  contradiction H1.
+  trivial.
+Qed.
+
+End SIMPLE.
+
 Section HAS_SMALLEST.
 Variable pm: phasermap.
 Let IsA t := In t pm.
@@ -155,12 +174,14 @@ Open Scope nat.
   performed a signal prior to waiting.
 *)
 
+
 Import HJ.Phasers.WellFormed.
 
 Import Phasermap.
 
 Variable WF : WellFormed pm.
 
+  Section Unblocked.
   Variable check_def:
     forall t,
     List.In t tids ->
@@ -231,7 +252,62 @@ Variable WF : WellFormed pm.
     }
     eauto using try_wait_pre_so.
   Qed.
+  End Unblocked.
 
+  Let both_cases:
+    forall l,
+    (forall x, List.In x l -> In x pm) ->
+    (exists x, List.In x l /\ ~ Check pm x WAIT_ALL) \/
+    (forall x, List.In x l -> Check pm x WAIT_ALL).
+  Proof.
+    induction l; intros. {
+      right.
+      intros.
+      inversion H0.
+    }
+    assert (i: In a pm) by eauto using in_eq.
+    destruct (check_dec pm a WAIT_ALL). {
+      assert (j: forall x, List.In x l -> In x pm) by eauto using in_cons.
+      apply IHl in j.
+      destruct j as [(?,(?,?))|?]. {
+        eauto using in_cons.
+      }
+      right.
+      intros.
+      destruct H1; subst; auto.
+    }
+    eauto using in_eq.
+  Qed.
+
+  Theorem progress:
+    tids <> nil ->
+    exists t,
+    forall o,
+    Check pm t o ->
+    exists m, Reduces pm t o m.
+  Proof.
+    intros.
+    edestruct (both_cases) as [(?,(?,?))|?]; eauto using pm_tids_spec_1. {
+      exists x.
+      intros.
+      assert (o <> WAIT_ALL). {
+        unfold not; intros; subst.
+        contradiction.
+      }
+      eauto using progress_unblocking_simple.
+    }
+    destruct (has_unblocked) as (x,(?,?)); auto.
+    exists x.
+    intros.
+    assert (Ho: o = WAIT_ALL \/ o <> WAIT_ALL). {
+      destruct o; auto; right; unfold not; intros N; inversion N.
+    }
+    destruct Ho. {
+      subst.
+      auto.
+    }
+    auto using progress_unblocking_simple.
+  Qed.
 End HAS_SMALLEST.
 
 Import HJ.Phasers.Typesystem.
@@ -456,7 +532,7 @@ Proof.
   assumption.
 Qed.
 
-Theorem progress:
+Theorem progress_ex:
   ~ Map_TID.Empty reqs ->
   exists t i m,
   Map_TID.MapsTo t i reqs /\ Reduces pm t i m.
@@ -475,7 +551,9 @@ Proof.
     intuition.
 Qed.
 
+
 End PROGRESS.
+
 
 Module ProgressSpec.
 
@@ -511,7 +589,7 @@ Module ProgressSpec.
     destruct m.
     destruct r.
     simpl in *.
-    eauto using progress.
+    eauto using progress_ex.
   Qed.
 
   Theorem progress:

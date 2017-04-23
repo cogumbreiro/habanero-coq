@@ -33,6 +33,25 @@ Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
     AsyncPre ps t pm ->
     Check pm t (ASYNC ps).
 
+  Ltac handle_not := 
+      right; unfold not; intros N; inversion N;
+      subst;
+      contradiction;
+      fail.
+
+  Lemma check_dec pm t o :
+    { Check pm t o } + { ~ Check pm t o }.
+  Proof.
+    destruct o.
+    - destruct (ph_new_pre_dec p t pm); try handle_not.
+      auto using check_ph_new.
+    - destruct (ph_signal_pre_dec p t pm); try handle_not.
+      auto using check_ph_signal.
+    - destruct (ph_drop_pre_dec p t pm); try handle_not.
+      auto using check_ph_drop.
+    - auto using check_signal_all.
+    - 
+  Admitted.
 Section Valid.
 Require Import Coq.ZArith.BinInt.
 Require Import HJ.Phasers.PhaseDiff.

@@ -213,6 +213,19 @@ Inductive Reduces m t o : phasermap -> Prop :=
     can_run (get_impl o) t m ->
     Reduces m t o (run (get_impl o) t m).
 
+Section Defs.
+  Notation trace := (list (tid * op)) % type.
+
+  Inductive ReducesN: phasermap -> trace -> Prop :=
+  | reduces_n_nil:
+    ReducesN make nil
+  | reduces_n_cons:
+    forall t l o pm pm',
+    ReducesN pm l ->
+    Reduces pm t o pm' ->
+    ReducesN pm' ((t,o)::l).
+End Defs.
+
 Section Facts.
 
   Let update_rw:
@@ -408,3 +421,53 @@ Section Facts.
     auto using Map_PHID.add_1.
   Qed.
 End Facts.
+
+Section Decidability.
+  Ltac handle_not := right; unfold not; intros N; inversion N; contradiction; fail.
+  Lemma ph_new_pre_dec p t pm:
+    { PhNewPre p t pm } + { ~ PhNewPre p t pm }.
+  Proof.
+    destruct (Map_PHID_Facts.In_dec pm p); try handle_not.
+    auto using ph_new_pre.
+  Defined.
+  
+  Lemma ph_signal_pre_dec p t pm:
+    { PhSignalPre p t pm } + { ~ PhSignalPre p t pm }.
+  Proof.
+    destruct (Map_PHID_Extra.lookup_dec phid_eq_rw p pm) as [(ph,mt)|(_,?)]. {
+      destruct (signal_pre t ph). {
+        eauto using ph_signal_pre.
+      }
+      right.
+      unfold not; intros N.
+      inversion N.
+      assert (ph0 = ph) by eauto using Map_PHID_Facts.MapsTo_fun; subst.
+      contradiction.
+    }
+    right.
+    unfold not; intros N.
+    inversion N.
+    apply Map_PHID_Extra.mapsto_to_in in H.
+    contradiction.
+  Defined.
+
+  Lemma ph_drop_pre_dec p t pm:
+    { PhDropPre p t pm } + { ~ PhDropPre p t pm }.
+  Proof.
+    destruct (Map_PHID_Extra.lookup_dec phid_eq_rw p pm) as [(ph,mt)|(_,?)]. {
+      destruct (drop_pre t ph). {
+        eauto using ph_drop_pre.
+      }
+      right.
+      unfold not; intros N.
+      inversion N.
+      assert (ph0 = ph) by eauto using Map_PHID_Facts.MapsTo_fun; subst.
+      contradiction.
+    }
+    right.
+    unfold not; intros N.
+    inversion N.
+    apply Map_PHID_Extra.mapsto_to_in in H.
+    contradiction.
+  Defined.
+End Decidability.
