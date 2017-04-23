@@ -1,7 +1,6 @@
 Require Import HJ.Vars.
-Require Import HJ.AsyncFinish.Lang.
-Require Import HJ.AsyncFinish.LangExtra.
-
+Require Import HJ.Finish.Lang.
+Require Import HJ.Finish.LangExtra.
 
 Module Examples.
 Module Example1.
@@ -39,10 +38,10 @@ Ltac solve_disjoint :=
   (apply disjoint_ok; solve_notin) ||
   (apply disjoint_skip; auto).
 
-
 (* Check if the notations are working. *)
 Goal Node nil = [].
-auto. Qed.
+  auto.
+Qed.
 
 (**
   Function [mk_finish] creates a finish scope, delimited by brackets,
@@ -473,9 +472,10 @@ Let S1_1 := from_list (
 Let S0 := run t1 S1.
 
 (*   [ ! t1 ] t1 BEGIN_FINISH ([ ! t1 ] |+ (t1 <| [! t1]))  *)
+(*
 Import FinishNotations.
 Open Scope finish_scope.
-Module F := HJ.AsyncFinish.Semantics.
+Module F := HJ.Finish.Semantics.
 
 (* 
   (t1: "begin_finish; async S3; f(); end_finish; S2")
@@ -537,9 +537,9 @@ Proof.
   - solve_tid_notin.
   - apply Example1.R2.
 Qed.
+*)
 
 End Example1_1.
 
 End FX10.
 End Examples.
-
