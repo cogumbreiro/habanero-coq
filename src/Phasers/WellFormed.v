@@ -655,10 +655,11 @@ Module Phasermap.
       rewrite R; clear R.
       assert (Hx: RegisterPre {| Phaser.get_task := (get_new_task ps); get_mode := r |} t ph). {
         inversion H.
-        apply H2 in H0.
-        inversion H0.
-        assert (r0 = r) by eauto using Map_PHID_Facts.MapsTo_fun; subst.
-        assumption.
+        inversion H2.
+        specialize (H4 _ _ i).
+        destruct H4 as (ph', (mt, Hr)).
+        assert (ph' = ph) by eauto using Map_PHID_Facts.MapsTo_fun; subst.
+        auto.
       }
       auto using ph_register_preserves_well_formed.
     }

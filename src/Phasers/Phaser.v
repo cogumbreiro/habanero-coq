@@ -379,6 +379,16 @@ Section Defs.
     eauto using Map_TID_Extra.mapsto_to_in.
   Defined.
 
+  Lemma register_pre_to_in:
+    forall r t ph,
+    RegisterPre r t ph ->
+    Map_TID.In t ph.
+  Proof.
+    intros.
+    inversion H.
+    eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
   (**
     Operationally, register adds task [get_task r]  to the phaser, assigning new taskview
     that is a copy of the issuer's taskview with the mode set to [get_mode r].

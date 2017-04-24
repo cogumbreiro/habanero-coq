@@ -1277,10 +1277,10 @@ Section Async.
   *)
 
   Variable t:tid.
-
+(*
   Variable p : phid.
-
-  Variable m : phasermap.
+*)
+  Variable pm : phasermap.
 
   Variable ps : phased.
 
@@ -1288,19 +1288,18 @@ Section Async.
 
   Let chg_edge (e:tid * tid) := match e with (x,y) => (chg_tid x, chg_tid y) end.
 
-  Variable pre: AsyncPre ps t m.
+  Variable pre: AsyncPre ps t pm.
 
-  Let m' := async ps t m.
+  Notation pm' := (async ps t pm).
 
   Let chg_edge_inv:
     forall pi ph ti v,
-    Map_PHID.MapsTo pi ph m' ->
+    Map_PHID.MapsTo pi ph pm' ->
     Map_TID.MapsTo ti v ph ->
-    (exists ph' v', Map_PHID.MapsTo pi ph' m /\ Map_TID.MapsTo t v' ph' /\ wait_phase v = wait_phase v') \/
-    (exists ph' v', Map_PHID.MapsTo pi ph' m /\ Map_TID.MapsTo ti v' ph' /\ wait_phase v = wait_phase v').
+    (exists ph' v', Map_PHID.MapsTo pi ph' pm /\ Map_TID.MapsTo t v' ph' /\ wait_phase v = wait_phase v') \/
+    (exists ph' v', Map_PHID.MapsTo pi ph' pm /\ Map_TID.MapsTo ti v' ph' /\ wait_phase v = wait_phase v').
   Proof.
     intros.
-    unfold m' in *.
     apply async_mapsto_rw in H.
     destruct H as (ph', (R, mt)).
     rewrite R in *; clear R.
@@ -1322,93 +1321,112 @@ Section Async.
   Qed.
 
   Let chg_tid_impl:
-    forall p' ph x v r,
-    Map_PHID.MapsTo p' ph m' ->
+    forall p ph x v,
+    Map_PHID.MapsTo p ph pm' ->
     Map_TID.MapsTo x v ph ->
-    Map_PHID.MapsTo p' r (get_args ps) ->
     exists ph' v',
-    Map_PHID.MapsTo p' ph' m /\ 
+    Map_PHID.MapsTo p ph' pm /\ 
     Map_TID.MapsTo (chg_tid x) v' ph' /\
     wait_phase v = wait_phase v'.
   Proof.
     intros.
-    unfold m' in *.
-    rewrite async_mapsto_rw in H.
-    destruct H as  (ph', (R, mt)).
-    rewrite R in *; clear R.
-    unfold chg_tid.
-    destruct (TID.eq_dec x (get_new_task ps)). {
-      subst.
-      assert (Map_TID.In t ph'). {
-        inversion pre as [Hx].
-        apply Hx in mt.
-        inversion mt.
-        assumption.
+    destruct (Map_PHID_Extra.in_dec phid_eq_rw p (get_args ps)). {
+      apply Map_PHID_Extra.in_to_mapsto in i.
+      rewrite async_mapsto_rw in H.
+      destruct H as  (ph', (R, mt)).
+      rewrite R in *; clear R.
+      unfold chg_tid.
+      destruct i as (r, ?).
+      destruct (TID.eq_dec x (get_new_task ps)). {
+        subst.
+        assert (Map_TID.In t ph') by eauto using async_pre_to_in_ph.
+        apply async_1_mapsto_eq with (r:=r) in H0; auto.
+        destruct H0 as (v1', (mt1, R1)).
+        subst.
+        eauto.
       }
-      apply async_1_mapsto_eq with (r:=r) in H0; auto.
-      destruct H0 as (v1', (mt1, R1)).
-      subst.
+      apply async_1_mapsto_neq in H0; auto; clear n.
       eauto.
     }
-    apply async_1_mapsto_neq in H0; auto; clear n.
-    eauto.
+    rewrite async_mapsto_rw in H.
+    destruct H as  (ph', (R, mt)).
+    subst.
+    apply async_1_mapsto in H0.
+    destruct H0 as [?|(v',(r,(?,(?,mt'))))]. {
+      unfold chg_tid.
+      destruct (Map_PHID_Extra.P.F.eq_dec x (get_new_task ps)). {
+        subst.
+        inversion pre.
+        contradiction H1.
+        eapply in_def; eauto using Map_TID_Extra.mapsto_to_in.
+      }
+      eauto.
+    }
+    subst.
+    contradiction n.
+    eauto using Map_PHID_Extra.mapsto_to_in.
   Qed.
 
-  Let chg_edge_impl:
-    forall p' r ph e z,
-    Map_PHID.MapsTo p' r (get_args ps) ->
-    Map_PHID.MapsTo p' ph m' ->
+  Let chg_edge_ph_impl:
+    forall p ph e z,
+    Map_PHID.MapsTo p ph pm' ->
     ph_diff ph e z ->
-    pm_diff m (chg_edge e) z.
+    exists ph',
+    Map_PHID.MapsTo p ph' pm /\ ph_diff ph' (chg_edge e) z.
   Proof.
     intros.
     destruct e as (x,y).
     simpl in *.
-    inversion H1; subst; clear H1.
-    apply chg_tid_impl with (p':=p') (r:=r) in H4; auto.
-    apply chg_tid_impl with (p':=p') (r:=r) in H6; auto.
-    destruct H4 as (ph1, (v1', (mt1, (mt2, R)))).
-    rewrite R in *; clear R.
-    destruct H6 as (ph2, (v2', (mt3, (mt4, R)))).
-    rewrite R in *; clear R.
+    inversion H0; subst; clear H0.
+    apply chg_tid_impl with (p:=p) in H3; auto.
+    destruct H3 as (ph1, (v1', (mt1, (mt2, R1)))).
+    rewrite R1; clear R1.
+    apply chg_tid_impl with (p:=p) in H5; auto.
+    destruct H5 as (ph2, (v2', (mt3, (mt4, R2)))).
+    rewrite R2; clear R2.
     assert (ph2 = ph1) by eauto using Map_PHID_Facts.MapsTo_fun; subst.
-    eauto using pm_diff_def, ph_diff_def.
+    eauto using ph_diff_def.
+  Qed.
+
+  Let chg_edge_impl:
+    forall p ph e z,
+    Map_PHID.MapsTo p ph pm' ->
+    ph_diff ph e z ->
+    pm_diff pm (chg_edge e) z.
+  Proof.
+    intros.
+    destruct e as (x,y).
+    simpl in *.
+    eapply chg_edge_ph_impl in H0; eauto.
+    destruct H0 as (?, (?,?)).
+    eauto using pm_diff_def.
   Qed.
 
   Let edge_impl:
     forall e z,
-    pm_diff m' e z ->
-    pm_diff m (chg_edge e) z.
+    pm_diff pm' e z ->
+    pm_diff pm (chg_edge e) z.
   Proof.
     intros.
-    unfold m' in *.
-    inversion H.
-    assert (mt: exists r, Map_PHID.MapsTo p0 r (get_args ps)). {
-      inversion pre.
-      rewrite async_mapsto_rw in H0.
-      destruct H0 as  (ph', (R, mt)).
-      apply H2 in mt.
-      inversion mt.
-      eauto.
-    }
-    destruct mt as (r, mt).
+    inversion H; clear H.
+    inversion pre; clear pre.
     eauto.
   Qed.
 
   Let walk_chg_edge:
     forall w,
-    Walk (HasDiff (pm_diff m')) w ->
-    Walk (HasDiff (pm_diff m)) (map chg_edge w).
+    Walk (HasDiff (pm_diff pm')) w ->
+    Walk (HasDiff (pm_diff pm)) (map chg_edge w).
   Proof.
     intros.
-    apply walk_map_impl with (E:=(HasDiff (pm_diff m'))); intros; auto.
+    apply walk_map_impl with (E:=(HasDiff (pm_diff pm'))); intros; auto.
     - destruct H0.
       unfold HasDiff.
       exists x.
       eauto.
     - destruct w0.
       + apply linked_nil.
-      + destruct p0 as (x, y).
+      + destruct p as (x, y).
         simpl.
         destruct a as (a,b).
         apply linked_inv in H0.
@@ -1426,7 +1444,7 @@ Section Async.
       apply starts_with_inv_nil in H.
       inversion H.
     }
-    destruct p0 as (a,b).
+    destruct p as (a,b).
     simpl.
     apply starts_with_eq in H.
     subst.
@@ -1455,8 +1473,8 @@ Section Async.
 
   Let walk2_chg_edge:
     forall t1 t2 w,
-    Walk2 (HasDiff (pm_diff m')) t1 t2 w ->
-    Walk2 (HasDiff (pm_diff m)) (chg_tid t1) (chg_tid t2) (map chg_edge w).
+    Walk2 (HasDiff (pm_diff pm')) t1 t2 w ->
+    Walk2 (HasDiff (pm_diff pm)) (chg_tid t1) (chg_tid t2) (map chg_edge w).
   Proof.
     intros.
     inversion H.
@@ -1466,8 +1484,8 @@ Section Async.
 
   Let diff_sum_chg_edge:
     forall w z,
-    DiffSum (pm_diff m') w z ->
-    DiffSum (pm_diff m) (map chg_edge w) z.
+    DiffSum (pm_diff pm') w z ->
+    DiffSum (pm_diff pm) (map chg_edge w) z.
   Proof.
     induction w; intros.
     - simpl.
@@ -1488,8 +1506,8 @@ Section Async.
 
   Let trans_diff_chg:
     forall t1 t2 z,
-    TransDiff (pm_diff m') t1 t2 z ->
-    TransDiff (pm_diff m) (chg_tid t1) (chg_tid t2) z.
+    TransDiff (pm_diff pm') t1 t2 z ->
+    TransDiff (pm_diff pm) (chg_tid t1) (chg_tid t2) z.
   Proof.
     intros.
     inversion H.
@@ -1498,8 +1516,8 @@ Section Async.
   Qed.
 
   Lemma sr_async:
-    Valid m ->
-    Valid m'.
+    Valid pm ->
+    Valid pm'.
   Proof.
     intros.
     unfold Valid in *.

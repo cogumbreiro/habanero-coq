@@ -157,24 +157,22 @@ Definition async ps t : phasermap -> phasermap := Map_PHID.mapi (async_1 ps t).
   using the phased object [ps].
    *)
 
-Inductive PhasedPre (m:phasermap) (t:tid) (ps:phased) (p:phid) (ph:phaser) : Prop := 
-  phased_pre:
-    forall r,
-    Map_PHID.MapsTo p r (get_args ps) ->
-    Map_TID.In t ph ->
-    RegisterPre (mk_registry (get_new_task ps) r) t ph ->
-    PhasedPre m t ps p ph.
+Inductive PhasedPre (ps:phased) (t:tid) pm : Prop := 
+  phased_pre_def:
+    (forall p m,
+      Map_PHID.MapsTo p m (get_args ps) -> 
+      exists ph, Map_PHID.MapsTo p ph pm /\ RegisterPre (mk_registry (get_new_task ps) m) t ph) ->
+    PhasedPre ps t pm.
 
 (**
   The pre-condition of executing an async are three:
   (i) all phased pairs in [ps] must meet the preconditions of [PhasedPre],
-  (ii) the phaser names in [ps] cannot be appear multiple times in [ps],
-  (iii) the spawned task [t'] cannot be known in the phasermap.
+  (ii) the spawned task [t'] cannot be known in the phasermap.
   *)
 
 Inductive AsyncPre (ps:phased) t m : Prop :=
   async_pre:
-    (forall p ph, Map_PHID.MapsTo p ph m -> PhasedPre m t ps p ph) ->
+    PhasedPre ps t m ->
     ~ In (get_new_task ps) m -> 
     AsyncPre ps t m.
 
@@ -420,6 +418,22 @@ Section Facts.
     unfold ph_new.
     auto using Map_PHID.add_1.
   Qed.
+
+  Lemma async_pre_to_in_ph:
+    forall ps t pm r ph p,
+    AsyncPre ps t pm ->
+    Map_PHID.MapsTo p r (get_args ps) ->
+    Map_PHID.MapsTo p ph pm ->
+    Map_TID.In t ph.
+  Proof.
+    intros.
+    inversion H as [Hx].
+    inversion Hx.
+    specialize (H3 _ _ H0).
+    destruct H3 as (ph', (?, Hr)).
+    assert (ph' = ph) by eauto using Map_PHID_Facts.MapsTo_fun; subst.
+    eauto using Phaser.register_pre_to_in.
+  Qed.
 End Facts.
 
 Section Decidability.
@@ -468,6 +482,99 @@ Section Decidability.
     unfold not; intros N.
     inversion N.
     apply Map_PHID_Extra.mapsto_to_in in H.
+    contradiction.
+  Defined.
+
+  Definition phased_pre_dec ps t (pm:phasermap):
+    { PhasedPre ps t pm } + { ~ PhasedPre ps t pm }.
+  Proof.
+    remember (forallb (fun kv => 
+      match Map_PHID.find (fst kv) pm with
+      | Some ph =>
+        if register_pre {| get_task := get_new_task ps; get_mode := (snd kv) |} t ph
+        then true else false
+      | _ => false
+      end
+    ) (Map_PHID.elements (get_args ps))).
+    symmetry in Heqb.
+    destruct b. {
+      left.
+      apply phased_pre_def.
+      intros.
+      rewrite forallb_forall in *.
+      specialize Heqb with (p, m).
+      rewrite <- Map_PHID_Extra.maps_to_iff_in_elements in Heqb; auto using phid_eq_rw.
+      specialize (Heqb H).
+      simpl in *.
+      destruct (Map_PHID_Extra.find_rw p pm) as [(R,N)|(ph,(R,?))]; rewrite R in *; clear R. {
+        inversion Heqb.
+      }
+      destruct (register_pre {| get_task := get_new_task ps; get_mode := m |} t ph). {
+        eauto.
+      }
+      inversion Heqb.
+    }
+    right.
+    rewrite List.forallb_existsb in Heqb.
+    rewrite Bool.negb_false_iff in *.
+    apply existsb_exists in Heqb.
+    unfold not; intros N.
+    destruct Heqb as ((p,m),(Hi,Hx)).
+    apply Map_PHID_Extra.maps_to_iff_in_elements in Hi; auto using phid_eq_rw.
+    rewrite Bool.negb_true_iff in *.
+    simpl in *.
+    inversion N.
+    specialize (H _ _ Hi).
+    destruct H as (ph, (mt, Hr)).
+    destruct (Map_PHID_Extra.find_rw p pm) as [(R,N1)|(ph',(R,?))]; rewrite R in *; clear R. {
+      contradiction N1.
+      eauto using Map_PHID_Extra.mapsto_to_in.
+    }
+    destruct (register_pre {| get_task := get_new_task ps; get_mode := m |} t ph'). {
+      inversion Hx.
+    }
+    assert (ph' = ph) by eauto using Map_PHID_Facts.MapsTo_fun; subst.
+    contradiction.
+  Defined.
+
+  Definition in_dec t pm:
+    { In t pm } + { ~ In t pm }.
+  Proof.
+    destruct (Map_PHID_Extra.pred_choice pm (fun p ph =>
+      if Map_TID_Extra.in_dec tid_eq_rw t ph then true else false
+    )); auto with *. {
+      left.
+      destruct e as (p,(ph, (?,Hx))).
+      destruct (Map_TID_Extra.in_dec tid_eq_rw t ph). {
+        eauto using in_def.
+      }
+      inversion Hx.
+    }
+    right.
+    unfold not; intros N.
+    inversion N; subst; clear N.
+    specialize (e _ _ H).
+    destruct (Map_TID_Extra.in_dec tid_eq_rw t ph). {
+      inversion e.
+    }
+    contradiction.
+  Defined.
+
+  Lemma async_pre_dec ps t pm: 
+    { AsyncPre ps t pm } + { ~ AsyncPre ps t pm }.
+  Proof.
+    destruct (in_dec (get_new_task ps) pm). {
+      right.
+      unfold not; intros N.
+      inversion N.
+      contradiction.
+    }
+    destruct (phased_pre_dec ps t pm). {
+      auto using async_pre.
+    }
+    right.
+    unfold not; intros N.
+    inversion N.
     contradiction.
   Defined.
 End Decidability.
