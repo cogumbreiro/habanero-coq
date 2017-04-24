@@ -282,7 +282,7 @@ Module Progress.
     Require Import HJ.Finish.Progress.
     Variable IsFlat:
       Flat f.
-
+    (** XXX: This cannot be a parameter. *)
     Variable nonempty_tids:
       LEDec.pm_tids (Phasermap.state p) <> nil.
 
@@ -311,9 +311,26 @@ Module Progress.
         }
         exists (pm_t, snd ctx).
         eapply reduces_p; eauto.
-      - 
+      - apply flat_reduces in H2; auto.
+        destruct H2 as (f', ?).
+        exists (fst ctx, f').
+        eapply reduces_f; eauto.
+      - apply H in H3.
+        destruct H3 as (pm', ?).
+        assert (Hr: ReducesN pm' ( (t,o0)::l )%list ). {
+          eauto using reduces_n_cons.
+        }
+        remember {| Phasermap.state := pm'; history := ((t,o0)::l)%list; phasermap_spec := Hr |}
+        as pm_t.
+        assert (ReducesT (fst ctx) (t, o0) pm_t). {
+          apply reduces_t_def; subst; auto.
+        }
+        apply flat_reduces in H2; auto.
+        destruct H2 as (f', ?).
+        exists (pm_t, f').
+        eapply reduces_both; eauto.
     Qed.
-      
+
 (*
     Let progress_only_f:
       forall t i o,
@@ -447,8 +464,8 @@ Module Progress.
         eauto.
       - apply progress_all_p with (r:=r); eauto.
     Qed.
-  End CtxProgress.
 *)
+  End CtxProgress.
   Section CtxTrans.
     Import Lang.FinishNotations.
     Open Scope finish_scope.
