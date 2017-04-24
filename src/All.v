@@ -5,8 +5,9 @@ Require Import HJ.Vars.
 Require Import HJ.Finish.IEF.
 Require Import HJ.Common.
 Require HJ.Phasers.Progress.
+Require HJ.Phasers.Phasermap.
 
-Notation phasermap_t := Progress.ProgressSpec.phasermap_t.
+(*Notation phasermap_t := phasermap.*)
 Notation fstate := (Map_FID.t phasermap_t).
 
 
@@ -152,13 +153,13 @@ Inductive ContextOf (s:state) (t:tid) : context -> Prop :=
     Map_FID.MapsTo l m s.(get_fstate) ->
     ContextOf s t (m, (get_finish s)).
 
-Import Progress.ProgressSpec.
+(*Import Progress.ProgressSpec.*)
 
 Inductive CtxReduces (ctx:context) (t:tid) (o:op) : context -> Prop :=
   | reduces_p:
     forall m o',
     translate o = only_p o' ->
-    Phasermap.Reduces (pm_t_value (fst ctx)) t o' (pm_t_value m) ->
+    Phasermap.ReducesT (fst ctx) (t, o') m ->
     CtxReduces ctx t o (m, snd ctx)
   | reduces_f:
     forall f o',
@@ -168,7 +169,7 @@ Inductive CtxReduces (ctx:context) (t:tid) (o:op) : context -> Prop :=
   | reduces_both:
     forall m o_p f o_f,
     translate o = both o_p o_f ->
-    Phasermap.Reduces (pm_t_value (fst ctx)) t o_p (pm_t_value m) ->
+    Phasermap.ReducesT (fst ctx) (t, o_p) m ->
     FS.Reduce (snd ctx) t o_f f ->
     CtxReduces ctx t o (m, f).
 
@@ -179,15 +180,15 @@ Module Typesystem.
   Import Semantics.
   Require HJ.Phasers.Typesystem.
   Require HJ.Finish.Typesystem.
-  Import Progress.ProgressSpec.
+(*  Import Progress.ProgressSpec.*)
   Module P_T := HJ.Phasers.Typesystem.
   Module F_T := HJ.Finish.Typesystem.
-  
+
   Inductive Check (ctx:context) (t:tid): op -> Prop :=
   | check_only_p:
     forall i o,
     translate i = only_p o ->
-    P_T.Check (pm_t_value (fst ctx)) t o ->
+    P_T.Check (Phasermap.state (fst ctx)) t o ->
     Check ctx t i
   | check_only_f:
     forall i o,
@@ -198,7 +199,7 @@ Module Typesystem.
     forall i o o',
     translate i = both o o' ->
     F_T.Check (snd ctx) t o' ->
-    P_T.Check (pm_t_value (fst ctx)) t o ->
+    P_T.Check (Phasermap.state (fst ctx)) t o ->
     Check ctx t i.
 
   Lemma check_inv_f_check:
@@ -247,8 +248,8 @@ Module Progress.
   Import Semantics.
   Import Typesystem.
 
-  Import P_P.ProgressSpec.
-
+(*  Import P_P.ProgressSpec.*)
+(*
   Inductive ProgressArg reqs m : Prop :=
     | some_f_req:
       forall  t i o,
@@ -261,34 +262,59 @@ Module Progress.
       (forall t o, Map_TID.MapsTo t o (pm_request_value r) -> exists i, as_p_op i = Some o /\ Map_TID.MapsTo t i reqs) ->
       ~ Map_TID.Empty reqs ->
       ProgressArg reqs m.
+*)
 
   Section CtxProgress.
-    Import P_P.ProgressSpec.
+    (*Import P_P.ProgressSpec.*)
 
     Variable f:F.finish.
     Variable p:phasermap_t.
-    Let pm := pm_t_value p.
 
-    Variable reqs: Map_TID.t op.
-    Variable hp: ProgressArg reqs p.
+(*    Variable reqs: Map_TID.t op.*)
+(*    Variable hp: ProgressArg reqs p.*)
 
     Let ctx := (p, f).
-
+(*
     Variable ReqsChecked:
       forall t i,
       Map_TID.MapsTo t i reqs -> Check ctx t i.
-
+*)
     Require Import HJ.Finish.Progress.
     Variable IsFlat:
       Flat f.
 
-    Let pm_wf:
-      Welformedness.Phasermap.WellFormed pm.
-    Proof.
-      destruct p.
-      eauto.
-    Qed.
+    Variable nonempty_tids:
+      LEDec.pm_tids (Phasermap.state p) <> nil.
 
+    Lemma ctx_progress:
+      exists t,
+      forall o,
+      Check ctx t o ->
+      exists ctx', CtxReduces ctx t o ctx'.
+    Proof.
+      destruct p as (pm, l, ?).
+      simpl in *.
+      eapply P_P.progress_ex in nonempty_tids; eauto.
+      destruct nonempty_tids as (t, ?).
+      exists t.
+      intros.
+      inversion H0; subst; clear H0.
+      - apply H in H2.
+        destruct H2 as (pm', ?).
+        assert (Hr: ReducesN pm' ( (t,o0)::l )%list ). {
+          eauto using reduces_n_cons.
+        }
+        remember {| Phasermap.state := pm'; history := ((t,o0)::l)%list; phasermap_spec := Hr |}
+        as pm_t.
+        assert (ReducesT (fst ctx) (t, o0) pm_t). {
+          apply reduces_t_def; subst; auto.
+        }
+        exists (pm_t, snd ctx).
+        eapply reduces_p; eauto.
+      - 
+    Qed.
+      
+(*
     Let progress_only_f:
       forall t i o,
       Map_TID.MapsTo t i reqs ->
@@ -337,7 +363,9 @@ Module Progress.
       destruct Hmt as (o, (_,Hx)).
       eauto using Map_TID_Extra.mapsto_to_in.
     Qed.
+*)
 
+(*
     Let progress_all_p
       (r:pm_request pm)
       (p_reqs_spec_1:
@@ -420,7 +448,7 @@ Module Progress.
       - apply progress_all_p with (r:=r); eauto.
     Qed.
   End CtxProgress.
-
+*)
   Section CtxTrans.
     Import Lang.FinishNotations.
     Open Scope finish_scope.

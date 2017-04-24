@@ -21,6 +21,8 @@ Require HJ.Phasers.SubjectReduction.
 Require HJ.Phasers.Typesystem.
 Require HJ.Phasers.WellFormed.
 
+Require Import Phasers.SubjectReduction.
+
 Module S := HJ.Phasers.Lang.
 
 Open Scope Z.
@@ -310,3 +312,18 @@ Variable WF : WellFormed pm.
   Qed.
 End HAS_SMALLEST.
 
+Section ProgressEx.
+  Corollary progress_ex:
+    forall pm l,
+    ReducesN pm l ->
+    pm_tids pm <> nil ->
+    exists t,
+    forall o,
+    Check pm t o ->
+    exists m, Reduces pm t o m.
+  Proof.
+    intros.
+    eauto using progress, reduces_n_to_valid, WellFormed.Phasermap.well_formed_to_reduces_n.
+  Qed.
+
+End ProgressEx.

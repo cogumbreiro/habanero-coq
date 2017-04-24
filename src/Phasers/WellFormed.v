@@ -702,4 +702,25 @@ Module Phasermap.
     - auto using pm_drop_all_preserves_well_formed.
     - auto using pm_async_preserves_well_formed.
   Qed.
+
+  Lemma well_formed_make:
+    WellFormed make.
+  Proof.
+    unfold make.
+    apply pm_well_formed_def.
+    intros.
+    rewrite Map_PHID_Facts.empty_mapsto_iff in H.
+    contradiction.
+  Qed.
+
+  Lemma well_formed_to_reduces_n:
+    forall l pm,
+    ReducesN pm l ->
+    WellFormed pm.
+  Proof.
+    induction l; intros; inversion H;subst; clear H. {
+      auto using well_formed_make.
+    }
+    eauto using pm_reduces_preserves_well_formed.
+  Qed.
 End Phasermap.

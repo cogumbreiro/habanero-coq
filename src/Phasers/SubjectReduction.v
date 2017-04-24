@@ -1545,6 +1545,68 @@ End Async.
     - auto using sr_drop_all.
     - auto using sr_async.
   Qed.
+(*
+  Lemma diff_sum_absurd_make:
+    forall w z,
+    ~ DiffSum (pm_diff make) w z.
+  Proof.
+    unfold not,make; intros.
+    inversion H; subst; clear H.
+    - 
+  Qed.
+*)
+
+  Lemma pm_diff_absurd_empty:
+    forall v1 v2 z,
+    ~ pm_diff make (v1, v2) z.
+  Proof.
+    unfold not, make; intros.
+    inversion H; subst; clear H.
+    apply Map_PHID_Facts.empty_mapsto_iff in H0.
+    assumption.
+  Qed.
+
+  Lemma trans_diff_absurd_empty:
+    forall t1 t2 z,
+    ~ TransDiff (pm_diff make) t1 t2 z.
+  Proof.
+    unfold not; intros.
+    inversion H; subst; clear H.
+    assert (exists e, List.In e w). {
+      destruct w. {
+        apply walk2_nil_inv in H1.
+        contradiction.
+      }
+      eauto using in_eq.
+    }
+    destruct H as ((v1,v2), Hi).
+    eapply walk2_to_edge in Hi; eauto.
+    inversion Hi; subst; clear Hi.
+    apply pm_diff_absurd_empty in H.
+    assumption.
+  Qed.
+
+  Lemma valid_make:
+    Valid make.
+  Proof.
+    unfold Valid, TransDiffFun.
+    intros.
+    apply trans_diff_absurd_empty in H.
+    contradiction.
+  Qed.
+
+  Lemma reduces_n_to_valid:
+    forall l pm,
+    ReducesN pm l ->
+    Valid pm.
+  Proof.
+    induction l; intros. {
+      inversion H; subst.
+      auto using valid_make.
+    }
+    inversion H; subst; clear H.
+    eauto using reduces_n_cons, subject_reduction.
+  Qed.
 End SR.
 
 

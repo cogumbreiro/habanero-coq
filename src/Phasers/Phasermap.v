@@ -212,7 +212,7 @@ Inductive Reduces m t o : phasermap -> Prop :=
     Reduces m t o (run (get_impl o) t m).
 
 Section Defs.
-  Notation trace := (list (tid * op)) % type.
+  Definition trace := (list (tid * op)) % type.
 
   Inductive ReducesN: phasermap -> trace -> Prop :=
   | reduces_n_nil:
@@ -222,6 +222,20 @@ Section Defs.
     ReducesN pm l ->
     Reduces pm t o pm' ->
     ReducesN pm' ((t,o)::l).
+
+  Structure phasermap_t := {
+    state : phasermap;
+    history : trace;
+    phasermap_spec: ReducesN state history
+  }.
+
+  Inductive ReducesT: phasermap_t -> (tid*op) -> phasermap_t -> Prop :=
+  | reduces_t_def:
+    forall t o pm1 pm2,
+    Reduces (state pm1) t o (state pm2) ->
+    history pm2 = (t,o)::(history pm1) ->
+    ReducesT pm1 (t, o) pm2.
+
 End Defs.
 
 Section Facts.
