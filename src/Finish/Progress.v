@@ -276,8 +276,9 @@ Qed.
   Any flat finish reduces. 
   *)
 Theorem flat_reduces:
-  forall f t o,
+  forall f,
   Flat f ->
+  forall t o,
   Check f t o ->
   exists f', Reduce f t o f'.
 Proof.
@@ -302,6 +303,7 @@ Proof.
     assumption.
 Qed.
 
+
 Lemma in_to_registered:
   forall t f,
   Flat f ->
@@ -320,6 +322,7 @@ Proof.
     inversion H0.
     inversion H1.
 Qed.
+
 (*
 (**
   Any flat finish reduces. 

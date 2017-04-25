@@ -310,7 +310,36 @@ Variable WF : WellFormed pm.
     }
     auto using progress_unblocking_simple.
   Qed.
+
 End HAS_SMALLEST.
+
+Section ProgressEmpty.
+  Lemma progress_empty:
+    forall t o pm l,
+    ReducesN pm l ->
+    pm_tids pm = nil ->
+    Check pm t o ->
+    exists pm', Reduces pm t o pm'.
+  Proof.
+    intros.
+    assert (O: o = WAIT_ALL \/ o <> WAIT_ALL). {
+      destruct o; auto; right; unfold not; intros N; inversion N.
+    }
+    destruct O as [?|?]. {
+      exists (run (get_impl o) t pm).
+      apply reduces.
+      subst; simpl.
+      apply wait_all_pre.
+      intros.
+      assert (i: In t pm) by eauto using in_def.
+      apply pm_tids_spec_2 in i.
+      rewrite H0 in *.
+      inversion i.
+    }
+    eauto using progress_unblocking_simple, reduces_n_to_valid.
+  Qed.
+
+End ProgressEmpty.
 
 Section ProgressEx.
   Corollary progress_ex:
