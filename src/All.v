@@ -153,8 +153,6 @@ Inductive ContextOf (s:state) (t:tid) : context -> Prop :=
     Map_FID.MapsTo l m s.(get_fstate) ->
     ContextOf s t (m, (get_finish s)).
 
-(*Import Progress.ProgressSpec.*)
-
 Inductive CtxReduces (ctx:context) (t:tid) (o:op) : context -> Prop :=
   | reduces_p:
     forall m o',
@@ -489,39 +487,6 @@ Module Progress.
     Map_FID.MapsTo h m (get_fstate s) ->
     In t (Phasermap.state m) ->
     F.Registered t f.
-(*
-  Let f_check_flat:
-    forall f h t o i m,
-    FIDPath f h ROOT ->
-    IEF t f ->
-    Map_FID.MapsTo h m (get_fstate s) ->
-    Map_TID.MapsTo t i reqs ->
-    Check (m, ROOT) t i ->
-    as_f_op i = Some o ->
-    F_T.Check ROOT t o ->
-    F_T.Check f t o.
-  Proof.
-    intros.
-    inversion H5.
-    assert (f <= ROOT) by eauto using fid_path_to_le.
-    apply check_ief with (x:=ROOT); auto.
-  Qed.
-
-  Let check_flat:
-    forall f h t i m,
-    FIDPath f h ROOT ->
-    IEF t f ->
-    Map_FID.MapsTo h m (get_fstate s) ->
-    Map_TID.MapsTo t i reqs ->
-    Check (m, ROOT) t i ->
-    Check (m, f) t i.
-  Proof.
-    intros.
-    inversion H3; subst; simpl in *.
-    - eauto using check_only_p.
-    - eauto using check_only_f, translate_only_f_impl_as_f_op.
-    - eauto using check_both, translate_both_impl_as_f_op.
-  Qed.*)
 
   Let flat_to_ief:
     forall t f,
@@ -544,20 +509,21 @@ Module Progress.
     F_P.Nonempty ROOT.
 
   Theorem progress:
-    exists t i h f m c',
+    exists t h f m,
     FIDPath f h ROOT /\
     Map_FID.MapsTo h m (get_fstate s) /\
-    CtxReduces (m,f) t i c'.
+    forall i,
+    Check (m, f) t i ->
+    exists c', CtxReduces (m,f) t i c'.
   Proof.
     intros.
     destruct (exists_flat) as (f, (h, (?,(?,(Hflat,?))))); eauto.
-    eapply ctx_progress in Hflat; eauto.
-    assert (Hx: ProgressArg (restrict f) x) by eauto.
-    apply ctx_progress with (f:=f) in Hx; eauto.
-    - destruct Hx as (t, (i, (ctx', (mt, Hc)))).
-      repeat eexists; intuition; eauto.
-    - intros.
-      assert (IEF t f) by eauto using Map_TID_Extra.mapsto_to_in.
-      eauto.
+    apply ctx_progress with (p:=x) in Hflat; auto.
+    destruct Hflat as (t, ?).
+    exists t.
+    exists h.
+    exists f.
+    exists x.
+    split; auto.
   Qed.
 End ApplyCtx.
