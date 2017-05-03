@@ -287,12 +287,9 @@ Proof.
   assert (RW : f' = f) by eauto using flat_le_rw.
   subst; clear H1.
   inversion H0; subst.
-  - exists (f |+ !t').
-    auto using begin_async.
-  - exists (f |- t).
-    auto using end_async.
-  - exists (f |+ t <| [!t]).
-    auto using begin_finish.
+  - eauto using begin_async.
+  - eauto using end_async.
+  - eauto using begin_finish.
   - exists (f |+ !t).
     apply end_finish.
     inversion H.
