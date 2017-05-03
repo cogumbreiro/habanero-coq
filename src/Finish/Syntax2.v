@@ -948,6 +948,50 @@ Require Import Aniceto.Graphs.FGraph.
     auto using in_cons, f_edge_to_in.
   Qed.
 
+  Lemma f_edge_fst_to_in:
+    forall s f g,
+    FEdge s (f, g) ->
+    In f s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using in_root.
+  Qed.
+
+  Lemma f_edge_snd_to_in:
+    forall s f g,
+    FEdge s (f, g) ->
+    In g s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using in_started.
+  Qed.
+
+  Lemma reaches_fst_to_in:
+    forall f g s,
+    Graph.Reaches (FEdge s) f g ->
+    In f s.
+  Proof.
+    intros.
+    apply Graph.reaches_to_in_fst in H.
+    inversion H; subst; clear H.
+    destruct x as (a,b), H0 as (He,Hi).
+    inversion Hi; subst; clear Hi; simpl. {
+      eauto using f_edge_fst_to_in.
+    }
+    eauto using f_edge_snd_to_in.
+  Qed.
+
+  Lemma reaches_edge_to_f_edge:
+    forall s f g,
+    Graph.Reaches (Edge (f_edges s)) f g ->
+    Graph.Reaches (FEdge s) f g.
+  Proof.
+    intros.
+    apply Graph.reaches_impl with (E:=Edge (f_edges s)); unfold Edge; auto using in_to_f_edge.
+  Qed.
+
   Lemma finish_dag:
     forall s a s',
     DAG (FGraph.Edge (f_edges s)) ->
@@ -964,7 +1008,18 @@ Require Import Aniceto.Graphs.FGraph.
     - apply dag_impl with (E:=Edge (((g,f)::(f_edges s)))). {
         eauto.
       }
+      assert (f <> g). {
+        unfold not; intros; subst.
+        assert (In g s). {
+          eauto using root_def, in_root.
+        }
+        contradiction.
+      }
       apply f_dag_cons; auto using FID.eq_dec.
+      unfold not; intros N.
+      apply reaches_edge_to_f_edge,reaches_fst_to_in in N.
+      contradiction.
+    - 
   Qed.
 (*
   Lemma finish_ind:
