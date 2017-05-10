@@ -1230,8 +1230,7 @@ Require Import Aniceto.Graphs.FGraph.
     forall s, 
     DAG (Edge (f_edges s)) ->
     (forall x, Map_TID.In x s -> forall f, ~ Started x f s) \/
-    (exists x, Graph.In (Edge (f_edges s)) x /\
-    forall y, ~ FEdge s (x, y)).
+    (exists t f, Started t f s /\ forall g, ~ FEdge s (f, g)).
   Proof.
     intros.
     remember (f_edges s).
@@ -1248,18 +1247,28 @@ Require Import Aniceto.Graphs.FGraph.
       rewrite <- Heql in *.
       inversion He.
     }
+    right.
     assert (p :: l <> []). {
       unfold not; intros N; inversion N.
     }
     eapply dag_infimum in H; eauto using FID.eq_dec.
-    destruct H as (x, (?,?)).
-    exists x.
-    split; auto.
+    destruct H as (f, (?,?)).
+    destruct H as ((a,b),(He,[])); subst; simpl; simpl in H1. {
+       apply Graph.edge_to_reaches in He.
+       apply H1 in He.
+       contradiction.
+    }
+    rewrite Heql in He.
+    apply edge_to_f_edge in He.
+    inversion He; subst; clear He.
+    exists t; exists b; split; auto.
     unfold not; intros.
-    apply f_edge_to_edge in H2.
-    rewrite <- Heql in *.
-    apply Graph.edge_to_reaches in H2.
-    apply H1 in H2.
+    match goal with H: FEdge _ _ |- _ =>
+      apply f_edge_to_edge in H;
+      rewrite <- Heql in *;
+      apply Graph.edge_to_reaches in H
+    end.
+    apply H1 in H.
     assumption.
   Qed.
   
