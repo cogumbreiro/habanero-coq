@@ -1226,11 +1226,11 @@ Require Import Aniceto.Graphs.FGraph.
     contradiction.
   Qed.
 
-  Let f_dag_supremum_0:
+  Let dag_cond:
     forall s, 
     DAG (Edge (f_edges s)) ->
     (forall x, Map_TID.In x s -> forall f, ~ Started x f s) \/
-    (exists t f, Started t f s /\ forall g, ~ FEdge s (f, g)).
+    (exists t f, Started t f s /\ forall u, Root u f s -> forall g, ~ Started u g s).
   Proof.
     intros.
     remember (f_edges s).
@@ -1263,19 +1263,15 @@ Require Import Aniceto.Graphs.FGraph.
     inversion He; subst; clear He.
     exists t; exists b; split; auto.
     unfold not; intros.
+    assert (He : FEdge s (b, g)) by eauto using f_edge_def.
     match goal with H: FEdge _ _ |- _ =>
       apply f_edge_to_edge in H;
       rewrite <- Heql in *;
       apply Graph.edge_to_reaches in H
     end.
-    apply H1 in H.
+    apply H1 in He.
     assumption.
   Qed.
-  
-  Lemma f_dag_s:
-    forall s,
-    DAG (FEdge s) ->
-    
 
   Lemma dag_reduces:
     forall s a s',
@@ -1286,427 +1282,82 @@ Require Import Aniceto.Graphs.FGraph.
     eauto using dag_f_edge_to_fgraph_edge, dag_fgraph_edge_to_f_edge, f_dag_reduces.
   Qed.
 
-  Lemma f_notin_empty:
-    forall f,
-    ~ In f empty.
-  Proof.
-    unfold not, empty; intros.
-    inversion H; subst; clear H. {
-      apply root_to_in in H0.
-      apply Map_TID_Facts.empty_in_iff in H0; contradiction.
-    }
-    apply started_to_in in H0.
-    apply Map_TID_Facts.empty_in_iff in H0; contradiction.
-  Qed.
-
-  Lemma flat_to_in:
-    forall f s,
-    Flat f s ->
-    In f s.
+  Lemma progress_nonblocking:
+    forall s t o,
+    Typecheck s (t, o) ->
+    o <> AWAIT ->
+    exists s', Reduces s (t, o) s'.
   Proof.
     intros.
-    inversion H; subst; clear H.
-    auto using nonempty_in.
+    destruct o; try contradiction; inversion H; subst; clear H;
+    eauto using reduces_init, reduces_end.
+    - apply Map_TID_Extra.in_to_mapsto in H2.
+      destruct H2 as (ft, mt).
+      destruct ft as (g, l).
+      eauto using reduces_finish.
+    - apply Map_TID_Extra.in_to_mapsto in H4.
+      destruct H4 as (ft, mt).
+      exists (Map_TID.add t0 (make (ief ft)) s).
+      eauto using reduces_async.
   Qed.
 
-  Lemma root_inv_init:
-    forall f s t u g,
-    Root u g (Map_TID.add t (make f) s) ->
-    ~ In f s ->
-    ~ Map_TID.In t s ->
-    (u = t /\ g = f) \/ (t <> u /\ Root u g s).
+  Let await_or:
+    forall o,
+    o = AWAIT \/ o <> AWAIT.
   Proof.
     intros.
-    apply root_inv_add_make in H.
-    destruct H as [(?,?)|(?,?)]. {
-      subst.
-      auto.
-    }
-    auto.
+    destruct o; auto;
+    right; unfold not; intros N; inversion N.
   Qed.
 
-  Lemma enabled_add_init:
-    forall f u s t,
-    Enabled u s ->
-    ~ In f s ->
-    ~ Map_TID.In t s ->
-    t <> u ->
-    Enabled u (Map_TID.add t (make f) s).
-  Proof.
-    intros.
-    match goal with H: Enabled _ _ |- _ => inversion H; subst; clear H end. {
-      eauto using enabled_ready, Map_TID.add_2.
-    }
-    eapply enabled_leaf; eauto using Map_TID.add_2.
-  Qed.
-
-  Lemma has_flat_add_init:
-    forall s f t,
-    HasFlat s ->
-    ~ In f s ->
-    ~ Map_TID.In t s ->
-    HasFlat (Map_TID.add t (make f) s).
-  Proof.
-    intros.
-    inversion H; subst; clear H; rename f0 into g.
-    apply has_flat_def with (f:=g).
-    match goal with H: Flat _  _ |- _ => inversion H; subst; clear H end.
-    apply flat_def. {
-      intros u; intros.
-      match goal with H: Root _ _ _ |- _ => apply root_inv_init in H; auto;
-      destruct H as [(?,?)|(?,Hr)] end. {
-        subst.
-        contradiction H0.
-        auto using nonempty_in.
-      }
-      eauto using enabled_add_init.
-    }
-    auto using nonempty_add_2.
-  Qed.
-
-  Lemma enabled_add_finish_eq:
-    forall f s u k h,
-    ~ In f s ->
-    Map_TID.MapsTo u {| root := h; started := k |} s ->
-    Enabled u (Map_TID.add u {| root := h; started := f :: k |} s).
-  Proof.
-    eauto using enabled_leaf, Map_TID.add_1.
-  Qed.
-
-  Lemma enabled_add_finish_neq:
-    forall u s t g k f,
-    Enabled u s ->
-    Map_TID.MapsTo t {| root := g; started := k |} s ->
-    t <> u ->
-    Enabled u (Map_TID.add t {| root := g; started := f :: k |} s).
-  Proof.
-    intros.
-    match goal with H: Enabled _ _ |- _ => inversion H; subst; clear H end. {
-      eauto using enabled_ready, Map_TID.add_2.
-    }
-    eauto using enabled_leaf, Map_TID.add_2.
-  Qed.
-(*
-  Lemma nonempty_add_finish:
-    forall h s t g k f,
-    Nonempty h s ->
-    Map_TID.MapsTo t {| root := g; started := k |} s ->
-    Nonempty h (Map_TID.add t {| root := g; started := f :: k |} s).
-  Proof.
-  
-  Qed.*)
-  Lemma flat_add_finish:
-    forall h s t g k f,
-    Flat h s ->
-    ~ In f s ->
-    Map_TID.MapsTo t {| root := g; started := k |} s ->
-    Flat h (Map_TID.add t {| root := g; started := f :: k |} s).
-  Proof.
-    intros.
-    apply flat_def. {
-      intros u; intros.
-      apply root_inv_add in H2.
-      destruct H2 as [(?,(l,R))|(?,?)]. {
-        inversion R; subst; clear R.
-        auto using enabled_add_finish_eq.
-      }
-      inversion H; subst; clear H.
-      auto using enabled_add_finish_neq.
-    }
-    inversion H; subst; clear H.
-    auto using nonempty_add_finish.
-  Qed.
-
-  Lemma has_flat_add_finish:
-    forall s f k g t,
-    HasFlat s ->
-    ~ In f s ->
-    Map_TID.MapsTo t {| root := g; started := k |} s ->
-    HasFlat (Map_TID.add t {| root := g; started := f :: k |} s).
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    rename f0 into h.
-    apply has_flat_def with (f:=h).
-    auto using flat_add_finish.
-  Qed.
-
-  Lemma in_to_nonempty:
-    forall {T} u s,
-    Map_TID.In u s ->
-    ~ Map_TID.Empty (elt:=T) s.
-  Proof.
-    intros.
-    apply Map_TID_Extra.in_to_mapsto in H.
-    destruct H as (?,mt).
-    contradict mt.
-    auto using Map_TID_Extra.empty_to_mapsto.
-  Qed.
-(*
-  Lemma flat_end_finish:
-    forall s t f k g h,
-    Flat h s ->
-    Map_TID.MapsTo t {| root := g; started := f :: k |} s ->
-    Finished f s ->
-    Flat h (Map_TID.add t {| root := g; started := k |} s).
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply flat_def. {
-      intros i; intros.
-      match goal with H: Root _ _ _ |- _ =>
-        apply root_inv_add in H;
-        destruct H as [(?,(l,R))|(?,Hr)]
-      end. {
-        inversion R; subst; clear R.
-        assert (Enabled i s) by eauto using root_def.
-      }
-    }
-  Qed.
-*)
-(*
-  Lemma has_flat_end_finish:
-    forall l s t f k g,
-    Finish l s ->
-    HasFlat s ->
-    Map_TID.MapsTo t {| root := g; started := f :: k |} s ->
-    Finished f s ->
-    HasFlat (Map_TID.add t {| root := g; started := k |} s).
-  Proof.
-    induction l; intros. {
-      inversion H; subst; clear H.
-      apply Map_TID_Extra.mapsto_to_in in H1.
-      apply in_to_nonempty in H1.
-      contradict H1.
-      eauto using Map_TID.empty_1.
-    }
-    inversion H; subst; clear H;
-    try rename f0 into h;
-    try rename t0 into u; rename s0 into s.
-    - unfold make in *.
-      match goal with H: Map_TID.MapsTo _ _ _ |- _ =>
-        apply Map_TID_Facts.add_mapsto_iff in H;
-        destruct H as [(?,R)|(?,?)]
-      end. {
-        inversion R; subst; clear R.
-      }
-      apply finished
-  Qed.
-*)
-  Lemma has_flat_reduces:
-    forall l s,
-    Finish l s ->
-    HasFlat s \/ Map_TID.Empty s.
-  Proof.
-    induction l; intros. {
-      right; intros.
-      inversion H; subst; clear H; unfold empty.
-      auto using Map_TID.empty_1.
-    }
-    inversion H; subst; clear H; rename s0 into s.
-    - left.
-      match goal with H: Finish _ _ |- _ =>
-        apply IHl in H; destruct H as [Hf|Hempty]
-      end. {
-        auto using has_flat_add_init.
-      }
-      apply has_flat_def with (f:=f).
-      apply flat_def. {
-        intros u; intros.
-        apply root_inv_add_make in H.
-        destruct H as [(?,?)|(?,?)]. {
-          subst.
-          apply enabled_ready with (f:=f); unfold make; simpl.
-          auto using Map_TID.add_1.
-        }
-        apply root_to_in in H.
-        apply in_to_nonempty in H.
-        contradiction.
-      }
-      unfold make.
-      eauto using nonempty_def, root_def, Map_TID.add_1.
-    - left.
-      match goal with H: Finish _ _ |- _ =>
-        apply IHl in H; destruct H as [Hf|Hempty]
-      end. {
-        auto using has_flat_add_finish.
-      }
-      apply Map_TID_Extra.mapsto_to_in in H5.
-      apply in_to_nonempty in H5.
-      contradiction.
-    - left.
-      match goal with H: Finish _ _ |- _ =>
-        apply IHl in H; destruct H as [Hf|Hempty]; clear IHl
-      end. {
-        inversion Hf; subst; clear Hf.
-        rename f0 into h.
-        destruct k. {
-          
-        }
-        auto using has_flat_add_finish.
-      }
-      
-  Qed.
-Map_TID_Props
-(*
-  Definition Pending f l s :=
-  forall t, Root t f s <-> List.In t l.
-
-  Structure FinishInd s (EMPTY: fid -> Prop) (P:fid -> list tid -> Prop) := {
-    finish_ind_nil:
-      forall f,
-      Finish f l ->
-      Empty f s ->
-      P f [];
-    finish_ind_leaf:
-      forall f t l,
-      P f l ->
-      Leaf t s ->
-      P f (t::l);
-   finish_ind_cons:
-      forall f l t g k,
-      P f l ->
-      Root t f s ->
-      Pending f l s ->
-      P g k ->
-      P g (t::k)%list
-  }.
-
-  Lemma pending_nil_to_empty:
-    forall f s,
-    Pending f [] s ->
-    Empty f s.
-  Proof.
-    intros; apply empty_def; unfold not; intros ? N.
-    apply H in N.
-    contradiction.
-  Qed.
-
-  Lemma finish_ind:
-    forall s P,
+  Theorem progress:
+    forall s,
+    (* Given that a finish-state is a DAG *)
     DAG (FEdge s) ->
-    FinishInd s P ->
-    forall l f t,
+    (* And that state is not empty *)
+    ~ Map_TID.Empty s ->
+    (* Then there is some f such that *)
+    exists f,
+    (* Any task in f is able to execute a finish-operation. *)
+    forall t,
     Root t f s ->
-    List.In t l ->
-    P f l.
-  Proof.
-    
-    induction l; intros. {
-      eapply finish_ind_nil; eauto using pending_nil_to_empty.
-    }
-    assert (Root a f s). {
-      inversion H0; auto using List.in_eq.
-    }
-    assert (P f l). {
-      inversion H0.
-    }
-    - 
-  Qed.
-*)
-
-
-  Lemma has_flat_reduces:
-    forall s s' a,
-    HasFlat s ->
-    Reduces s a s' ->
-    HasFlat s'.
+    forall o,
+    Typecheck s (t, o) ->
+    exists s', Reduces s (t, o) s'.
   Proof.
     intros.
-    inversion H0; subst; clear H0;
-    inversion H; subst; clear H;
-    inversion H0; subst; clear H0.
-    - apply has_flat_def with (f:=f0).
-      assert (f <> f0). {
-        unfold not; intros; subst.
-        contradiction H1.
-        auto.
-      }
-      apply flat_def; intros; eauto.
-      apply root_inv_add_make in H4; auto; destruct H4 as (i,?).
-      clear H0.
-      apply H in i.
-      inversion i; subst; clear i; eauto using enabled_ready, enabled_leaf, Map_TID.add_2.
-    - assert (f <> f0). {
-        unfold not; intros; subst.
-        contradiction H1.
-        eauto using Map_FID_Extra.mapsto_to_in.
-      }
-      apply has_flat_def with (f:=f0).
-      apply flat_def with (f:=f0); auto.
-      intros.
-      match goal with
-      | H: Root _ _ _ |- _ =>
-        apply root_inv in H;
-        destruct H as [(?,(l',R))|(?,?)]
-      end. {
-        inversion R; subst; clear R.
-        eauto.
-      }
-      assert (Enabled t0 s). {
-        auto.
-      }
-      rename t0 into u.
-      inversion H6; subst; clear H6. {
-        eauto using enabled_ready, Map_TID.add_2.
-      }
-      subst.
-      eapply enabled_leaf with (f:=f1) (g:=g0) (l:=l0); eauto using Map_TID.add_2.
-    - destruct (FID.eq_dec f0 f). {
+    apply Map_TID_Extra.nonempty_in in H0.
+    apply dag_f_edge_to_fgraph_edge in H.
+    apply dag_cond in H.
+    destruct H as [H|H]. {
+      destruct H0 as (t, Hi).
+      apply Map_TID_Extra.in_to_mapsto in Hi.
+      destruct Hi as ((g,l), mt).
+      assert (Hr: Root t g s) by eauto using root_def.
+      exists g.
+      intros u; intros.
+      assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
+      destruct X. {
         subst.
-        apply finished_to_empty in H2.
+        inversion H1; subst; clear H1.
+        assert (~ Started u f s) by eauto using Map_TID_Extra.mapsto_to_in.
+        assert (Started u f s) by eauto using started_def, List.in_eq.
         contradiction.
       }
-      destruct (FID.eq_dec f0 g). {
-        subst.
-      }
-      (* suppose t was enabled, then we need to see if the next f is a leaf. *)
-      destruct l. {
-        assert (Flat f0 s) by eauto using flat_def.
-        apply has_flat_def with (f:=f0).
-        
-        apply flat_def.
-        + intros.
-          apply root_inv in H0.
-          destruct H0 as [(?,(l,R))|(?,?)]. {
-            inversion R; subst; clear R.
-            eauto using enabled_ready, Map_TID.add_1.
-          }
-          assert (e: Enabled t0 s) by eauto.
-          inversion e; subst; clear e. {
-            eauto using enabled_ready, Map_TID.add_2.
-          }
-          inversion H5; subst.
-          eapply enabled_leaf; eauto using Map_TID.add_2.
-          apply finished_def with (t:=t1). {
-            assert (t1 <> t). {
-              unfold not; intros; subst.
-              assert (~ Root t0 
-            }
-          }
-          eauto using enabled_ready, Map_TID.add_2.
-          eapply enabled_leaf; eauto.
-          apply H5 in H.
-          inversion H; subst; clear H.
-          destruct (TID.eq_dec t t0). {
-            subst; auto.
-          }
-          apply enabled_def with (ft:=ft); auto using Map_TID.add_2.
-          inversion H9; subst; clear H9. {
-            auto using enabled_task_ready.
-          }
-          apply enabled_task_leaf.
-          destruct (FID.eq_dec g0 f). {
-            subst.
-          }
-        + auto using Map_FID.remove_2.
-      }
-        assert (t <> t0). {
-          unfold not; intros; subst.
-        }
+      eauto using progress_nonblocking.
+    }
+    destruct H as (t, (f, (Hs, Hr))).
+    exists f.
+    intros u; intros.
+    assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
+    destruct X. {
+      subst.
+      match goal with H: Typecheck _ _ |- _ => inversion H; subst; clear H
+      end.
+      assert (~ Started u f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
+      assert (Started u f0 s) by eauto using started_def, List.in_eq.
+      contradiction.
+    }
+    eauto using progress_nonblocking.
   Qed.
-
-  Lemma progress:
-    exists t,
-    
-
+End Defs.
