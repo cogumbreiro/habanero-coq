@@ -284,13 +284,15 @@ Variable WF : WellFormed pm.
   Theorem progress:
     tids <> nil ->
     exists t,
+    In t pm /\
     forall o,
-    Check pm t o ->
-    exists m, Reduces pm t o m.
+    (Check pm t o ->
+    exists m, Reduces pm t o m).
   Proof.
     intros.
     edestruct (both_cases) as [(?,(?,?))|?]; eauto using pm_tids_spec_1. {
       exists x.
+      split; auto using pm_tids_spec_1.
       intros.
       assert (o <> WAIT_ALL). {
         unfold not; intros; subst.
@@ -300,6 +302,7 @@ Variable WF : WellFormed pm.
     }
     destruct (has_unblocked) as (x,(?,?)); auto.
     exists x.
+    split; auto using pm_tids_spec_1.
     intros.
     assert (Ho: o = WAIT_ALL \/ o <> WAIT_ALL). {
       destruct o; auto; right; unfold not; intros N; inversion N.
@@ -347,9 +350,10 @@ Section ProgressEx.
     ReducesN pm l ->
     pm_tids pm <> nil ->
     exists t,
+    In t pm /\
     forall o,
-    Check pm t o ->
-    exists m, Reduces pm t o m.
+    (Check pm t o ->
+    exists m, Reduces pm t o m).
   Proof.
     intros.
     eauto using progress, reduces_n_to_valid, WellFormed.Phasermap.well_formed_to_reduces_n.

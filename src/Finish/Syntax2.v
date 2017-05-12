@@ -670,6 +670,111 @@ Section Defs.
     right; unfold not; intros N; inversion N.
   Qed.
 
+  Inductive Nonempty (f:fid) (s:state) : Prop :=
+  | nonempty_def:
+    forall t,
+    Root t f s ->
+    Nonempty f s.
+
+  Let has_root t f s :=
+  match Map_TID.find t s with
+  | Some ft => if FID.eq_dec f (root ft) then true else false
+  | _ => false
+  end.
+
+  Lemma root_to_in:
+    forall t f s,
+    Root t f s ->
+    Map_TID.In t s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
+  Lemma root_fun:
+    forall t f s g,
+    Root t f s ->
+    Root t g s ->
+    f = g.
+  Proof.
+    intros.
+    inversion H; inversion H0; subst; clear H H0.
+    match goal with [ H1: Map_TID.MapsTo t ?x s, H2: Map_TID.MapsTo t ?y s |- _] =>
+      assert (R: x = y) by eauto using Map_TID_Facts.MapsTo_fun;
+      inversion R; subst; clear R
+    end.
+    trivial.
+  Qed.
+
+  Lemma root_dec t f s:
+    { Root t f s } + { ~ Root t f s }.
+  Proof.
+    remember (has_root t f s).
+    symmetry in Heqb;
+    unfold has_root in *.
+    destruct b. {
+      left.
+      destruct (Map_TID_Extra.find_rw t s) as [(R,?)|((g,l),(R,?))];
+      rewrite R in *.
+      - inversion Heqb.
+      - simpl in *.
+        destruct (FID.eq_dec f g). {
+          subst.
+          eauto using root_def.
+        }
+        inversion Heqb.
+    }
+    right.
+    destruct (Map_TID_Extra.find_rw t s) as [(R,?)|((g,l),(R,?))];
+    rewrite R in *. {
+      unfold not; intros N.
+      apply root_to_in in N.
+      contradiction.
+    }
+    simpl in *.
+    destruct (FID.eq_dec f g). {
+      inversion Heqb.
+    }
+    unfold not; intros N.
+    assert (Root t g s) by eauto using root_def.
+    assert (f = g)  by eauto using root_fun.
+    contradiction.
+  Defined.
+
+  Let filter_root f s :=
+  Map_TID_Extra.filter (fun t ft => if FID.eq_dec f (root ft) then true else false) s.
+
+  Lemma empty_nonempty_dec f s:
+    { Nonempty f s } + { Empty f s }.
+  Proof.
+    destruct (Map_TID_Extra.any_in_dec (filter_root f s)) as [(t,Hi)|X];
+    unfold filter_root in *. {
+      left.
+      apply Map_TID_Extra.in_to_mapsto in Hi.
+      destruct Hi as (ft, mt).
+      apply Map_TID_Extra.filter_spec in mt; auto using tid_eq_rw.
+      destruct mt as (mt, Hx).
+      destruct (FID.eq_dec f (root ft)). {
+        subst.
+        eauto using nonempty_def, root_eq.
+      }
+      inversion Hx.
+    }
+    right.
+    destruct X as (_, He).
+    rewrite Map_TID_Extra.empty_filter_spec in He; auto using tid_eq_rw.
+    apply empty_def; intros.
+    unfold not; intros N.
+    inversion N; subst; clear N.
+    apply He in H.
+    simpl in *.
+    destruct (FID.eq_dec f f). {
+      inversion H.
+    }
+    contradiction.
+  Defined.
+
   Theorem progress:
     forall s,
     (* Given that a finish-state is a DAG *)
@@ -678,12 +783,19 @@ Section Defs.
     ~ Map_TID.Empty s ->
     (* Then there is some f such that *)
     exists f,
+    (Nonempty f s /\
+      (forall u o, Typecheck s (u, o) -> exists s', Reduces s (u, o) s')
+    )
+    \/
+    (exists t, Started t f s /\ Empty f s)
+    \/
+    (exists t, Started t f s /\ Nonempty f s /\
     (* Any task in f is able to execute a finish-operation. *)
-    forall t,
-    Root t f s ->
+    (forall u,
+    Root u f s ->
     forall o,
-    Typecheck s (t, o) ->
-    exists s', Reduces s (t, o) s'.
+    Typecheck s (u, o) ->
+    exists s', Reduces s (u, o) s')).
   Proof.
     intros.
     apply Map_TID_Extra.nonempty_in in H0.
@@ -695,11 +807,15 @@ Section Defs.
       destruct Hi as ((g,l), mt).
       assert (Hr: Root t g s) by eauto using root_def.
       exists g.
+      left.
+      split. {
+        eauto using nonempty_def.
+      }
       intros u; intros.
       assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
       destruct X. {
         subst.
-        inversion H1; subst; clear H1.
+        match goal with H: Typecheck _ _ |- _ => inversion H; subst; clear H end.
         assert (~ Started u f s) by eauto using Map_TID_Extra.mapsto_to_in.
         assert (Started u f s) by eauto using started_def, List.in_eq.
         contradiction.
@@ -708,6 +824,10 @@ Section Defs.
     }
     destruct H as (t, (f, (Hs, Hr))).
     exists f.
+    right.
+    destruct (empty_nonempty_dec f s); eauto.
+    right.
+    exists t; try (repeat split; auto).
     intros u; intros.
     assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
     destruct X. {
