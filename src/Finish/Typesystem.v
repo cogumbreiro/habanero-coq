@@ -322,30 +322,32 @@ Proof.
       inversion H4.
       assumption.
 Qed.
+Module Leaf.
+  Inductive Valid (f:finish) (t:tid) : op -> Prop :=
+    | valid_begin_async:
+      forall t',
+      Child (!t) f ->
+      ~ In t' f ->
+      Valid f t (BEGIN_ASYNC t')
+    | valid_end_async:
+      Child (!t) f ->
+      Valid f t END_ASYNC
+    | valid_begin_finish:
+      Child (!t) f ->
+      Valid f t BEGIN_FINISH
+    | valid_end_finish:
+      forall f',
+      ~ Registered t f' -> (* the task executed its body *)
+      Child (t <| f') f ->
+      Valid f t END_FINISH.
+End Leaf.
 
-Inductive CheckLeaf (f:finish) (t:tid) : op -> Prop :=
-  | check_begin_async:
-    forall t',
-    Child (!t) f ->
-    ~ In t' f ->
-    CheckLeaf f t (BEGIN_ASYNC t')
-  | check_end_async:
-    Child (!t) f ->
-    CheckLeaf f t END_ASYNC
-  | check_begin_finish:
-    Child (!t) f ->
-    CheckLeaf f t BEGIN_FINISH
-  | check_end_finish:
-    forall f',
-    ~ Registered t f' -> (* the task executed its body *)
-    Child (t <| f') f ->
-    CheckLeaf f t END_FINISH.
-
-
-Inductive Check (f:finish) (t:tid) (o:op): Prop :=
-  check_def:
-    forall f',
-    CheckLeaf f' t o ->
-    f' <= f ->
-    Disjoint f o ->
-    Check f t o.
+Module Op.
+  Inductive Valid (f:finish) (t:tid) (o:op): Prop :=
+    valid_def:
+      forall f',
+      Leaf.Valid f' t o ->
+      f' <= f ->
+      Disjoint f o ->
+      Valid f t o.
+End Op.

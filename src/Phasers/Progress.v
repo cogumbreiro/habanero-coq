@@ -32,7 +32,7 @@ Section SIMPLE.
 Lemma progress_unblocking_simple:
   forall pm t i,
   Valid pm ->
-  Check pm t i ->
+  Op.Valid pm t i ->
   i <> WAIT_ALL ->
   exists m, Reduces pm t i m.
 Proof.
@@ -187,7 +187,7 @@ Variable WF : WellFormed pm.
   Variable check_def:
     forall t,
     List.In t tids ->
-    Check pm t WAIT_ALL.
+    Op.Valid pm t WAIT_ALL.
 
   Theorem has_unblocked:
     tids <> nil ->
@@ -228,7 +228,7 @@ Variable WF : WellFormed pm.
           apply Taskview.tv_well_formed_inv_sw in H2; auto.
           destruct H2; auto.
           assert (wait_phase v <> signal_phase v). {
-            assert (Hk : Check pm t WAIT_ALL) by eauto.
+            assert (Hk : Op.Valid pm t WAIT_ALL) by eauto.
             inversion Hk.
             assert (wait_phase v < signal_phase v) by eauto.
             intuition.
@@ -241,7 +241,7 @@ Variable WF : WellFormed pm.
       apply phase_def.
       intros x w; intros.
       assert (wait_phase w < signal_phase w). {
-        assert (Hk : Check pm x WAIT_ALL). {
+        assert (Hk : Op.Valid pm x WAIT_ALL). {
           eauto using in_tids, Map_TID_Extra.mapsto_to_in.
         }
         inversion Hk.
@@ -259,8 +259,8 @@ Variable WF : WellFormed pm.
   Let both_cases:
     forall l,
     (forall x, List.In x l -> In x pm) ->
-    (exists x, List.In x l /\ ~ Check pm x WAIT_ALL) \/
-    (forall x, List.In x l -> Check pm x WAIT_ALL).
+    (exists x, List.In x l /\ ~ Op.Valid pm x WAIT_ALL) \/
+    (forall x, List.In x l -> Op.Valid pm x WAIT_ALL).
   Proof.
     induction l; intros. {
       right.
@@ -268,7 +268,7 @@ Variable WF : WellFormed pm.
       inversion H0.
     }
     assert (i: In a pm) by eauto using in_eq.
-    destruct (check_dec pm a WAIT_ALL). {
+    destruct (Op.valid_dec pm a WAIT_ALL). {
       assert (j: forall x, List.In x l -> In x pm) by eauto using in_cons.
       apply IHl in j.
       destruct j as [(?,(?,?))|?]. {
@@ -286,7 +286,7 @@ Variable WF : WellFormed pm.
     exists t,
     In t pm /\
     forall o,
-    (Check pm t o ->
+    (Op.Valid pm t o ->
     exists m, Reduces pm t o m).
   Proof.
     intros.
@@ -321,7 +321,7 @@ Section ProgressEmpty.
     forall t o pm l,
     ReducesN pm l ->
     pm_tids pm = nil ->
-    Check pm t o ->
+    Op.Valid pm t o ->
     exists pm', Reduces pm t o pm'.
   Proof.
     intros.
@@ -352,7 +352,7 @@ Section ProgressEx.
     exists t,
     In t pm /\
     forall o,
-    (Check pm t o ->
+    (Op.Valid pm t o ->
     exists m, Reduces pm t o m).
   Proof.
     intros.

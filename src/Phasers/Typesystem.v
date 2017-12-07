@@ -6,35 +6,36 @@ Import Regmode.Notations.
 Require Import Aniceto.List.
 
 Open Scope reg_scope.
-
-Inductive Check (pm:phasermap) (t:tid) : op -> Prop :=
-  | check_ph_new:
+Module Op.
+Inductive Valid (pm:phasermap) (t:tid) : op -> Prop :=
+  | valid_ph_new:
     forall p,
     PhNewPre p t pm ->
-    Check pm t (PH_NEW p)
-  | check_ph_signal:
+    Valid pm t (PH_NEW p)
+  | valid_ph_signal:
     forall p,
     PhSignalPre p t pm ->
-    Check pm t (PH_SIGNAL p)
-  | check_ph_drop:
+    Valid pm t (PH_SIGNAL p)
+  | valid_ph_drop:
     forall p,
     PhDropPre p t pm ->
-    Check pm t (PH_DROP p)
-  | check_signal_all:
-    Check pm t SIGNAL_ALL
-  | check_wait_all:
+    Valid pm t (PH_DROP p)
+  | valid_signal_all:
+    Valid pm t SIGNAL_ALL
+  | valid_wait_all:
     (forall p ph,
       Map_PHID.MapsTo p ph pm ->
       forall v,
       Map_TID.MapsTo t v ph ->
       wait_phase v < signal_phase v) ->
-    Check pm t WAIT_ALL
-  | check_drop_all:
-    Check pm t DROP_ALL
-  | check_async:
+    Valid pm t WAIT_ALL
+  | valid_drop_all:
+    Valid pm t DROP_ALL
+  | valid_async:
     forall ps,
     AsyncPre ps t pm ->
-    Check pm t (ASYNC ps).
+    Valid pm t (ASYNC ps).
+
 Section Props.
   Ltac handle_not := 
       right; unfold not; intros N; inversion N;
@@ -42,22 +43,22 @@ Section Props.
       contradiction;
       fail.
 
-  Let check_wait_all_dec pm t:
-    {Check pm t WAIT_ALL} + {~ Check pm t WAIT_ALL}.
+  Let valid_wait_all_dec pm t:
+    {Valid pm t WAIT_ALL} + {~ Valid pm t WAIT_ALL}.
   Proof.
-    assert (check_lt:forall v, { wait_phase v < signal_phase v } + { ~ wait_phase v < signal_phase v }). {
+    assert (valid_lt:forall v, { wait_phase v < signal_phase v } + { ~ wait_phase v < signal_phase v }). {
       auto using Compare_dec.lt_dec.
     }
     remember (List.forallb (fun kv =>
       match Map_TID.find t (snd kv) with
-      | Some v => if check_lt v then true else false
+      | Some v => if valid_lt v then true else false
       | None => true
       end
     ) (Map_PHID.elements pm)).
     symmetry in Heqb.
     destruct b. {
       left.
-      apply check_wait_all; intros.
+      apply valid_wait_all; intros.
       rewrite forallb_forall in Heqb.
       assert (i: In (p, ph) (Map_PHID.elements pm)). {
         rewrite Map_PHID_Extra.maps_to_iff_in_elements in H; auto using phid_eq_rw.
@@ -71,7 +72,7 @@ Section Props.
       }
       rewrite R in *.
       assert (v' = v) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-      destruct (check_lt v); auto.
+      destruct (valid_lt v); auto.
       inversion Heqb.
     }
     right.
@@ -86,30 +87,31 @@ Section Props.
     destruct (Map_TID_Extra.find_rw t ph) as [(R,N1)|(v',(R,?))]; rewrite R in *; clear R. {
       inversion Hx.
     }
-    destruct (check_lt v'). {
+    destruct (valid_lt v'). {
       inversion Hx.
     }
     contradiction n.
     inversion N; subst; eauto.
   Defined.
 
-  Lemma check_dec pm t o :
-    { Check pm t o } + { ~ Check pm t o }.
+  Lemma valid_dec pm t o :
+    { Valid pm t o } + { ~ Valid pm t o }.
   Proof.
     destruct o.
     - destruct (ph_new_pre_dec p t pm); try handle_not.
-      auto using check_ph_new.
+      auto using valid_ph_new.
     - destruct (ph_signal_pre_dec p t pm); try handle_not.
-      auto using check_ph_signal.
+      auto using valid_ph_signal.
     - destruct (ph_drop_pre_dec p t pm); try handle_not.
-      auto using check_ph_drop.
-    - auto using check_signal_all.
-    - auto using check_wait_all_dec.
-    - auto using check_drop_all.
+      auto using valid_ph_drop.
+    - auto using valid_signal_all.
+    - auto using valid_wait_all_dec.
+    - auto using valid_drop_all.
     - destruct (async_pre_dec p t pm); try handle_not.
-      auto using check_async.
+      auto using valid_async.
   Defined.
 End Props.
+End Op.
 Section Valid.
 Require Import Coq.ZArith.BinInt.
 Require Import HJ.Phasers.PhaseDiff.

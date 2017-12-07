@@ -250,7 +250,7 @@ Qed.
 
 Lemma check_leaf_absurd_nil:
   forall t o,
-  ~ CheckLeaf [] t o.
+  ~ Leaf.Valid [] t o.
 Proof.
   intros.
   intuition.
@@ -261,7 +261,7 @@ Qed.
 Lemma flat_le_rw:
   forall f f' t o,
   Flat f ->
-  CheckLeaf f' t o ->
+  Leaf.Valid f' t o ->
   f' <= f ->
   f' = f.
 Proof.
@@ -279,7 +279,7 @@ Theorem flat_reduces:
   forall f,
   Flat f ->
   forall t o,
-  Check f t o ->
+  Op.Valid f t o ->
   exists f', Reduce f t o f'.
 Proof.
   intros.

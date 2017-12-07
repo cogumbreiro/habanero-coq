@@ -105,30 +105,30 @@ Section Defs.
     Map_TID.MapsTo t {| root := f; started := nil |} s ->
     Reduces s (t, END) (Map_TID.remove t s).
 
-  Inductive Typecheck s : action -> Prop :=
-  | typecheck_init:
+  Inductive Valid s : tid -> op -> Prop :=
+  | valid_init:
     forall f t,
     ~ In f s ->
     ~ Map_TID.In t s ->
-    Typecheck s (t, INIT)
-  | typecheck_finish:
+    Valid s t INIT
+  | valid_finish:
     forall t f,
     Map_TID.In t s ->
     ~ In f s ->
-    Typecheck s (t, FINISH)
-  | typecheck_await:
+    Valid s t FINISH
+  | valid_await:
     forall t f g l,
     Map_TID.MapsTo t {| root := g; started := (f::l) % list |} s ->
-    Typecheck s (t, AWAIT)
-  | typecheck_async:
+    Valid s t AWAIT
+  | valid_async:
     forall t u,
     ~ Map_TID.In u s ->
     Map_TID.In t s ->
-    Typecheck s (t, ASYNC u)
+    Valid s t (ASYNC u)
   | typecheck_end:
     forall t f,
     Map_TID.MapsTo t {| root := f; started := nil |} s ->
-    Typecheck s (t, END).
+    Valid s t END.
 
   Inductive FEdge s : (fid * fid) -> Prop :=
   | f_edge_def:
@@ -644,21 +644,18 @@ Section Defs.
 
   Lemma progress_nonblocking:
     forall s t o,
-    Typecheck s (t, o) ->
+    Valid s t o ->
     o <> AWAIT ->
     exists s', Reduces s (t, o) s'.
   Proof.
     intros.
     destruct o; try contradiction; inversion H; subst; clear H;
-    eauto using reduces_init, reduces_end.
-    - apply Map_TID_Extra.in_to_mapsto in H2.
-      destruct H2 as (ft, mt).
-      destruct ft as (g, l).
-      eauto using reduces_finish.
-    - apply Map_TID_Extra.in_to_mapsto in H4.
-      destruct H4 as (ft, mt).
-      exists (Map_TID.add t0 (make (ief ft)) s).
-      eauto using reduces_async.
+    eauto using reduces_init, reduces_end;
+    match goal with [ H: Map_TID.In _ _ |- _ ] =>
+      apply Map_TID_Extra.in_to_mapsto in H;
+      destruct H as ((?,?), mt) end.
+    - eauto using reduces_finish.
+    - eauto using reduces_async.
   Qed.
 
   Let await_or:
@@ -784,7 +781,7 @@ Section Defs.
     (* Then there is some f such that *)
     exists f,
     (Nonempty f s /\
-      (forall u o, Typecheck s (u, o) -> exists s', Reduces s (u, o) s')
+      (forall u o, Valid s u o -> exists s', Reduces s (u, o) s')
     )
     \/
     (exists t, Started t f s /\ Empty f s)
@@ -794,7 +791,7 @@ Section Defs.
     (forall u,
     Root u f s ->
     forall o,
-    Typecheck s (u, o) ->
+    Valid s u o ->
     exists s', Reduces s (u, o) s')).
   Proof.
     intros.
@@ -815,7 +812,7 @@ Section Defs.
       assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
       destruct X. {
         subst.
-        match goal with H: Typecheck _ _ |- _ => inversion H; subst; clear H end.
+        match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
         assert (~ Started u f s) by eauto using Map_TID_Extra.mapsto_to_in.
         assert (Started u f s) by eauto using started_def, List.in_eq.
         contradiction.
@@ -832,7 +829,7 @@ Section Defs.
     assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
     destruct X. {
       subst.
-      match goal with H: Typecheck _ _ |- _ => inversion H; subst; clear H
+      match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H
       end.
       assert (~ Started u f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
       assert (Started u f0 s) by eauto using started_def, List.in_eq.

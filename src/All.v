@@ -5,6 +5,9 @@ Require Import HJ.Vars.
 (*Require Import HJ.Common.*)
 Require HJ.Phasers.Progress.
 Require HJ.Phasers.Phasermap.
+Require HJ.Phasers.Lang.
+Require HJ.Phasers.Typesystem.
+Require HJ.Finish.Typesystem.
 
 (*Notation phasermap_t := phasermap.*)
 Notation fstate := (Map_FID.t phasermap_t).
@@ -25,8 +28,8 @@ Definition set_finish (s:state) (f:F.state) : state :=
   mk_state f s.(get_fstate).
 
 Module Semantics.
+  Import HJ.Phasers.Lang.
 
-Require Import HJ.Phasers.Lang.
 (*Require HJ.Finish.Semantics.*)
 (*Module FS := HJ.Finish.Semantics.*)
 
@@ -175,35 +178,33 @@ End Semantics.
 
 Module Typesystem.
   Import Semantics.
-  Require HJ.Phasers.Typesystem.
-  Require HJ.Finish.Typesystem.
 (*  Import Progress.ProgressSpec.*)
   Module P_T := HJ.Phasers.Typesystem.
   Module F_T := HJ.Finish.Syntax2.
 
-  Inductive Check (ctx:context) (t:tid): op -> Prop :=
-  | check_only_p:
+  Inductive Valid (ctx:context) (t:tid): op -> Prop :=
+  | valid_only_p:
     forall i o,
     translate i = only_p o ->
-    P_T.Check (Phasermap.state (fst ctx)) t o ->
-    Check ctx t i
-  | check_only_f:
+    P_T.Op.Valid (Phasermap.state (fst ctx)) t o ->
+    Valid ctx t i
+  | valid_only_f:
     forall i o,
     translate i = only_f o ->
-    F_T.Typecheck (snd ctx) (t, o) ->
-    Check ctx t i
-  | check_both:
+    F_T.Valid (snd ctx) t o ->
+    Valid ctx t i
+  | valid_both:
     forall i o o',
     translate i = both o o' ->
-    F_T.Typecheck (snd ctx) (t, o') ->
-    P_T.Check (Phasermap.state (fst ctx)) t o ->
-    Check ctx t i.
+    F_T.Valid (snd ctx) t o' ->
+    P_T.Op.Valid (Phasermap.state (fst ctx)) t o ->
+    Valid ctx t i.
 
-  Lemma check_inv_f_check:
+  Lemma valid_inv_f_check:
     forall p f t i o,
-    Check (p, f) t i ->
+    Valid (p, f) t i ->
     as_f_op i = Some o ->
-    F_T.Typecheck f (t, o).
+    F_T.Valid f t o.
   Proof.
     intros.
     inversion H; (subst; simpl in *).
@@ -222,21 +223,20 @@ Module Typesystem.
       assumption.
   Qed.
 (*
-  Lemma check_change_finish:
+  Lemma valid_change_finish:
     forall t f f' i m,
     F.Registered t f ->
-    Check (m, f') t i ->
-    Check (m, f) t i.
+    Valid (m, f') t i ->
+    Valid (m, f) t i.
   Proof.
     intros.
     inversion H0; subst; simpl in *.
-    - eauto using check_only_p.
-    - apply check_only_f with (o); auto.
+    - eauto using valid_only_p.
+    - apply valid_only_f with (o); auto.
       simpl.
   Admitted.*)
 End Typesystem.
 
-Require HJ.Phasers.Progress.
 Module P_P := HJ.Phasers.Progress.
 (*Require HJ.Finish.Progress.*)
 Module F_P := HJ.Finish.Syntax2.
@@ -246,29 +246,34 @@ Module Progress.
   Import Typesystem.
 
   Section CtxProgress.
+
+    (** Given the id of a IEF *)
     Variable ief: fid.
+
+    (** Let [ief] have a type [f]. *)
     Variable f:F.state.
-    Variable p:phasermap_t.
-
-    Variable IsDAG: DAG.DAG (F.FEdge f).
-    Variable nonempty: 
-       ~ Map_TID.Empty f.
-
     Variable ief_defined:
       F.In ief f.
 
+    (** Let [p] be the phaser map of [f]. *)
+    Variable p:phasermap_t.
+    Let ctx := (p, f).
+
+    (** For the sake of progress, say that state [f] is nonemty *)
+    Variable nonempty:
+       ~ Map_TID.Empty f.
+
+    (** Assume that [f] is a DAG *)
+    (* XXX: Q1: Shouldn't it suffice for [f] to be well typed? *)
+    Variable IsDAG: DAG.DAG (F.FEdge f).
+
+    (** Say that any task in the phaser map is either the root task or
+      started in [f]. *)
+    (* XXX: Q1: Shouldn't this be part of the notion of well-typed? *)
     Variable task_mem:
       forall t pm,
       Phasermap.In t pm ->
-      F.Root t ief f.
-
-    Variable f_prog:
-      forall t,
-      F.Root t ief f ->
-      forall o,
-      F.Typecheck f (t, o) -> exists g, F.Reduces f (t, o) g.
-
-    Let ctx := (p, f).
+      F.Root t ief f \/ F.Started t ief f.
 
     (*
     Require Import HJ.Finish.Progress.
@@ -304,66 +309,108 @@ Module Progress.
       exists (pm_t, snd ctx).
       eapply Semantics.reduces_p; eauto.
     Qed.
+    
+    Section Case1.
+      (** Case 1 of the proof: every task in [ief] that typechecks can execute *)
+      Variable f_prog:
+        forall t,
+        F.Root t ief f ->
+        forall o,
+        F.Valid f t o -> exists g, F.Reduces f (t, o) g.
 
-    Let reduces_f_ex:
-      forall o o' t,
-      F.Root t ief f ->
-      Semantics.translate o = Semantics.only_f o' ->
-      F_T.Typecheck (snd ctx) (t, o') ->
-      exists ctx', Semantics.CtxReduces ctx t o ctx'.
-    Proof.
-      intros.
-      apply f_prog in H1; auto.
-      destruct H1 as (f', Hr).
-      exists (fst ctx, f').
-      eapply Semantics.reduces_f; eauto.
-    Qed.
+      Let reduces_f_ex:
+        forall o o' t,
+        F.Root t ief f ->
+        Semantics.translate o = Semantics.only_f o' ->
+        F_T.Valid (snd ctx) t o' ->
+        exists ctx', Semantics.CtxReduces ctx t o ctx'.
+      Proof.
+        intros.
+        apply f_prog in H1; auto.
+        destruct H1 as (f', Hr).
+        exists (fst ctx, f').
+        eapply Semantics.reduces_f; eauto.
+      Qed.
 
-    Let reduces_both:
-      forall o o_f o_p t pm',
-      F.Root t ief f ->
-      Semantics.translate o = Semantics.both o_p o_f ->
-      F_T.Typecheck (snd ctx) (t, o_f) ->
-      Reduces (Phasermap.state p) t o_p pm' ->
-      exists ctx', Semantics.CtxReduces ctx t o ctx'.
-    Proof.
-      intros.
-      assert (R: exists pm_t, ReducesT p (t, o_p) pm_t) by eauto.
-      destruct R as (pm_t, ?).
-      apply f_prog in H1; auto.
-      destruct H1 as (f', Hr).
-      exists (pm_t, f').
-      eapply Semantics.reduces_both; eauto.
-    Qed.
+      Let reduces_both:
+        forall o o_f o_p t pm',
+        F.Root t ief f ->
+        Semantics.translate o = Semantics.both o_p o_f ->
+        F_T.Valid (snd ctx) t o_f ->
+        Reduces (Phasermap.state p) t o_p pm' ->
+        exists ctx', Semantics.CtxReduces ctx t o ctx'.
+      Proof.
+        intros.
+        assert (R: exists pm_t, ReducesT p (t, o_p) pm_t) by eauto.
+        destruct R as (pm_t, ?).
+        apply f_prog in H1; auto.
+        destruct H1 as (f', Hr).
+        exists (pm_t, f').
+        eapply Semantics.reduces_both; eauto.
+      Qed.
 
-    Let ctx_progress_aux (nonempty_tids:
-      LEDec.pm_tids (Phasermap.state p) <> nil):
+      Lemma ctx_progress_aux (nonempty_tids:
+        LEDec.pm_tids (Phasermap.state p) <> nil):
+        exists t,
+        forall o,
+        Valid ctx t o ->
+        exists ctx', Semantics.CtxReduces ctx t o ctx'.
+      Proof.
+        destruct p as (pm, l, ?).
+        simpl in *.
+        eapply P_P.progress_ex in nonempty_tids; eauto.
+        destruct nonempty_tids as (t, (Hi, ?)).
+        apply task_mem in Hi.
+        exists t.
+        intros.
+        match goal with H: Valid _ _ _ |- _ =>
+          inversion H; subst; clear H
+        end.
+        - assert (X: exists m, Reduces pm t o0 m) by eauto;
+          destruct X; eauto.
+        - destruct Hi as [Hi|Hi]. {
+            eauto.
+          }
+          eauto.
+        - assert (X: exists m, Reduces pm t o0 m) by eauto;
+          destruct X; eauto.
+      Qed.
+
+      Lemma ctx_progress_1 (ief_nonempty: F.Nonempty ief f):
+        exists t,
+        forall o,
+        Valid ctx t o ->
+        exists ctx', Semantics.CtxReduces ctx t o ctx'.
+      Proof.
+        assert (E: LEDec.pm_tids (Phasermap.state p) = nil \/ LEDec.pm_tids (Phasermap.state p) <> nil). {
+          remember (LEDec.pm_tids _).
+          destruct l; auto.
+          right.
+          unfold not; intros N.
+          inversion N.
+        }
+        destruct E; auto using ctx_progress_aux.
+        inversion ief_nonempty.
+        exists t.
+        intros.
+        inversion H1; subst; clear H1.
+        - apply P_P.progress_empty with (l:=history p) in H3;
+          eauto using phasermap_spec.
+          destruct H3 as (?, ?).
+          eauto.
+        - eauto.
+        - apply P_P.progress_empty with (l:=history p) in H4;
+          eauto using phasermap_spec.
+          destruct H4 as (?, ?).
+          eauto.
+      Qed.
+    End Case1.
+(*
+    Let ctx_progress_1 (ief_nonempty: F.Nonempty ief f)
+    (R: forall u o, F.Typecheck f (u, o) -> exists s', F.Reduces f (u, o) s'):
       exists t,
       forall o,
-      Check ctx t o ->
-      exists ctx', Semantics.CtxReduces ctx t o ctx'.
-    Proof.
-      destruct p as (pm, l, ?).
-      simpl in *.
-      eapply P_P.progress_ex in nonempty_tids; eauto.
-      destruct nonempty_tids as (t, (Hi, ?)).
-      apply task_mem in Hi.
-      exists t.
-      intros.
-      match goal with H: Check _ _ _ |- _ =>
-        inversion H; subst; clear H
-      end.
-      - assert (X: exists m, Reduces pm t o0 m) by eauto;
-        destruct X; eauto.
-      - eauto.
-      - assert (X: exists m, Reduces pm t o0 m) by eauto;
-        destruct X; eauto.
-    Qed.
-
-    Lemma ctx_progress:
-      exists t,
-      forall o,
-      Check ctx t o ->
+      Valid ctx t o ->
       exists ctx', Semantics.CtxReduces ctx t o ctx'.
     Proof.
       assert (E: LEDec.pm_tids (Phasermap.state p) = nil \/ LEDec.pm_tids (Phasermap.state p) <> nil). {
@@ -374,21 +421,41 @@ Module Progress.
         inversion N.
       }
       destruct E; auto.
-(*      inversion H; subst; clear H.*)
-      apply in_to_registered in H2; auto.
+      inversion ief_nonempty.
       exists t.
       intros.
       inversion H1; subst; clear H1.
+      - apply P_P.progress_empty with (l:=history p) in H3;
+        eauto using phasermap_spec.
+        destruct H3 as (?, ?).
+        eauto.
+      - eauto.
       - apply P_P.progress_empty with (l:=history p) in H4;
         eauto using phasermap_spec.
         destruct H4 as (?, ?).
         eauto.
-      - eauto.
-      - apply P_P.progress_empty with (l:=history p) in H5;
-        eauto using phasermap_spec.
-        destruct H5 as (?, ?).
-        eauto.
+    Qed.*)
+    (*
+    Let ctx_progress_empty t (Hs: F.Started t ief f) (ief_empty: F.Empty ief f):
+      forall o,
+      Valid ctx t o ->
+      exists ctx', Semantics.CtxReduces ctx t o ctx'.
+    Proof.
+      intros.
+      assert (E: LEDec.pm_tids (Phasermap.state p) = nil \/ LEDec.pm_tids (Phasermap.state p) <> nil). {
+        remember (LEDec.pm_tids _).
+        destruct l; auto.
+        right.
+        unfold not; intros N.
+        inversion N.
+      }
+      destruct E; auto.
+      inversion ief_empty.
+      exists t.
+      intros.
+      inversion H1; subst; clear H1.
     Qed.
+    *)
   End CtxProgress.
   
   Section CtxTrans.
@@ -533,7 +600,7 @@ Module Progress.
     FIDPath f h ROOT /\
     Map_FID.MapsTo h m (get_fstate s) /\
     forall i,
-    Check (m, f) t i ->
+    Valid (m, f) t i ->
     exists c', CtxReduces (m,f) t i c'.
   Proof.
     intros.

@@ -190,7 +190,7 @@ Section IEF.
     intros.
     auto using ief_ready.
   Qed.
-  
+
   Lemma unique_ief_le:
     forall x y,
     UniqueIEF x ->
@@ -220,10 +220,10 @@ Section IEF.
 
   Require Import HJ.Finish.Typesystem.
 
-  Lemma check_leaf_to_ief:
+  Lemma valid_leaf_to_ief:
     forall f t o,
     UniqueIEF f ->
-    CheckLeaf f t o ->
+    Leaf.Valid f t o ->
     IEF t f.
   Proof.
     intros.
@@ -231,23 +231,23 @@ Section IEF.
     eauto using ief_blocked.
   Qed.
 
-  Lemma check_ief:
+  Lemma valid_ief:
     forall x t o y,
     UniqueIEF x ->
     IEFFun x ->
-    Check x t o ->
+    Op.Valid x t o ->
     y <= x ->
     IEF t y ->
-    Check y t o.
+    Op.Valid y t o.
   Proof.
     intros.
     inversion H1.
     assert (IEF t f') by
-    eauto using check_leaf_to_ief, unique_ief_le.
+    eauto using valid_leaf_to_ief, unique_ief_le.
     assert (f'=y) by (inversion H0; eauto).
     subst.
-    eauto using le_refl, check_def, disjoint_le.
-  Qed.    
+    eauto using le_refl, Op.valid_def, disjoint_le.
+  Qed.
 
 End IEF.
 
