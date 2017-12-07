@@ -14,7 +14,11 @@ Require Import Vars.
 Require Import Node.
 Require Import Phasers.Phaser.
 
+
 Section WP_SP.
+  (**
+    Redefine wait-phase and signal-phase.
+    *)
 
   Inductive WaitPhase x n ph : Prop :=
   | wait_phase_def:
@@ -419,6 +423,9 @@ Section WP_SP.
 End WP_SP.
 
 Section Defs.
+  (**
+    Definition of a computation graph annotated with signal and wait phases.
+    *)
 
   Notation edge := (node * node) %type.
 
@@ -498,11 +505,17 @@ Section Defs.
 
   Definition phases := (Map_TID.t node * MN.t nat) % type.
 
+  (** For each task, gets the running node. For each node gets the phase number. *)
+
   Definition ph_empty : phases := (Map_TID.empty node, MN.empty nat).
+
+  (** A root node is assigned to the phaser. *)
 
   Definition ph_make (x:tid) : phases :=
   let n := (fresh (A:=tid) nil) in
   (Map_TID.add x n (Map_TID.empty node), MN.add n 0 (MN.empty nat)).
+
+  (** Get the phase associated with a given task name. *)
 
   Inductive GetPhase : tid -> nat -> phases -> Prop :=
   | get_phase_def:
@@ -510,6 +523,8 @@ Section Defs.
     Map_TID.MapsTo x n ns -> (* get the last node *)
     MN.MapsTo n w phs -> (* get the phase number *)
     GetPhase x w (ns, phs).
+
+  (** Returns if the given task is registered with some phaser. *)
 
   Inductive Registered x ws : Prop :=
   | registered_def:
@@ -572,6 +587,8 @@ Section Defs.
   Notation Phase n ph sp := (MN.MapsTo n ph (snd sp)).
   Notation In n sp := (MN.In n (snd sp)).
 
+  (** Set phase returns a new phases object. *)
+
   Inductive SetPhase vs : phases -> tid -> nat -> phases -> Prop :=
   | set_phase_def:
     forall n ns ps x ph,
@@ -609,6 +626,9 @@ Section Defs.
     }
     inversion H.
   Qed.
+
+  (** The increment operator expects a registered task and increments
+      its phase number. *)
 
   Inductive Inc vs ws x : phases -> Prop :=
   | inc_def:
