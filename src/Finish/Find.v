@@ -1,3 +1,4 @@
+Require Import Coq.funind.Recdef.
 Require Import Coq.Lists.List.
 Require Import Coq.Relations.Relation_Operators.
 
