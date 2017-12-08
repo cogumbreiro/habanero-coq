@@ -63,6 +63,12 @@ Section Defs.
     Map_TID.MapsTo t {| root := g; started := l |} s ->
     Started t f s.
 
+  Inductive Current : tid -> fid -> state -> Prop :=
+  | current_def:
+    forall t f l s g,
+    Map_TID.MapsTo t {| root := g; started := (f::l) |} s ->
+    Current t f s.
+
   Inductive In (f:fid) s : Prop :=
   | in_root:
     forall t,
@@ -137,6 +143,13 @@ Section Defs.
     Started t g s ->
     FEdge s (f, g).
 
+  Inductive CEdge s : (fid * fid) -> Prop :=
+  | c_edge_def:
+    forall f g t,
+    Root t f s ->
+    Current t g s ->
+    CEdge s (f, g).
+
   Let root_inv_add:
     forall u g t s ft,
     Root u g (Map_TID.add t ft s) ->
@@ -166,11 +179,25 @@ Section Defs.
     auto.
   Qed.
 
+  Definition current (ft:task) :=
+  match ft with
+  | {| root := f; started := nil |} => None
+  | {| root := g; started := (f::l)%list |} =>  Some f
+  end.
+
   Definition task_edges (ft:task) :=
-    List.map (fun f => (root ft, f)) (started ft).
+  List.map (fun f => (root ft, f)) (started ft).
 
   Definition f_edges (s:state) : list (fid * fid) := 
-    List.flat_map task_edges (Map_TID_Extra.values s).
+  List.flat_map task_edges (Map_TID_Extra.values s).
+
+  Definition c_edges (s:state) : list (fid * fid) := 
+  let c_edge (ft:task) :=
+  match current ft with
+  | Some g => Some (root ft, g)
+  | None => None
+  end in
+  List.omap c_edge (Map_TID_Extra.values s).
 
   Lemma root_eq:
     forall t ft s,
@@ -180,6 +207,17 @@ Section Defs.
     intros.
     destruct ft; simpl in *.
     eauto using root_def.
+  Qed.
+
+  Lemma in_to_root:
+    forall t s,
+    Map_TID.In t s ->
+    exists f, Root t f s.
+  Proof.
+    intros.
+    apply Map_TID_Extra.in_to_mapsto in H.
+    destruct H as (ft, mt).
+    eauto using root_eq.
   Qed.
 
   Lemma started_eq:
@@ -246,6 +284,42 @@ Section Defs.
     FEdge s p <-> (FGraph.Edge (f_edges s)) p.
   Proof.
     unfold FGraph.Edge in *; intros; split; auto using f_edge_to_in, in_to_f_edge.
+  Qed.
+
+  Lemma c_edge_to_in:
+    forall p s,
+    CEdge s p ->
+    List.In p (c_edges s).
+  Proof.
+    unfold c_edges.
+    intros.
+    inversion H; subst; clear H.
+    inversion H0; subst.
+    inversion H1; subst.
+    eapply in_omap_1; eauto using Map_TID_Extra.values_spec_2.
+    simpl in *.
+    eapply Map_TID_Facts.MapsTo_fun in H; eauto.
+    inversion H; subst; clear H.
+    trivial.
+  Qed.
+
+  Lemma in_to_c_edge:
+    forall p s,
+    List.In p (c_edges s) ->
+    CEdge s p.
+  Proof.
+    unfold c_edges.
+    intros.
+    apply in_omap_2 in H.
+    destruct H as ([], (Hi, Hj)).
+    apply Map_TID_Extra.values_spec_1 in Hi.
+    destruct Hi as (t, mt).
+    simpl in *.
+    destruct started0. {
+      inversion Hj.
+    }
+    inversion Hj; subst; clear Hj.
+    eauto using root_def, current_def, c_edge_def.
   Qed.
 
   Lemma started_inv_add:
@@ -327,6 +401,17 @@ Section Defs.
     apply dag_impl with (E:=FEdge s); auto.
     intros; unfold FGraph.Edge in *.
     auto using in_to_f_edge.
+  Qed.
+
+  Let dag_c_edge_to_fgraph_edge:
+    forall s,
+    DAG (CEdge s) ->
+    DAG (Edge (c_edges s)).
+  Proof.
+    intros.
+    apply dag_impl with (E:=CEdge s); auto.
+    intros; unfold FGraph.Edge in *.
+    auto using in_to_c_edge.
   Qed.
 
   Let f_edge_inv_add_finish:
@@ -574,6 +659,22 @@ Section Defs.
     unfold Edge; auto using in_to_f_edge.
   Qed.
 
+  Lemma c_edge_to_edge:
+    forall s p,
+    CEdge s p ->
+    Edge (c_edges s) p.
+  Proof.
+    unfold Edge; auto using c_edge_to_in.
+  Qed.
+
+  Lemma edge_to_c_edge:
+    forall s p,
+    Edge (c_edges s) p ->
+    CEdge s p.
+  Proof.
+    unfold Edge; auto using in_to_c_edge.
+  Qed.
+
   Lemma started_nil_to_not_started:
     forall x g s,
     Map_TID.MapsTo x {| root := g; started := [] |} s ->
@@ -586,24 +687,35 @@ Section Defs.
     contradiction.
   Qed.
 
+  Lemma started_nil_to_not_current:
+    forall x g s,
+    Map_TID.MapsTo x {| root := g; started := [] |} s ->
+    forall f, ~ Current x f s.
+  Proof.
+    unfold not; intros.
+    inversion H0; subst; clear H0.
+    eapply Map_TID_Facts.MapsTo_fun in H; eauto.
+    inversion H; subst; clear H.
+  Qed.
+
   Let dag_cond:
     forall s, 
-    DAG (Edge (f_edges s)) ->
-    (forall x, Map_TID.In x s -> forall f, ~ Started x f s) \/
-    (exists t f, Started t f s /\ forall u, Root u f s -> forall g, ~ Started u g s).
+    DAG (Edge (c_edges s)) ->
+    (forall x, Map_TID.In x s -> forall f, ~ Current x f s) \/
+    (exists t f, Current t f s /\ forall u, Root u f s -> forall g, ~ Current u g s).
   Proof.
     intros.
-    remember (f_edges s).
+    remember (c_edges s).
     destruct l. {
       left; intros.
       apply Map_TID_Extra.in_to_mapsto in H0.
       destruct H0 as (ft, mt).
       destruct ft as (g, l).
       destruct l. {
-        eauto using started_nil_to_not_started.
+        eauto using started_nil_to_not_current.
       }
-      assert (He: FEdge s (g, f0)) by eauto using List.in_eq, started_def, f_edge_def, root_def.
-      apply f_edge_to_edge in He.
+      assert (He: CEdge s (g, f0)) by eauto using List.in_eq, current_def, c_edge_def, root_def.
+      apply c_edge_to_edge in He.
       rewrite <- Heql in *.
       inversion He.
     }
@@ -619,13 +731,13 @@ Section Defs.
        contradiction.
     }
     rewrite Heql in He.
-    apply edge_to_f_edge in He.
+    apply edge_to_c_edge in He.
     inversion He; subst; clear He.
     exists t; exists b; split; auto.
     unfold not; intros.
-    assert (He : FEdge s (b, g)) by eauto using f_edge_def.
-    match goal with H: FEdge _ _ |- _ =>
-      apply f_edge_to_edge in H;
+    assert (He : CEdge s (b, g)) by eauto using c_edge_def.
+    match goal with H: CEdge _ _ |- _ =>
+      apply c_edge_to_edge in H;
       rewrite <- Heql in *;
       apply Graph.edge_to_reaches in H
     end.
@@ -772,32 +884,60 @@ Section Defs.
     contradiction.
   Defined.
 
+  Let current_to_started:
+    forall t f s,
+    Current t f s ->
+    Started t f s.
+  Proof.
+    intros.
+    inversion H; subst.
+    eauto using started_def, List.in_eq.
+  Qed.
+
+  Let c_edge_to_f_edge:
+    forall s e,
+    CEdge s e ->
+    FEdge s e.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using f_edge_def, current_to_started.
+  Qed.
+
+  Let dag_f_edge_to_c_edge:
+    forall s,
+    DAG (FEdge s) ->
+    DAG (CEdge s).
+  Proof.
+    intros.
+    apply dag_impl with (E:=FEdge s); auto using c_edge_to_f_edge.
+  Qed.
+
   Theorem progress:
     forall s,
     (* Given that a finish-state is a DAG *)
     DAG (FEdge s) ->
     (* And that state is not empty *)
     ~ Map_TID.Empty s ->
-    (* Then there is some f such that *)
+    (* Then there is some [f] such that *)
     exists f,
-    (Nonempty f s /\
-      (forall u o, Valid s u o -> exists s', Reduces s (u, o) s')
+    ((* [f] is nonempty and every task in [f] reduces. *)
+      Nonempty f s
+      /\
+      forall t o, Root t f s -> Valid s t o -> exists s', Reduces s (t, o) s'
     )
     \/
-    (exists t, Started t f s /\ Empty f s)
-    \/
-    (exists t, Started t f s /\ Nonempty f s /\
-    (* Any task in f is able to execute a finish-operation. *)
-    (forall u,
-    Root u f s ->
-    forall o,
-    Valid s u o ->
-    exists s', Reduces s (u, o) s')).
+    ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
+      Empty f s
+      /\
+      exists t, Current t f s
+    ).
   Proof.
     intros.
     apply Map_TID_Extra.nonempty_in in H0.
-    apply dag_f_edge_to_fgraph_edge in H.
-    apply dag_cond in H.
+    apply dag_f_edge_to_c_edge,
+          dag_c_edge_to_fgraph_edge,
+          dag_cond in H.
     destruct H as [H|H]. {
       destruct H0 as (t, Hi).
       apply Map_TID_Extra.in_to_mapsto in Hi.
@@ -808,33 +948,35 @@ Section Defs.
       split. {
         eauto using nonempty_def.
       }
-      intros u; intros.
+      intros.
       assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
       destruct X. {
         subst.
         match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
-        assert (~ Started u f s) by eauto using Map_TID_Extra.mapsto_to_in.
-        assert (Started u f s) by eauto using started_def, List.in_eq.
+        assert (g0 = g) by eauto using root_fun, root_def; subst.
+        assert (~ Current t0 f s) by eauto using Map_TID_Extra.mapsto_to_in.
+        assert (Current t0 f s) by eauto using current_def.
         contradiction.
       }
       eauto using progress_nonblocking.
     }
     destruct H as (t, (f, (Hs, Hr))).
-    exists f.
-    right.
-    destruct (empty_nonempty_dec f s); eauto.
-    right.
-    exists t; try (repeat split; auto).
-    intros u; intros.
-    assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
-    destruct X. {
-      subst.
-      match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H
-      end.
-      assert (~ Started u f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
-      assert (Started u f0 s) by eauto using started_def, List.in_eq.
-      contradiction.
+    destruct (empty_nonempty_dec f s). {
+      exists f.
+      left; split; auto.
+      intros.
+      assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
+      destruct X. {
+        subst.
+        match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
+        assert (g = f) by eauto using root_fun, root_def; subst.
+        assert (~ Current t0 f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
+        assert (Current t0 f0 s) by eauto using current_def.
+        contradiction.
+      }
+      eauto using progress_nonblocking.
     }
-    eauto using progress_nonblocking.
+    exists f.
+    right; split; eauto.
   Qed.
 End Defs.

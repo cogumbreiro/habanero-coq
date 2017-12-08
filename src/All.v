@@ -155,6 +155,9 @@ Inductive ContextOf (s:state) (t:tid) : context -> Prop :=
     Map_FID.MapsTo l m s.(get_fstate) ->
     ContextOf s t (m, (get_finish s)).
 *)
+
+(* XXX: before a await on f, the task must not hold any phasers held by f *)
+
 Inductive CtxReduces (ctx:context) (t:tid) (o:op) : context -> Prop :=
   | reduces_p:
     forall m o',
@@ -275,6 +278,11 @@ Module Progress.
       Phasermap.In t pm ->
       F.Root t ief f \/ F.Started t ief f.
 
+  (* XXX: we are missing the invariant that says that
+    F.Started t ief f ->
+    F_T.Valid f t AWAIT ->
+    ~ In t pm. *)
+
     (*
     Require Import HJ.Finish.Progress.
     Variable IsFlat:
@@ -309,14 +317,15 @@ Module Progress.
       exists (pm_t, snd ctx).
       eapply Semantics.reduces_p; eauto.
     Qed.
-    
+
     Section Case1.
       (** Case 1 of the proof: every task in [ief] that typechecks can execute *)
-      Variable f_prog:
-        forall t,
+      Variable ief_nonempty: F.Nonempty ief f.
+      Variable ief_can_run:
+        forall t o,
         F.Root t ief f ->
-        forall o,
-        F.Valid f t o -> exists g, F.Reduces f (t, o) g.
+        F.Valid f t o ->
+        exists f', F.Reduces f (t, o) f'.
 
       Let reduces_f_ex:
         forall o o' t,
@@ -326,8 +335,7 @@ Module Progress.
         exists ctx', Semantics.CtxReduces ctx t o ctx'.
       Proof.
         intros.
-        apply f_prog in H1; auto.
-        destruct H1 as (f', Hr).
+        destruct ief_can_run with (t:=t) (o:=o') as (f', Hr); auto.
         exists (fst ctx, f').
         eapply Semantics.reduces_f; eauto.
       Qed.
@@ -343,8 +351,7 @@ Module Progress.
         intros.
         assert (R: exists pm_t, ReducesT p (t, o_p) pm_t) by eauto.
         destruct R as (pm_t, ?).
-        apply f_prog in H1; auto.
-        destruct H1 as (f', Hr).
+        destruct ief_can_run with (t:=t) (o:=o_f) as (f', Hr); auto.
         exists (pm_t, f').
         eapply Semantics.reduces_both; eauto.
       Qed.
@@ -361,16 +368,34 @@ Module Progress.
         eapply P_P.progress_ex in nonempty_tids; eauto.
         destruct nonempty_tids as (t, (Hi, ?)).
         apply task_mem in Hi.
-        exists t.
+        destruct Hi. {
+          exists t; intros.
+          match goal with H: Valid _ _ _ |- _ =>
+            inversion H; subst; clear H
+          end.
+          - assert (X: exists m, Reduces pm t o0 m) by eauto;
+            destruct X; eauto using reduces_p_ex.
+          - apply reduces_f_ex with (o':=o0); auto.
+          - assert (X: exists m, Reduces pm t o0 m) by eauto.
+            destruct X; eauto using reduces_both.
+        }
+        
+        inversion ief_nonempty.
+        rename t0 into u.
+        exists u.
         intros.
         match goal with H: Valid _ _ _ |- _ =>
           inversion H; subst; clear H
         end.
-        - assert (X: exists m, Reduces pm t o0 m) by eauto;
-          destruct X; eauto.
+        - assert (X: exists m, Reduces pm u o0 m) by eauto;
+          destruct X; eauto using reduces_p_ex.
+          - apply reduces_f_ex with (o':=o0); auto.
+          - assert (X: exists m, Reduces pm t o0 m) by eauto.
+            destruct X; eauto using reduces_both.
         - destruct Hi as [Hi|Hi]. {
-            eauto.
+            eauto using reduces_f_ex.
           }
+          eapply reduces_f_ex.
           eauto.
         - assert (X: exists m, Reduces pm t o0 m) by eauto;
           destruct X; eauto.
