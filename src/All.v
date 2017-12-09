@@ -1,15 +1,13 @@
-Require HJ.Finish.Syntax2.
-Module F := HJ.Finish.Syntax2.
-Require Import HJ.Phasers.Phasermap.
-Require Import HJ.Vars.
-(*Require Import HJ.Common.*)
 Require HJ.Phasers.Progress.
-Require HJ.Phasers.Phasermap.
 Require HJ.Phasers.Lang.
 Require HJ.Phasers.Typesystem.
-Require HJ.Finish.Typesystem.
+Require HJ.Finish.Syntax2.
 
-(*Notation phasermap_t := phasermap.*)
+Require Import HJ.Vars.
+Require Import HJ.Phasers.Phasermap.
+
+Module F := HJ.Finish.Syntax2.
+
 Notation fstate := (Map_FID.t phasermap_t).
 
 
@@ -30,10 +28,7 @@ Definition set_finish (s:state) (f:F.state) : state :=
 Module Semantics.
   Import HJ.Phasers.Lang.
 
-(*Require HJ.Finish.Semantics.*)
-(*Module FS := HJ.Finish.Semantics.*)
-
-Inductive op := 
+  Inductive op := 
   | BEGIN_ASYNC : phased -> op
   | END_ASYNC
   | BEGIN_FINISH
@@ -44,12 +39,12 @@ Inductive op :=
   | SIGNAL_ALL : op
   | WAIT_ALL : op.
 
-Inductive packet :=
+  Inductive packet :=
   | only_p: Phasermap.op -> packet
   | only_f: F.op -> packet
   | both: Phasermap.op -> F.op -> packet.
 
-Definition translate (o:op) : packet :=
+  Definition translate (o:op) : packet :=
   match o with
   (* Copies registry from spawner and registers task in finish scope of spawner*)
   | BEGIN_ASYNC ps  => both (ASYNC ps) (F.ASYNC (get_new_task ps))
@@ -67,98 +62,89 @@ Definition translate (o:op) : packet :=
   | WAIT_ALL => only_p Phasermap.WAIT_ALL
   end.
 
-Definition as_f_op (o:op) :=
+  Definition as_f_op (o:op) :=
   match translate o with
   | only_f o => Some o
   | both _ o => Some o
   | only_p _ => None
   end.
 
-Ltac translate_solver := intros i; intros; destruct i; try (simpl in *; inversion H); compute; auto.
+  Ltac translate_solver := intros i; intros; destruct i; try (simpl in *; inversion H); compute; auto.
 
-Lemma translate_only_f_impl_as_f_op:
-  forall i o,
-  translate i = only_f o ->
-  as_f_op i = Some o.
-Proof.
-  translate_solver.
-Qed.
+  Lemma translate_only_f_impl_as_f_op:
+    forall i o,
+    translate i = only_f o ->
+    as_f_op i = Some o.
+  Proof.
+    translate_solver.
+  Qed.
 
-Lemma translate_both_impl_as_f_op:
-  forall i o o',
-  translate i = both o o' ->
-  as_f_op i = Some o'.
-Proof.
-  translate_solver.
-Qed.
+  Lemma translate_both_impl_as_f_op:
+    forall i o o',
+    translate i = both o o' ->
+    as_f_op i = Some o'.
+  Proof.
+    translate_solver.
+  Qed.
 
-Lemma translate_only_p_impl_as_f_op:
-  forall i o,
-  translate i = only_p o ->
-  as_f_op i = None.
-Proof.
-  translate_solver.
-Qed.
+  Lemma translate_only_p_impl_as_f_op:
+    forall i o,
+    translate i = only_p o ->
+    as_f_op i = None.
+  Proof.
+    translate_solver.
+  Qed.
 
-Definition as_p_op (o:op) :=
+  Definition as_p_op (o:op) :=
   match translate o with
   | only_p o => Some o
   | both o _ => Some o
   | only_f _ => None
   end.
 
-Lemma translate_only_p_impl_as_p_op:
-  forall i o,
-  translate i = only_p o ->
-  as_p_op i = Some o.
-Proof.
-  translate_solver.
-Qed.
+  Lemma translate_only_p_impl_as_p_op:
+    forall i o,
+    translate i = only_p o ->
+    as_p_op i = Some o.
+  Proof.
+    translate_solver.
+  Qed.
 
-Lemma translate_both_impl_as_p_op:
-  forall i o o',
-  translate i = both o o' ->
-  as_p_op i = Some o.
-Proof.
-  translate_solver.
-Qed.
+  Lemma translate_both_impl_as_p_op:
+    forall i o o',
+    translate i = both o o' ->
+    as_p_op i = Some o.
+  Proof.
+    translate_solver.
+  Qed.
 
-Lemma translate_only_f_impl_as_p_op:
-  forall i o,
-  translate i = only_f o ->
-  as_p_op i = None.
-Proof.
-  translate_solver.
-Qed.
+  Lemma translate_only_f_impl_as_p_op:
+    forall i o,
+    translate i = only_f o ->
+    as_p_op i = None.
+  Proof.
+    translate_solver.
+  Qed.
 
-Lemma as_p_op_some_impl_translate:
-  forall i o,
-  as_p_op i = Some o ->
-  (translate i = only_p o) \/ (exists o', translate i = both o o').
-Proof.
-  intros.
-  unfold as_p_op in H.
-  remember (translate _).
-  destruct p; try (inversion H; subst; intuition).
-  right.
-  exists o1.
-  trivial.
-Qed.
+  Lemma as_p_op_some_impl_translate:
+    forall i o,
+    as_p_op i = Some o ->
+    (translate i = only_p o) \/ (exists o', translate i = both o o').
+  Proof.
+    intros.
+    unfold as_p_op in H.
+    remember (translate _).
+    destruct p; try (inversion H; subst; intuition).
+    right.
+    exists o1.
+    trivial.
+  Qed.
 
-Definition context := (phasermap_t * F.state) % type.
-(*
-Inductive ContextOf (s:state) (t:tid) : context -> Prop :=
-  context_of_def:
-    forall f l m,
-    IEF t f ->
-    FIDPath f l (get_finish s) ->
-    Map_FID.MapsTo l m s.(get_fstate) ->
-    ContextOf s t (m, (get_finish s)).
-*)
+  Definition context := (phasermap_t * F.state) % type.
 
-(* XXX: before a await on f, the task must not hold any phasers held by f *)
+  (* XXX: before a await on f, the task must not hold any phasers held by f *)
 
-Inductive CtxReduces (ctx:context) (t:tid) (o:op) : context -> Prop :=
+  Inductive CtxReduces (ctx:context) (t:tid) (o:op) : context -> Prop :=
   | reduces_p:
     forall m o',
     translate o = only_p o' ->
@@ -178,10 +164,8 @@ Inductive CtxReduces (ctx:context) (t:tid) (o:op) : context -> Prop :=
 
 End Semantics.
 
-
 Module Typesystem.
   Import Semantics.
-(*  Import Progress.ProgressSpec.*)
   Module P_T := HJ.Phasers.Typesystem.
   Module F_T := HJ.Finish.Syntax2.
 
@@ -225,19 +209,7 @@ Module Typesystem.
       subst.
       assumption.
   Qed.
-(*
-  Lemma valid_change_finish:
-    forall t f f' i m,
-    F.Registered t f ->
-    Valid (m, f') t i ->
-    Valid (m, f) t i.
-  Proof.
-    intros.
-    inversion H0; subst; simpl in *.
-    - eauto using valid_only_p.
-    - apply valid_only_f with (o); auto.
-      simpl.
-  Admitted.*)
+
 End Typesystem.
 
 Module P_P := HJ.Phasers.Progress.
@@ -283,11 +255,6 @@ Module Progress.
     F_T.Valid f t AWAIT ->
     ~ In t pm. *)
 
-    (*
-    Require Import HJ.Finish.Progress.
-    Variable IsFlat:
-      Flat f.
-*)
     Let reduces_t:
       forall o pm t,
       Reduces (Phasermap.state p) t o pm ->
