@@ -253,7 +253,10 @@ Module Progress.
   (* XXX: we are missing the invariant that says that
     F.Started t ief f ->
     F_T.Valid f t AWAIT ->
-    ~ In t pm. *)
+    ~ In t pm.
+    XXX: We are not missing this invariant, because of this rule:
+    END_FINISH => both DROP_ALL F.AWAIT
+     *)
 
     Let reduces_t:
       forall o pm t,
@@ -346,19 +349,28 @@ Module Progress.
           - assert (X: exists m, Reduces pm t o0 m) by eauto.
             destruct X; eauto using reduces_both.
         }
-        
-        inversion ief_nonempty.
-        rename t0 into u.
-        exists u.
+        exists t.
         intros.
         match goal with H: Valid _ _ _ |- _ =>
           inversion H; subst; clear H
         end.
-        - assert (X: exists m, Reduces pm u o0 m) by eauto;
+        - assert (X: exists m, Reduces pm t o0 m) by eauto;
           destruct X; eauto using reduces_p_ex.
-          - apply reduces_f_ex with (o':=o0); auto.
-          - assert (X: exists m, Reduces pm t o0 m) by eauto.
-            destruct X; eauto using reduces_both.
+        - assert (o0 <> F.AWAIT). {
+            (* We know that o0 is not an AWAIT because
+              the await is a both operation. *)
+            unfold not; intros; subst.
+            destruct o;
+            match goal with
+            [ H: translate _ = _ |- _ ] => simpl in *; inversion H
+            end.
+          }
+          edestruct F.progress_nonblocking as (f', Hr);eauto.
+          exists (fst ctx, f').
+          eapply reduces_f; eauto.
+        - 
+          assert (X: exists m, Reduces pm t o0 m) by eauto.
+          destruct X; eauto using reduces_both.
         - destruct Hi as [Hi|Hi]. {
             eauto using reduces_f_ex.
           }
