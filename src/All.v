@@ -56,10 +56,6 @@ Module Semantics.
   | _  => task_op
   end.
 
-  Definition is_finish_op (o:op) :=
-  match o with
-  end.
-
   Inductive packet :=
   | only_p: Phasermap.op -> packet
   | only_f: F.op -> packet
@@ -341,7 +337,31 @@ Module Progress.
         eapply Semantics.reduces_both; eauto.
       Qed.
 
-      Let ctx_progress_aux (nonempty_tids:
+      Let ctx_progress_empty (nonempty_tids:
+          LEDec.pm_tids (Phasermap.state p) = nil):
+        exists t,
+        forall o,
+        Valid ctx t o ->
+        exists ctx', Semantics.CtxReduces ctx t o ctx'.
+      Proof.
+        destruct p as (pm, l, ?).
+        simpl in *.
+        inversion ief_nonempty.
+        exists t.
+        intros.
+        inversion H0; subst.
+        - assert (X: exists m, Reduces pm t o0 m). {
+            eapply P_P.progress_empty; eauto.
+          }
+          destruct X; eauto using reduces_p_ex.
+        - eauto.
+        - assert (X: exists m, Reduces pm t o0 m). {
+            eapply P_P.progress_empty; eauto.
+          }
+          destruct X; eauto using reduces_both.
+      Qed.
+
+      Let ctx_progress_nonempty (nonempty_tids:
           LEDec.pm_tids (Phasermap.state p) <> nil):
         exists (k:op_kind),
         k <> task_op /\
@@ -409,21 +429,14 @@ Module Progress.
           unfold not; intros N.
           inversion N.
         }
-        destruct E; auto using ctx_progress_aux.
-        inversion ief_nonempty.
-        apply ctx_progress_aux; auto.
-        exists t.
-        intros.
-        inversion H1; subst; clear H1.
-        - apply P_P.progress_empty with (l:=history p) in H3;
-          eauto using phasermap_spec.
-          destruct H3 as (?, ?).
-          eauto.
-        - eauto.
-        - apply P_P.progress_empty with (l:=history p) in H4;
-          eauto using phasermap_spec.
-          destruct H4 as (?, ?).
-          eauto.
+        destruct E; auto using ctx_progress_nonempty.
+        exists phaser_op.
+        split. {
+          unfold not; intros N; inversion N.
+        }
+        edestruct ctx_progress_empty as (x, Hx); auto.
+        exists x.
+        auto.
       Qed.
     End Case1.
 (*
