@@ -39,6 +39,27 @@ Module Semantics.
   | SIGNAL_ALL : op
   | WAIT_ALL : op.
 
+  Inductive op_kind :=
+  | phaser_op
+  | finish_op
+  | task_op.
+
+  Definition get_op_kind (o:op) :=
+  match o with
+  | PH_NEW _
+  | PH_SIGNAL _
+  | PH_DROP _
+  | SIGNAL_ALL
+  | WAIT_ALL => phaser_op
+  | BEGIN_FINISH
+  | END_FINISH => finish_op
+  | _  => task_op
+  end.
+
+  Definition is_finish_op (o:op) :=
+  match o with
+  end.
+
   Inductive packet :=
   | only_p: Phasermap.op -> packet
   | only_f: F.op -> packet
@@ -167,6 +188,7 @@ End Semantics.
 Module Typesystem.
   Import Semantics.
   Module P_T := HJ.Phasers.Typesystem.
+  Module P_R := HJ.Phasers.SubjectReduction.
   Module F_T := HJ.Finish.Syntax2.
 
   Inductive Valid (ctx:context) (t:tid): op -> Prop :=
@@ -250,14 +272,6 @@ Module Progress.
       Phasermap.In t pm ->
       F.Root t ief f \/ F.Started t ief f.
 
-  (* XXX: we are missing the invariant that says that
-    F.Started t ief f ->
-    F_T.Valid f t AWAIT ->
-    ~ In t pm.
-    XXX: We are not missing this invariant, because of this rule:
-    END_FINISH => both DROP_ALL F.AWAIT
-     *)
-
     Let reduces_t:
       forall o pm t,
       Reduces (Phasermap.state p) t o pm ->
@@ -287,6 +301,7 @@ Module Progress.
       exists (pm_t, snd ctx).
       eapply Semantics.reduces_p; eauto.
     Qed.
+
 
     Section Case1.
       (** Case 1 of the proof: every task in [ief] that typechecks can execute *)
@@ -326,10 +341,13 @@ Module Progress.
         eapply Semantics.reduces_both; eauto.
       Qed.
 
-      Lemma ctx_progress_aux (nonempty_tids:
-        LEDec.pm_tids (Phasermap.state p) <> nil):
+      Let ctx_progress_aux (nonempty_tids:
+          LEDec.pm_tids (Phasermap.state p) <> nil):
+        exists (k:op_kind),
+        k <> task_op /\
         exists t,
         forall o,
+        get_op_kind o = k ->
         Valid ctx t o ->
         exists ctx', Semantics.CtxReduces ctx t o ctx'.
       Proof.
@@ -339,50 +357,48 @@ Module Progress.
         destruct nonempty_tids as (t, (Hi, ?)).
         apply task_mem in Hi.
         destruct Hi. {
+          exists phaser_op.
+          split. {
+            unfold not; intros N; inversion N.
+          }
           exists t; intros.
           match goal with H: Valid _ _ _ |- _ =>
             inversion H; subst; clear H
           end.
           - assert (X: exists m, Reduces pm t o0 m) by eauto;
             destruct X; eauto using reduces_p_ex.
-          - apply reduces_f_ex with (o':=o0); auto.
-          - assert (X: exists m, Reduces pm t o0 m) by eauto.
-            destruct X; eauto using reduces_both.
+          - destruct o; simpl in *; inversion H1; simpl in *; inversion H3.
+          - destruct o; simpl in *; inversion H1; simpl in *; inversion H3.
         }
-        exists t.
+        exists finish_op.
+        split. {
+          unfold not; intros N; inversion N.
+        }
+        inversion ief_nonempty.
+        exists t0.
         intros.
-        match goal with H: Valid _ _ _ |- _ =>
-          inversion H; subst; clear H
-        end.
-        - assert (X: exists m, Reduces pm t o0 m) by eauto;
-          destruct X; eauto using reduces_p_ex.
-        - assert (o0 <> F.AWAIT). {
-            (* We know that o0 is not an AWAIT because
-              the await is a both operation. *)
-            unfold not; intros; subst.
-            destruct o;
-            match goal with
-            [ H: translate _ = _ |- _ ] => simpl in *; inversion H
-            end.
-          }
-          edestruct F.progress_nonblocking as (f', Hr);eauto.
-          exists (fst ctx, f').
-          eapply reduces_f; eauto.
-        - 
-          assert (X: exists m, Reduces pm t o0 m) by eauto.
-          destruct X; eauto using reduces_both.
-        - destruct Hi as [Hi|Hi]. {
-            eauto using reduces_f_ex.
-          }
-          eapply reduces_f_ex.
+        destruct o;
+        inversion H2;
+        inversion H3; subst; simpl in *; inversion H4; subst; clear H4 H2.
+        - assert (translate BEGIN_FINISH = only_f F.FINISH) by (simpl; auto).
           eauto.
-        - assert (X: exists m, Reduces pm t o0 m) by eauto;
-          destruct X; eauto.
+        - assert (Hp: exists m, Reduces pm t0 DROP_ALL m). {
+            apply P_P.progress_unblocking_simple;
+             eauto using P_R.reduces_n_to_valid.
+            unfold not; intros N; inversion N.
+          }
+          destruct Hp as (m, Hp).
+          assert (Hf: exists g, F.Reduces f (t0, F.AWAIT) g) by eauto.
+          destruct Hf as (g, Hf).
+          eapply reduces_both; simpl; eauto.
       Qed.
 
-      Lemma ctx_progress_1 (ief_nonempty: F.Nonempty ief f):
+      Lemma ctx_progress_1:
+        exists (k:op_kind),
+        k <> task_op /\
         exists t,
         forall o,
+        get_op_kind o = k ->
         Valid ctx t o ->
         exists ctx', Semantics.CtxReduces ctx t o ctx'.
       Proof.
@@ -395,6 +411,7 @@ Module Progress.
         }
         destruct E; auto using ctx_progress_aux.
         inversion ief_nonempty.
+        apply ctx_progress_aux; auto.
         exists t.
         intros.
         inversion H1; subst; clear H1.
