@@ -220,6 +220,15 @@ Section Defs.
     eauto using root_eq.
   Qed.
 
+  Lemma not_root_empty:
+    forall t f,
+    ~ Root t f empty.
+  Proof.
+    unfold not, empty; intros ? ? N.
+    inversion N; subst; clear N.
+    apply Map_TID_Facts.empty_mapsto_iff in H; auto.
+  Qed.
+
   Lemma started_eq:
     forall f t ft s,
     Map_TID.MapsTo t ft s ->
@@ -770,7 +779,7 @@ Section Defs.
     - eauto using reduces_async.
   Qed.
 
-  Let await_or:
+  Lemma await_or:
     forall o,
     o = AWAIT \/ o <> AWAIT.
   Proof.
@@ -913,6 +922,46 @@ Section Defs.
     apply dag_impl with (E:=FEdge s); auto using c_edge_to_f_edge.
   Qed.
 
+  Lemma current_fun:
+    forall t f g s,
+    Current t f s ->
+    Current t g s ->
+    f = g.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    inversion H0; subst; clear H0.
+    apply Map_TID_Facts.MapsTo_fun with (e:={| root := g1; started := g :: l0 |}) in H1; auto.
+    inversion H1; subst; auto.
+  Qed.
+
+  Lemma progress_empty:
+    forall t f s,
+    Empty f s ->
+    Current t f s ->
+    forall o,
+    Valid s t o ->
+    exists s', Reduces s (t, o) s'.
+  Proof.
+    intros.
+    destruct (await_or o). {
+      subst.
+      inversion H1; subst.
+      assert (f0 = f). {
+        assert (Current t f0 s) by eauto using current_def.
+        eauto using current_fun.
+      }
+      subst.
+      exists ((Map_TID.add t {| root := g; started := l |} s)).
+      eapply reduces_await; eauto.
+    }
+    auto using progress_nonblocking.
+  Qed.
+
+  (** An enabled task can reduce with any operation. *)
+  Definition Enabled s t :=
+  forall o, Valid s t o -> exists s', Reduces s (t, o) s'.
+
   Theorem progress:
     forall s,
     (* Given that a finish-state is a DAG *)
@@ -924,16 +973,17 @@ Section Defs.
     ((* [f] is nonempty and every task in [f] reduces. *)
       Nonempty f s
       /\
-      forall t o, Root t f s -> Valid s t o -> exists s', Reduces s (t, o) s'
+      (forall t, Root t f s -> Enabled s t)
     )
     \/
     ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
       Empty f s
       /\
-      exists t, Current t f s
+      exists t, Current t f s /\ Enabled s t
     ).
   Proof.
     intros.
+    unfold Enabled.
     apply Map_TID_Extra.nonempty_in in H0.
     apply dag_f_edge_to_c_edge,
           dag_c_edge_to_fgraph_edge,
@@ -977,6 +1027,78 @@ Section Defs.
       eauto using progress_nonblocking.
     }
     exists f.
-    right; split; eauto.
+    right;
+    split; eauto using progress_empty.
   Qed.
+
 End Defs.
+
+
+Module Trace.
+  Definition t := (list (tid * op)) % type.
+
+  Inductive ReducesN: state -> t -> Prop :=
+  | reduces_n_nil:
+    ReducesN empty nil
+  | reduces_n_cons:
+    forall t l o s s',
+    ReducesN s l ->
+    Reduces s (t, o) s' ->
+    ReducesN s' ((t,o)::l).
+
+  Section Props.
+    Theorem reduces_n_to_dag:
+      forall l s,
+      ReducesN s l ->
+      DAG (FEdge s).
+    Proof.
+      induction l; intros; inversion H; subst; clear H.
+      - unfold DAG, not; intros.
+        apply Graph.reaches_to_in_fst in H.
+        destruct H as (?,(?,?)).
+        inversion H; subst; clear H.
+        apply not_root_empty in H1; auto.
+      - assert (DAG (FEdge s0)) by auto.
+        eauto using dag_reduces.
+    Qed.
+
+    Corollary progress_ex:
+      forall s l,
+      (* Given that a finish-state is a DAG *)
+      ReducesN s l ->
+      (* And that state is not empty *)
+      ~ Map_TID.Empty s ->
+      (* Then there is some [f] such that *)
+      exists f,
+      ((* [f] is nonempty and every task in [f] reduces. *)
+        Nonempty f s
+        /\
+        forall t, Root t f s -> Enabled s t
+      )
+      \/
+      ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
+        Empty f s
+        /\
+        exists t, Current t f s /\ Enabled s t
+      ).
+    Proof.
+      intros.
+      edestruct progress as (f, [Hx|Hx]); eauto using reduces_n_to_dag.
+    Qed.
+
+    Corollary progress:
+      forall s l,
+      (* Given that a finish-state is a DAG *)
+      ReducesN s l ->
+      (* And that state is not empty *)
+      ~ Map_TID.Empty s ->
+      (* Then there is some [f] such that *)
+      exists t,
+      Enabled s t.
+    Proof.
+      intros.
+      edestruct progress as (f, [([],?)|(Hx,(t,(?,?)))]);
+        eauto using reduces_n_to_dag.
+    Qed.
+  End Props.
+End Trace.

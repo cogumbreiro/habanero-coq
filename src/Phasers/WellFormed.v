@@ -715,7 +715,7 @@ Module Phasermap.
 
   Lemma well_formed_to_reduces_n:
     forall l pm,
-    ReducesN pm l ->
+    Trace.ReducesN pm l ->
     WellFormed pm.
   Proof.
     induction l; intros; inversion H;subst; clear H. {

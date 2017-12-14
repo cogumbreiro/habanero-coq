@@ -1597,7 +1597,7 @@ End Async.
 
   Lemma reduces_n_to_valid:
     forall l pm,
-    ReducesN pm l ->
+    Trace.ReducesN pm l ->
     Valid pm.
   Proof.
     induction l; intros. {
@@ -1605,7 +1605,7 @@ End Async.
       auto using valid_make.
     }
     inversion H; subst; clear H.
-    eauto using reduces_n_cons, subject_reduction.
+    eauto using Trace.reduces_n_cons, subject_reduction.
   Qed.
 End SR.
 

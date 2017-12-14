@@ -190,11 +190,12 @@ Variable WF : WellFormed pm.
     Op.Valid pm t WAIT_ALL.
 
   Theorem has_unblocked:
-    tids <> nil ->
+    Nonempty pm ->
     exists t,
     List.In t tids /\ exists m, Reduces pm t WAIT_ALL m.
   Proof.
     intros.
+    apply pm_tids_nonempty in H.
     assert (Hisa : Forall IsA tids). {
       apply Forall_forall.
       intros.
@@ -282,7 +283,7 @@ Variable WF : WellFormed pm.
   Qed.
 
   Theorem progress:
-    tids <> nil ->
+    Nonempty pm ->
     exists t,
     In t pm /\
     forall o,
@@ -301,6 +302,7 @@ Variable WF : WellFormed pm.
       eauto using progress_unblocking_simple.
     }
     destruct (has_unblocked) as (x,(?,?)); auto.
+    apply pm_tids_nonempty in H.
     exists x.
     split; auto using pm_tids_spec_1.
     intros.
@@ -319,7 +321,7 @@ End HAS_SMALLEST.
 Section ProgressEmpty.
   Lemma progress_empty:
     forall t o pm l,
-    ReducesN pm l ->
+    Trace.ReducesN pm l ->
     pm_tids pm = nil ->
     Op.Valid pm t o ->
     exists pm', Reduces pm t o pm'.
@@ -347,8 +349,8 @@ End ProgressEmpty.
 Section ProgressEx.
   Corollary progress_ex:
     forall pm l,
-    ReducesN pm l ->
-    pm_tids pm <> nil ->
+    Trace.ReducesN pm l ->
+    Nonempty pm ->
     exists t,
     In t pm /\
     forall o,

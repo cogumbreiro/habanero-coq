@@ -253,7 +253,7 @@ Proof.
 Qed.
 
 Lemma pm_tids_nonempty:
-  pm_tids <> nil <-> exists t, In t pm.
+  pm_tids <> nil <-> Nonempty pm.
 Proof.
   intros.
   intuition.
@@ -270,6 +270,27 @@ Proof.
     inversion Hin.
 Qed.
 
+Lemma pm_tids_empty:
+  pm_tids = nil <-> Empty pm.
+Proof.
+  remember (pm_tids).
+  symmetry in Heql.
+  split; intros. {
+    unfold Empty, not; intros ? Hi.
+    apply pm_tids_spec in Hi.
+    subst.
+    rewrite H in *.
+    inversion Hi.
+  }
+  unfold Empty in *.
+  destruct l. {
+    auto.
+  }
+  assert (Hi: List.In k pm_tids) by (rewrite Heql in *; eauto using in_eq).
+  apply pm_tids_spec_1 in Hi.
+  apply H in Hi.
+  contradiction.
+Qed.
 
 Lemma ph_le_in_pm_tids:
   forall p ph x y,

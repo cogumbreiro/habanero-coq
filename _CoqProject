@@ -19,6 +19,7 @@ src/Phasers/TransDiff.v
 src/Phasers/SubjectReduction.v
 src/Phasers/Typesystem.v
 src/Phasers/Sync.v
+src/Phasers/DF.v
 #src/ReverseSemaphore.v
 src/Finish/Lang.v
 src/Finish/LangDec.v
@@ -32,6 +33,7 @@ src/Finish/LangExtra.v
 src/Finish/Typesystem.v
 src/Finish/Progress.v
 src/Finish/Syntax2.v
+src/Finish/DF.v
 #
 src/Common.v
 src/Bijection.v
