@@ -292,6 +292,22 @@ Proof.
   contradiction.
 Qed.
 
+Lemma empty_nonempty_dec:
+  { Empty pm } + { Nonempty pm }.
+Proof.
+  remember (pm_tids).
+  symmetry in Heql.
+  destruct l. {
+    left.
+    apply pm_tids_empty; auto.
+  }
+  right.
+  apply pm_tids_nonempty.
+  unfold not; intros N.
+  rewrite N in *.
+  inversion Heql.
+Defined.
+
 Lemma ph_le_in_pm_tids:
   forall p ph x y,
   Map_PHID.MapsTo p ph pm ->
