@@ -23,6 +23,12 @@ Module State.
       forall x, F.In x (f_state finishes) -> Map_FID.In x phasers;
     spec_2:
       forall x, Map_FID.In x phasers -> F.In x (f_state finishes);
+    spec_3:
+      forall x pm f,
+      Map_FID.MapsTo f pm phasers ->
+      Phasermap.In x (pm_state pm) ->
+      F.Root x f (f_state finishes) \/ F.Started x f (f_state finishes);
+
   }.
 (*
   Definition set_phasers (s:t) m
@@ -440,14 +446,8 @@ Module Progress.
         Valid ctx t o ->
         exists ctx', Semantics.CtxReduces ctx t o ctx'.
       Proof.
-        assert (E: LEDec.pm_tids (Phasermap.state p) = nil \/ LEDec.pm_tids (Phasermap.state p) <> nil). {
-          remember (LEDec.pm_tids _).
-          destruct l; auto.
-          right.
-          unfold not; intros N.
-          inversion N.
-        }
-        destruct E; auto using ctx_progress_nonempty.
+        destruct (LEDec.empty_nonempty_dec (pm_state p));
+          auto using ctx_progress_nonempty.
         exists phaser_op.
         split. {
           unfold not; intros N; inversion N.
