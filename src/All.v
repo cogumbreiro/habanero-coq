@@ -15,65 +15,15 @@ Notation phasermap_t := Phasers.DF.t.
 Notation pm_state := Phasers.DF.state.
 Notation f_state := Finish.DF.state.
 
-Module State.
-  Inductive t := make {
-    finishes: finish_t;
-    phasers: Map_FID.t phasermap_t;
-    spec_1:
-      forall x, F.In x (f_state finishes) -> Map_FID.In x phasers;
-    spec_2:
-      forall x, Map_FID.In x phasers -> F.In x (f_state finishes);
-    spec_3:
-      forall x pm f,
-      Map_FID.MapsTo f pm phasers ->
-      Phasermap.In x (pm_state pm) ->
-      F.Root x f (f_state finishes) \/ F.Started x f (f_state finishes);
-
-  }.
-(*
-  Definition set_phasers (s:t) m
-    (S1: forall x, F.In x (finishes s) <-> Map_FID.In x m) : t :=
-  make (finishes s) m S1.
-
-  Definition set_finishes (s:t) m
-    (S1: forall x, F.In x m <-> Map_FID.In x (phasers s)): t :=
-  make m (phasers s) S1.
-
-  Definition put_phasermap (s:t) (f:fid) (m:phasermap_t) 
-  (S1: forall x, F.In x (finishes s)): t.
-  Proof.
-    refine (set_phasers s (Map_FID.add f m (phasers s)) _).
-    split; intros;
-    rewrite Map_FID_Facts.add_in_iff in *.
-    - destruct s.
-      simpl in *.
-      rewrite spec_2 in H.
-      auto.
-    - destruct H.
-      + subst.
-        auto.
-      + auto.
-  Qed.*)
-  (*
-  Definition set_finish (s:t) (u:tid) (m:F.task)
-  (S1: forall x, F.In x (finishes s)): t.
-  Proof.
-    refine (set_finishes s (Map_TID.add u m (finishes s)) _).
-    intros.
-    split; intros.
-    - apply Map_FID_Facts.add_in_iff in H.
-  Qed.
-  mk_state f s.(get_fstate).*)
-End State.
-
 Module Semantics.
   Import HJ.Phasers.Lang.
 
-  Inductive op := 
+  Inductive op :=
+  | INIT: fid -> op
   | BEGIN_ASYNC : phased -> op
   | END_ASYNC
-  | BEGIN_FINISH
-  | END_FINISH
+  | BEGIN_FINISH: fid -> op
+  | END_FINISH: fid -> op
   | PH_NEW : phid -> op
   | PH_SIGNAL : phid -> op
   | PH_DROP : phid -> op
@@ -87,14 +37,16 @@ Module Semantics.
 
   Definition get_op_kind (o:op) :=
   match o with
+  | INIT _
+  | BEGIN_ASYNC _
+  | END_ASYNC => task_op
+  | BEGIN_FINISH _ 
+  | END_FINISH _ => finish_op
   | PH_NEW _
   | PH_SIGNAL _
   | PH_DROP _
   | SIGNAL_ALL
   | WAIT_ALL => phaser_op
-  | BEGIN_FINISH
-  | END_FINISH => finish_op
-  | _  => task_op
   end.
 
   Inductive packet :=
@@ -104,20 +56,28 @@ Module Semantics.
 
   Definition translate (o:op) : packet :=
   match o with
+  | INIT f => only_f (F.INIT f)
   (* Copies registry from spawner and registers task in finish scope of spawner*)
-  | BEGIN_ASYNC ps  => both (ASYNC ps) (F.ASYNC (get_new_task ps))
+  | BEGIN_ASYNC ps => both (ASYNC ps) (F.BEGIN_TASK (get_new_task ps))
   (* Drops all phasers and removes task from finish scope *)
-  | END_ASYNC => both DROP_ALL F.END
+  | END_ASYNC => both DROP_ALL F.END_TASK
   (* Pushes a finish scope  *)
-  | BEGIN_FINISH => only_f F.FINISH
+  | BEGIN_FINISH f => only_f (F.BEGIN_FINISH f)
   (* Drops all phasers and pops a finish scope *)
-  | END_FINISH => both DROP_ALL F.AWAIT
+  | END_FINISH f => both DROP_ALL (F.END_FINISH f)
   (* Phaser-only operations: *)
   | PH_NEW p => only_p (Phasermap.PH_NEW p)
   | PH_SIGNAL p => only_p (Phasermap.PH_SIGNAL p)
   | PH_DROP p => only_p (Phasermap.PH_DROP p)
   | SIGNAL_ALL => only_p Phasermap.SIGNAL_ALL
   | WAIT_ALL => only_p Phasermap.WAIT_ALL
+  end.
+
+  Definition creates_finish (o:op) :=
+  match o with
+  | INIT f => Some f
+  | BEGIN_FINISH f => Some f
+  | _ => None
   end.
 
   Definition as_f_op (o:op) :=
@@ -416,9 +376,8 @@ Module Progress.
         inversion Hv; subst; simpl in *;
         destruct o; simpl in *;
         inversion H1; inversion H2; subst; clear H2. {
-          assert (Hx: exists s', Finish.DF.Reduces s (t, F.FINISH) s'). {
-            apply Finish.DF.progress_nonblocking; auto.
-            unfold not; intros N; inversion N.
+          assert (Hx: exists s', Finish.DF.Reduces s (t, F.BEGIN_FINISH f) s'). {
+            auto using F.nonblocking_begin_finish, Finish.DF.progress_nonblocking.
           }
           destruct Hx as (s', Hx).
           exists (fst ctx, s').
@@ -432,7 +391,7 @@ Module Progress.
         assert (Finish.DF.Enabled s t) by auto.
         unfold Finish.DF.Enabled in *.
         destruct Hp as (m, Hp).
-        assert (Hf: exists g, Finish.DF.Reduces s (t, F.AWAIT) g) by auto.
+        assert (Hf: exists g, Finish.DF.Reduces s (t, F.END_FINISH f) g) by auto.
         destruct Hf as (g, Hf).
         eapply reduces_both; simpl; eauto.
       Qed.
@@ -458,110 +417,92 @@ Module Progress.
       Qed.
     End Case1.
   End CtxProgress.
+  End Progress.
 
-    Lemma ctx_progress_2:
-      exists (k:op_kind),
-      k <> task_op /\
-      exists t,
-      forall o,
-      get_op_kind o = k ->
-      Valid ctx t o ->
-      exists ctx', Semantics.CtxReduces ctx t o ctx'.
-    Proof.
-      intros.
-      edestruct F.FinishState.progress as (x, [(Hx,Hy)|Hx]); eauto using F.FinishState.spec.
-      - eapply ctx_progress_1.
-      assert (Hx: exists ief : fid,
-         F.Nonempty ief f /\
-         (forall t o,
-          F.Root t ief f ->
-          F.Valid f t o -> exists s', F.Reduces f (t, o) s') \/
-         F.Empty ief f /\ (exists t, F.Current t ief f)
-      ). {
-        eauto using F.FinishState.progress, F.FinishState.spec.
-      }
-      destruct Hx.
-    Qed.
+Module State.
+  Structure t := make {
+    finishes: finish_t;
+    phasers: Map_FID.t phasermap_t;
+    spec_1:
+      forall x, F.In x (f_state finishes) -> Map_FID.In x phasers;
+    spec_2:
+      forall x, Map_FID.In x phasers -> F.In x (f_state finishes);
+    spec_3:
+      forall x pm f,
+      Map_FID.MapsTo f pm phasers ->
+      Phasermap.In x (pm_state pm) ->
+      F.Root x f (f_state finishes) \/ F.Started x f (f_state finishes);
+  }.
 
+  Inductive Reduces: t -> (tid*Semantics.op)%type -> t -> Prop :=
+  | reduces_update:
+    forall s t o ft s' pm' pm S1 S2 S3,
+    Map_TID.MapsTo t ft (f_state (finishes s)) ->
+    Map_FID.MapsTo (F.ief ft) pm (phasers s) ->
+    Semantics.CtxReduces (pm, finishes s) t o (pm', s') ->
+    Semantics.creates_finish o = None ->
+    Reduces s (t, o) {|
+      finishes := s';
+      phasers := Map_FID.add (F.ief ft) pm' (phasers s);
+      spec_1 := S1; spec_2:=S2; spec_3:=S3
+    |}
+  | reduces_create:
+    forall f s t o s' pm' S1 S2 S3,
+    Semantics.CtxReduces (DF.make, finishes s) t o (pm', s') ->
+    Semantics.creates_finish o = Some f ->
+    Reduces s (t, o) {|
+      finishes := s';
+      phasers := Map_FID.add f pm' (phasers s);
+      spec_1 := S1; spec_2:=S2; spec_3:=S3
+    |}.
+
+  Import Progress.
+  Import Semantics.
+
+  Theorem progress:
+    exists (k:op_kind),
+    k <> task_op /\
+    exists t,
+    forall o,
+    get_op_kind o = k ->
+    Valid ctx t o ->
+    exists s', Reduces s t o s'.
+    
 (*
-    Lemma ctx_progress_2 (ief_empty: F.Empty ief f):
-      exists (k:op_kind),
-      k <> task_op /\
-      exists t,
-      forall o,
-      get_op_kind o = k ->
-      Valid ctx t o ->
-      exists ctx', Semantics.CtxReduces ctx t o ctx'.
-    Proof.
-      assert (E: LEDec.pm_tids (Phasermap.state p) = nil \/ LEDec.pm_tids (Phasermap.state p) <> nil). {
-        remember (LEDec.pm_tids _).
-        destruct l; auto.
-        right.
-        unfold not; intros N.
-        inversion N.
-      }
-      destruct E; auto using ctx_progress_nonempty.
-      exists phaser_op.
-      split. {
-        unfold not; intros N; inversion N.
-      }
-      edestruct ctx_progress_empty as (x, Hx); auto.
-      exists x.
+  Definition set_phasers (s:t) m
+    (S1: forall x, F.In x (finishes s) <-> Map_FID.In x m) : t :=
+  make (finishes s) m S1.
+
+  Definition set_finishes (s:t) m
+    (S1: forall x, F.In x m <-> Map_FID.In x (phasers s)): t :=
+  make m (phasers s) S1.
+
+  Definition put_phasermap (s:t) (f:fid) (m:phasermap_t) 
+  (S1: forall x, F.In x (finishes s)): t.
+  Proof.
+    refine (set_phasers s (Map_FID.add f m (phasers s)) _).
+    split; intros;
+    rewrite Map_FID_Facts.add_in_iff in *.
+    - destruct s.
+      simpl in *.
+      rewrite spec_2 in H.
       auto.
-    Qed.
-*)
-(*
-    Let ctx_progress_1 (ief_nonempty: F.Nonempty ief f)
-    (R: forall u o, F.Typecheck f (u, o) -> exists s', F.Reduces f (u, o) s'):
-      exists t,
-      forall o,
-      Valid ctx t o ->
-      exists ctx', Semantics.CtxReduces ctx t o ctx'.
-    Proof.
-      assert (E: LEDec.pm_tids (Phasermap.state p) = nil \/ LEDec.pm_tids (Phasermap.state p) <> nil). {
-        remember (LEDec.pm_tids _).
-        destruct l; auto.
-        right.
-        unfold not; intros N.
-        inversion N.
-      }
-      destruct E; auto.
-      inversion ief_nonempty.
-      exists t.
-      intros.
-      inversion H1; subst; clear H1.
-      - apply P_P.progress_empty with (l:=history p) in H3;
-        eauto using phasermap_spec.
-        destruct H3 as (?, ?).
-        eauto.
-      - eauto.
-      - apply P_P.progress_empty with (l:=history p) in H4;
-        eauto using phasermap_spec.
-        destruct H4 as (?, ?).
-        eauto.
-    Qed.*)
-    (*
-    Let ctx_progress_empty t (Hs: F.Started t ief f) (ief_empty: F.Empty ief f):
-      forall o,
-      Valid ctx t o ->
-      exists ctx', Semantics.CtxReduces ctx t o ctx'.
-    Proof.
-      intros.
-      assert (E: LEDec.pm_tids (Phasermap.state p) = nil \/ LEDec.pm_tids (Phasermap.state p) <> nil). {
-        remember (LEDec.pm_tids _).
-        destruct l; auto.
-        right.
-        unfold not; intros N.
-        inversion N.
-      }
-      destruct E; auto.
-      inversion ief_empty.
-      exists t.
-      intros.
-      inversion H1; subst; clear H1.
-    Qed.
-    *)
-  End CtxProgress.
+    - destruct H.
+      + subst.
+        auto.
+      + auto.
+  Qed.*)
+  (*
+  Definition set_finish (s:t) (u:tid) (m:F.task)
+  (S1: forall x, F.In x (finishes s)): t.
+  Proof.
+    refine (set_finishes s (Map_TID.add u m (finishes s)) _).
+    intros.
+    split; intros.
+    - apply Map_FID_Facts.add_in_iff in H.
+  Qed.
+  mk_state f s.(get_fstate).*)
+End State.
 
     Lemma ctx_progress:
       forall ctx,
