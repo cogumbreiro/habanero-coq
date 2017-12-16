@@ -3,7 +3,7 @@ State: (task -> (finisih * finishes)) * (finish -> tasks)
 t0, init f0
 t0, begin_finish f1;
 t0, begin_task t1;
-t1, end_task f1;
+t1, end_task f;
 t0, begin_finish f2;
 t0, begin_task t2;
 t2, begin_task t3;
@@ -68,6 +68,16 @@ Section Defs.
     forall t f l s g,
     Map_TID.MapsTo t {| root := g; started := (f::l) |} s ->
     Current t f s.
+
+  Inductive IEF: tid -> fid -> state -> Prop :=
+  | ief_nil:
+    forall t f s,
+    Map_TID.MapsTo t {| root := f; started := nil |} s ->
+    IEF t f s
+  | ief_cons:
+    forall g l t f s,
+    Map_TID.MapsTo t {| root := g; started := f::l |} s ->
+    IEF t f s.
 
   Inductive In (f:fid) s : Prop :=
   | in_root:
@@ -857,6 +867,16 @@ Section Defs.
     forall t,
     Root t f s ->
     Nonempty f s.
+
+  Lemma nonempty_to_in:
+    forall f s,
+    Nonempty f s ->
+    In f s.
+  Proof.
+    intros.
+    inversion H.
+    eauto using in_root.
+  Qed.
 
   Let has_root t f s :=
   match Map_TID.find t s with
