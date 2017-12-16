@@ -1,19 +1,19 @@
 (*
 State: (task -> (finisih * finishes)) * (finish -> tasks)
 t0, init f0
-t0, finish f1;
-t0, async t1;
-t1, end f1;
-t0, finish f2;
-t0, async t2;
-t2, async t3;
-t2, end f2;
-t3, end f2;
-t0, await f3;
-t0, finish f3
-t0, async t4
-t4, end f3
-t0, await f3
+t0, begin_finish f1;
+t0, begin_task t1;
+t1, end_task f1;
+t0, begin_finish f2;
+t0, begin_task t2;
+t2, begin_task t3;
+t2, end_task f2;
+t3, end_task f2;
+t0, end_finish f3;
+t0, begin_finish f3
+t0, begin_task t4
+t4, end_task f3
+t0, end_finish f3
 *)
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -37,10 +37,10 @@ Section Defs.
 
   Inductive op :=
   | INIT
-  | FINISH
-  | AWAIT
-  | ASYNC: tid -> op
-  | END: op.
+  | BEGIN_FINISH
+  | END_FINISH
+  | BEGIN_TASK: tid -> op
+  | END_TASK: op.
 
   Definition action := (tid * op) % type.
 
@@ -90,26 +90,26 @@ Section Defs.
     ~ In f s ->
     ~ Map_TID.In t s ->
     Reduces s (t, INIT) (Map_TID.add t (make f) s)
-  | reduces_finish:
+  | reduces_begin_finish:
     forall t f s l g,
     ~ In f s ->
     Map_TID.MapsTo t {| root := g; started := l |} s ->
-    Reduces s (t, FINISH) (
+    Reduces s (t, BEGIN_FINISH) (
       Map_TID.add t {| root := g; started := f::l |} s)
-  | reduces_await:
+  | reduces_end_finish:
     forall s t f l g,
     Map_TID.MapsTo t {| root := g; started := (f::l) % list |} s ->
     Empty f s ->
-    Reduces s (t, AWAIT) (Map_TID.add t {| root := g; started := l |} s)
-  | reduces_async:
+    Reduces s (t, END_FINISH) (Map_TID.add t {| root := g; started := l |} s)
+  | reduces_begin_task:
     forall s t u ft,
     ~ Map_TID.In u s ->
     Map_TID.MapsTo t ft s ->
-    Reduces s (t, ASYNC u) (Map_TID.add u (make (ief ft)) s)
-  | reduces_end:
+    Reduces s (t, BEGIN_TASK u) (Map_TID.add u (make (ief ft)) s)
+  | reduces_end_task:
     forall t f s ,
     Map_TID.MapsTo t {| root := f; started := nil |} s ->
-    Reduces s (t, END) (Map_TID.remove t s).
+    Reduces s (t, END_TASK) (Map_TID.remove t s).
 
   Inductive Valid s : tid -> op -> Prop :=
   | valid_init:
@@ -117,24 +117,24 @@ Section Defs.
     ~ In f s ->
     ~ Map_TID.In t s ->
     Valid s t INIT
-  | valid_finish:
+  | valid_begin_finish:
     forall t f,
     Map_TID.In t s ->
     ~ In f s ->
-    Valid s t FINISH
-  | valid_await:
+    Valid s t BEGIN_FINISH
+  | valid_end_finish:
     forall t f g l,
     Map_TID.MapsTo t {| root := g; started := (f::l) % list |} s ->
-    Valid s t AWAIT
-  | valid_async:
+    Valid s t END_FINISH
+  | valid_begin_task:
     forall t u,
     ~ Map_TID.In u s ->
     Map_TID.In t s ->
-    Valid s t (ASYNC u)
-  | typecheck_end:
+    Valid s t (BEGIN_TASK u)
+  | typecheck_end_task:
     forall t f,
     Map_TID.MapsTo t {| root := f; started := nil |} s ->
-    Valid s t END.
+    Valid s t END_TASK.
 
   Inductive FEdge s : (fid * fid) -> Prop :=
   | f_edge_def:
@@ -423,7 +423,7 @@ Section Defs.
     auto using in_to_c_edge.
   Qed.
 
-  Let f_edge_inv_add_finish:
+  Let f_edge_inv_add_begin_finish:
     forall t f l g s x y,
     FEdge (Map_TID.add t {| root := g; started := f :: l |} s) (x, y) ->
     Map_TID.MapsTo t {| root := g; started := l |} s ->
@@ -458,7 +458,7 @@ Section Defs.
     eauto using f_edge_def.
   Qed.
 
-  Let f_edges_rw_add_finish_1:
+  Let f_edges_rw_add_begin_finish_1:
     forall t g f l s p,
     Edge (f_edges (Map_TID.add t {| root := g; started := f :: l |} s)) p ->
     Map_TID.MapsTo t {| root := g; started := l |} s ->
@@ -467,7 +467,7 @@ Section Defs.
     unfold Edge; intros.
     apply in_to_f_edge in H.
     destruct p as (x, y).
-    apply f_edge_inv_add_finish in H; auto.
+    apply f_edge_inv_add_begin_finish in H; auto.
     destruct H as [(?,?)|He]. {
       subst.
       auto using in_eq.
@@ -564,7 +564,7 @@ Section Defs.
     eauto using f_edge_def.
   Qed.
 
-  Lemma f_edge_async:
+  Lemma f_edge_begin_task:
     forall u ft s p,
     FEdge (Map_TID.add u (make (ief ft)) s) p ->
     FEdge s p.
@@ -605,7 +605,7 @@ Section Defs.
     eauto using started_def.
   Qed.
 
-  Lemma f_edge_end:
+  Lemma f_edge_end_task:
     forall t s p f,
     FEdge (Map_TID.remove t s) p ->
     Map_TID.MapsTo t {| root := f; started := [] |} s ->
@@ -629,7 +629,7 @@ Section Defs.
     intros.
     inversion H0; subst; clear H0.
     - apply dag_f_edge_to_fgraph_edge, dag_impl with (E:=FEdge s);
-      eauto using f_edge_async, f_edge_finished.
+      eauto using f_edge_begin_task, f_edge_finished.
     - apply dag_impl with (E:=Edge (((g,f)::(f_edges s)))). {
         eauto.
       }
@@ -645,11 +645,11 @@ Section Defs.
       apply reaches_edge_to_f_edge,reaches_fst_to_in in N.
       contradiction.
     - apply dag_f_edge_to_fgraph_edge, dag_impl with (E:=FEdge s);
-      eauto using f_edge_async, f_edge_finished.
+      eauto using f_edge_begin_task, f_edge_finished.
     - apply dag_f_edge_to_fgraph_edge, dag_impl with (E:=FEdge s);
-      eauto using f_edge_async.
+      eauto using f_edge_begin_task.
     - apply dag_f_edge_to_fgraph_edge, dag_impl with (E:=FEdge s);
-      eauto using f_edge_async, f_edge_finished, f_edge_end.
+      eauto using f_edge_begin_task, f_edge_finished, f_edge_end_task.
   Qed.
 
   Lemma f_edge_to_edge:
@@ -766,22 +766,22 @@ Section Defs.
   Lemma progress_nonblocking:
     forall s t o,
     Valid s t o ->
-    o <> AWAIT ->
+    o <> END_FINISH ->
     exists s', Reduces s (t, o) s'.
   Proof.
     intros.
     destruct o; try contradiction; inversion H; subst; clear H;
-    eauto using reduces_init, reduces_end;
+    eauto using reduces_init, reduces_end_task;
     match goal with [ H: Map_TID.In _ _ |- _ ] =>
       apply Map_TID_Extra.in_to_mapsto in H;
       destruct H as ((?,?), mt) end.
-    - eauto using reduces_finish.
-    - eauto using reduces_async.
+    - eauto using reduces_begin_finish.
+    - eauto using reduces_begin_task.
   Qed.
 
-  Lemma await_or:
+  Lemma end_finish_or:
     forall o,
-    o = AWAIT \/ o <> AWAIT.
+    o = END_FINISH \/ o <> END_FINISH.
   Proof.
     intros.
     destruct o; auto;
@@ -944,7 +944,7 @@ Section Defs.
     exists s', Reduces s (t, o) s'.
   Proof.
     intros.
-    destruct (await_or o). {
+    destruct (end_finish_or o). {
       subst.
       inversion H1; subst.
       assert (f0 = f). {
@@ -953,7 +953,7 @@ Section Defs.
       }
       subst.
       exists ((Map_TID.add t {| root := g; started := l |} s)).
-      eapply reduces_await; eauto.
+      eapply reduces_end_finish; eauto.
     }
     auto using progress_nonblocking.
   Qed.
@@ -999,7 +999,7 @@ Section Defs.
         eauto using nonempty_def.
       }
       intros.
-      assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
+      assert (X: o = END_FINISH \/ o <> END_FINISH) by eauto using end_finish_or;
       destruct X. {
         subst.
         match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
@@ -1015,7 +1015,7 @@ Section Defs.
       exists f.
       left; split; auto.
       intros.
-      assert (X: o = AWAIT \/ o <> AWAIT) by eauto using await_or;
+      assert (X: o = END_FINISH \/ o <> END_FINISH) by eauto using end_finish_or;
       destruct X. {
         subst.
         match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
