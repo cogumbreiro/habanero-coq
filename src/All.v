@@ -263,7 +263,7 @@ Module Progress.
       started in [f]. *)
     (* XXX: Q1: Shouldn't this be part of the notion of well-typed? *)
     Variable task_mem:
-      forall t pm,
+      forall t,
       Phasermap.In t pm ->
       F.Root t ief f \/ F.Started t ief f.
 
@@ -321,12 +321,13 @@ Module Progress.
       Let ctx_progress_empty (pm_is_empty:
           Empty (pm_state p)):
         exists t,
-        forall o,
+        Syntax2.Root t ief f /\
+        (forall o,
         Valid ctx t o ->
-        exists ctx', Semantics.CtxReduces ctx t o ctx'.
+        exists ctx', Semantics.CtxReduces ctx t o ctx').
       Proof.
         inversion ief_nonempty.
-        exists t.
+        exists t; split; auto.
         intros.
         inversion H0; subst.
         - apply Phasers.DF.progress_empty with (x:=t) in pm_is_empty.
@@ -343,10 +344,11 @@ Module Progress.
         exists (k:op_kind),
         k <> task_op /\
         exists t,
-        forall o,
+        Syntax2.Root t ief f /\
+        (forall o,
         get_op_kind o = k ->
         Valid ctx t o ->
-        exists ctx', Semantics.CtxReduces ctx t o ctx'.
+        exists ctx', Semantics.CtxReduces ctx t o ctx').
       Proof.
         simpl in *.
         eapply Phasers.DF.progress in nonempty_tids.
@@ -358,7 +360,7 @@ Module Progress.
           split. {
             unfold not; intros N; inversion N.
           }
-          exists x; intros.
+          exists x; split; auto; intros.
           match goal with H: Valid _ _ _ |- _ =>
             inversion H; subst; clear H
           end.
@@ -371,7 +373,7 @@ Module Progress.
           unfold not; intros N; inversion N.
         }
         inversion ief_nonempty.
-        exists t.
+        exists t; split; auto.
         intros ? ? Hv.
         inversion Hv; subst; simpl in *;
         destruct o; simpl in *;
@@ -396,14 +398,15 @@ Module Progress.
         eapply reduces_both; simpl; eauto.
       Qed.
 
-      Lemma ctx_progress_1:
+      Lemma ctx_progress:
         exists (k:op_kind),
         k <> task_op /\
         exists t,
-        forall o,
-        get_op_kind o = k ->
-        Valid ctx t o ->
-        exists ctx', Semantics.CtxReduces ctx t o ctx'.
+        Syntax2.Root t ief f /\
+        (forall o,
+          get_op_kind o = k ->
+          Valid ctx t o ->
+          exists ctx', Semantics.CtxReduces ctx t o ctx').
       Proof.
         destruct (LEDec.empty_nonempty_dec (pm_state p));
           auto using ctx_progress_nonempty.
@@ -411,9 +414,7 @@ Module Progress.
         split. {
           unfold not; intros N; inversion N.
         }
-        edestruct ctx_progress_empty as (x, Hx); auto.
-        exists x.
-        auto.
+        edestruct ctx_progress_empty as (x, (?,?)); eauto.
       Qed.
     End Case1.
   End CtxProgress.
@@ -434,39 +435,89 @@ Module State.
       F.Root x f (f_state finishes) \/ F.Started x f (f_state finishes);
   }.
 
-  Inductive Reduces: t -> (tid*Semantics.op)%type -> t -> Prop :=
-  | reduces_update:
-    forall s t o ft s' pm' pm S1 S2 S3,
-    Map_TID.MapsTo t ft (f_state (finishes s)) ->
+  Import Progress.
+  Import Semantics.
+  Module F := Syntax2.
+
+  Inductive GetPhasermap s: (tid*op) -> (fid * phasermap_t) -> Prop :=
+  | get_context_update:
+    forall x o ft pm,
+    Map_TID.MapsTo x ft (f_state (finishes s)) ->
     Map_FID.MapsTo (F.ief ft) pm (phasers s) ->
-    Semantics.CtxReduces (pm, finishes s) t o (pm', s') ->
-    Semantics.creates_finish o = None ->
-    Reduces s (t, o) {|
-      finishes := s';
-      phasers := Map_FID.add (F.ief ft) pm' (phasers s);
-      spec_1 := S1; spec_2:=S2; spec_3:=S3
-    |}
-  | reduces_create:
-    forall f s t o s' pm' S1 S2 S3,
-    Semantics.CtxReduces (DF.make, finishes s) t o (pm', s') ->
+    creates_finish o = None ->
+    GetPhasermap s (x,o) (F.ief ft, pm)
+  | get_context_new:
+    forall x o f,
     Semantics.creates_finish o = Some f ->
-    Reduces s (t, o) {|
+    GetPhasermap s (x, o) (f, DF.make).
+
+  Inductive GetContext s a : (fid * context) -> Prop :=
+  | get_context_def:
+    forall pm f,
+    GetPhasermap s a (f, pm) ->
+    GetContext s a (f, (pm, finishes s)).
+
+  Inductive Reduces: t -> (tid*op) -> t -> Prop :=
+  | reduces_def:
+    forall s x o s' pm' f ctx S1 S2 S3,
+    GetContext s (x, o) (f, ctx) ->
+    Semantics.CtxReduces ctx x o (pm', s') ->
+    Reduces s (x, o) {|
       finishes := s';
       phasers := Map_FID.add f pm' (phasers s);
       spec_1 := S1; spec_2:=S2; spec_3:=S3
     |}.
 
-  Import Progress.
-  Import Semantics.
+  Inductive Valid s x o : Prop :=
+  | valid_def:
+    forall f ctx,
+    GetContext s (x, o) (f, ctx) ->
+    Typesystem.Valid ctx x o ->
+    Valid s x o.
+
+  Notation Nonempty s := (~ Map_TID.Empty (f_state (finishes s))).
 
   Theorem progress:
+    forall s,
+    Nonempty s ->
     exists (k:op_kind),
     k <> task_op /\
-    exists t,
+    exists x,
     forall o,
     get_op_kind o = k ->
-    Valid ctx t o ->
-    exists s', Reduces s t o s'.
+    Valid s x o ->
+    exists s', Reduces s (x, o) s'.
+  Proof.
+    intros.
+    edestruct Finish.DF.progress_ex as (f,[(Hx, Hy)|Hx]); eauto. {
+      assert (Hc: exists pm, Map_FID.MapsTo f pm (phasers s)). {
+        assert (F.In f (f_state (finishes s))) by auto using Syntax2.nonempty_to_in.
+        auto using Map_FID_Extra.in_to_mapsto, spec_1.
+      }
+      destruct Hc as (pm, Hmt).
+      destruct ctx_progress with (ief:=f) (s:=finishes s) (p:=pm)
+        as (k, (?, (x, (root, prog))));
+      eauto using spec_3.
+      exists k; split; auto.
+      exists x.
+      intros.
+      match goal with [H: Valid _ _ _ |- _] => inversion H; subst end.
+      assert (ctx = (pm, finishes s)). {
+        destruct ctx as (pm', fs).
+        match goal with [H: GetContext _ _ _ |- _] => inversion H; subst; clear H end.
+        assert (pm' = pm); subst; auto.
+        match goal with [H: GetPhasermap _ _ _ |- _ ] => inversion H; subst; clear H end. {
+          assert (F.ief ft = f). {
+            inversion root; subst; clear root.
+            assert ({| F.root := f; F.started := l |} = ft) by
+              eauto using Map_TID_Facts.MapsTo_fun.
+            subst.
+            destruct ft; simpl.
+          }
+        }
+      assert (exists ctx', CtxReduces (pm, finishes s)
+    }
+  Qed.
     
 (*
   Definition set_phasers (s:t) m
