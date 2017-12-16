@@ -101,7 +101,7 @@ Section Props.
   Lemma progress_nonblocking:
     forall s t o,
     Valid (state s) t o ->
-    o <> END_FINISH ->
+    Nonblocking o ->
     exists s', Reduces s (t, o) s'.
   Proof.
     intros.

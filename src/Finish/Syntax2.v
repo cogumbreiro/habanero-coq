@@ -36,9 +36,9 @@ Section Defs.
   Definition empty : state := Map_TID.empty task.
 
   Inductive op :=
-  | INIT
-  | BEGIN_FINISH
-  | END_FINISH
+  | INIT: fid -> op
+  | BEGIN_FINISH: fid -> op
+  | END_FINISH: fid -> op
   | BEGIN_TASK: tid -> op
   | END_TASK: op.
 
@@ -89,18 +89,18 @@ Section Defs.
     forall s t f,
     ~ In f s ->
     ~ Map_TID.In t s ->
-    Reduces s (t, INIT) (Map_TID.add t (make f) s)
+    Reduces s (t, INIT f) (Map_TID.add t (make f) s)
   | reduces_begin_finish:
     forall t f s l g,
     ~ In f s ->
     Map_TID.MapsTo t {| root := g; started := l |} s ->
-    Reduces s (t, BEGIN_FINISH) (
+    Reduces s (t, BEGIN_FINISH f) (
       Map_TID.add t {| root := g; started := f::l |} s)
   | reduces_end_finish:
     forall s t f l g,
     Map_TID.MapsTo t {| root := g; started := (f::l) % list |} s ->
     Empty f s ->
-    Reduces s (t, END_FINISH) (Map_TID.add t {| root := g; started := l |} s)
+    Reduces s (t, END_FINISH f) (Map_TID.add t {| root := g; started := l |} s)
   | reduces_begin_task:
     forall s t u ft,
     ~ Map_TID.In u s ->
@@ -116,16 +116,16 @@ Section Defs.
     forall f t,
     ~ In f s ->
     ~ Map_TID.In t s ->
-    Valid s t INIT
+    Valid s t (INIT f)
   | valid_begin_finish:
     forall t f,
     Map_TID.In t s ->
     ~ In f s ->
-    Valid s t BEGIN_FINISH
+    Valid s t (BEGIN_FINISH f)
   | valid_end_finish:
     forall t f g l,
     Map_TID.MapsTo t {| root := g; started := (f::l) % list |} s ->
-    Valid s t END_FINISH
+    Valid s t (END_FINISH f)
   | valid_begin_task:
     forall t u,
     ~ Map_TID.In u s ->
@@ -763,29 +763,93 @@ Section Defs.
     eauto using dag_f_edge_to_fgraph_edge, dag_fgraph_edge_to_f_edge, f_dag_reduces.
   Qed.
 
+  Inductive Blocking: op -> Prop :=
+  | blocking_def:
+    forall f,
+    Blocking (END_FINISH f).
+
+  Inductive Nonblocking: op -> Prop :=
+  | nonblocking_init:
+    forall f,
+    Nonblocking (INIT f)
+  | nonblocking_begin_finish:
+    forall f,
+    Nonblocking (BEGIN_FINISH f)
+  | nonblocking_begin_task:
+    forall t,
+    Nonblocking (BEGIN_TASK t)
+  | nonblocking_end_task:
+    Nonblocking END_TASK.
+
+  Definition blocking_dec o:
+    { Blocking o } + { Nonblocking o }.
+  Proof.
+    destruct o; auto using blocking_def, nonblocking_init, nonblocking_begin_task, nonblocking_end_task, nonblocking_begin_finish.
+  Defined.
+
+  Lemma nonblocking_to_not_blocking:
+    forall o,
+    Nonblocking o -> ~ Blocking o.
+  Proof.
+    unfold not; intros ? ? N.
+    inversion N.
+    inversion H; subst; inversion H1.
+  Qed.
+
+  Lemma not_blocking_to_nonblocking:
+    forall o,
+    ~ Blocking o -> Nonblocking o.
+  Proof.
+    unfold not.
+    intros ? N.
+    destruct o;
+    auto using nonblocking_init,
+      nonblocking_begin_task,
+      nonblocking_end_task,
+      nonblocking_begin_finish.
+    contradiction N.
+    auto using blocking_def.
+  Qed.
+
+  Lemma blocking_to_not_unblocking:
+    forall o,
+    Blocking o -> ~ Nonblocking o.
+  Proof.
+    unfold not.
+    intros ? ? N.
+    inversion H; subst; clear H.
+    inversion N.
+  Qed.
+
+  Lemma not_unblocking_to_blocking:
+    forall o,
+    ~ Nonblocking o -> Blocking o.
+  Proof.
+    intros.
+    destruct o;
+    auto using blocking_def;
+    contradiction H;
+    auto using nonblocking_init,
+      nonblocking_begin_task,
+      nonblocking_end_task,
+      nonblocking_begin_finish.
+  Qed.
+
   Lemma progress_nonblocking:
     forall s t o,
     Valid s t o ->
-    o <> END_FINISH ->
+    Nonblocking o ->
     exists s', Reduces s (t, o) s'.
   Proof.
     intros.
-    destruct o; try contradiction; inversion H; subst; clear H;
+    inversion H0; subst; clear H0;
+    inversion H; subst; clear H;
     eauto using reduces_init, reduces_end_task;
     match goal with [ H: Map_TID.In _ _ |- _ ] =>
       apply Map_TID_Extra.in_to_mapsto in H;
       destruct H as ((?,?), mt) end.
     - eauto using reduces_begin_finish.
     - eauto using reduces_begin_task.
-  Qed.
-
-  Lemma end_finish_or:
-    forall o,
-    o = END_FINISH \/ o <> END_FINISH.
-  Proof.
-    intros.
-    destruct o; auto;
-    right; unfold not; intros N; inversion N.
   Qed.
 
   Inductive Nonempty (f:fid) (s:state) : Prop :=
@@ -944,8 +1008,8 @@ Section Defs.
     exists s', Reduces s (t, o) s'.
   Proof.
     intros.
-    destruct (end_finish_or o). {
-      subst.
+    destruct (blocking_dec o). {
+      inversion b; subst; clear b.
       inversion H1; subst.
       assert (f0 = f). {
         assert (Current t f0 s) by eauto using current_def.
@@ -999,9 +1063,8 @@ Section Defs.
         eauto using nonempty_def.
       }
       intros.
-      assert (X: o = END_FINISH \/ o <> END_FINISH) by eauto using end_finish_or;
-      destruct X. {
-        subst.
+      destruct (blocking_dec o). {
+        inversion b; subst; clear b.
         match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
         assert (g0 = g) by eauto using root_fun, root_def; subst.
         assert (~ Current t0 f s) by eauto using Map_TID_Extra.mapsto_to_in.
@@ -1015,8 +1078,8 @@ Section Defs.
       exists f.
       left; split; auto.
       intros.
-      assert (X: o = END_FINISH \/ o <> END_FINISH) by eauto using end_finish_or;
-      destruct X. {
+      destruct (blocking_dec o). {
+        inversion b; subst; clear b.
         subst.
         match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
         assert (g = f) by eauto using root_fun, root_def; subst.
