@@ -69,15 +69,20 @@ Section Defs.
     Map_TID.MapsTo t {| root := g; started := (f::l) |} s ->
     Current t f s.
 
-  Inductive IEF: tid -> fid -> state -> Prop :=
+  Inductive IEF x f s: Prop :=
   | ief_nil:
-    forall t f s,
-    Map_TID.MapsTo t {| root := f; started := nil |} s ->
-    IEF t f s
+    Map_TID.MapsTo x {| root := f; started := nil |} s ->
+    IEF x f s
   | ief_cons:
-    forall g l t f s,
-    Map_TID.MapsTo t {| root := g; started := f::l |} s ->
-    IEF t f s.
+    forall g l,
+    Map_TID.MapsTo x {| root := g; started := f::l |} s ->
+    IEF x f s.
+
+  Definition get_ief x s :=
+  match Map_TID.find x s with
+  | Some ft => Some (ief ft)
+  | None => None
+  end.
 
   Inductive In (f:fid) s : Prop :=
   | in_root:
@@ -91,7 +96,7 @@ Section Defs.
 
   Inductive Empty f s : Prop :=
   | empty_def:
-    (forall t, ~ Root t f s) ->
+    (forall x, ~ Root x f s) ->
     Empty f s.
 
   Inductive Reduces : state -> action -> state -> Prop :=
@@ -187,6 +192,23 @@ Section Defs.
       auto.
     }
     auto.
+  Qed.
+
+  Lemma ief_fun:
+    forall x f g s,
+    IEF x f s ->
+    IEF x g s ->
+    g = f.
+  Proof.
+    intros.
+    inversion H; inversion H0; subst; clear H H0;
+    match goal with H: Map_TID.MapsTo _ _ _, H1: Map_TID.MapsTo _ _ _ |- _
+    =>
+      eapply Map_TID_Facts.MapsTo_fun in H;
+      try apply H1;
+      inversion H;
+      auto
+    end.
   Qed.
 
   Definition current (ft:task) :=
@@ -864,8 +886,8 @@ Section Defs.
 
   Inductive Nonempty (f:fid) (s:state) : Prop :=
   | nonempty_def:
-    forall t,
-    Root t f s ->
+    forall x,
+    Root x f s ->
     Nonempty f s.
 
   Lemma nonempty_to_in:
@@ -883,6 +905,85 @@ Section Defs.
   | Some ft => if FID.eq_dec f (root ft) then true else false
   | _ => false
   end.
+
+  Section IEF_dec.
+    Let ief_to_in:
+      forall x f s,
+      IEF x f s -> Map_TID.In x s.
+    Proof.
+      intros.
+      inversion H; eauto using Map_TID_Extra.mapsto_to_in.
+    Qed.
+
+    Lemma ief_to_some:
+      forall x s f,
+      IEF x f s -> get_ief x s = Some f.
+    Proof.
+      intros.
+      unfold get_ief.
+      destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(ft, (R,?))]; rewrite R. {
+        assert (Map_TID.In x s) by eauto.
+        contradiction.
+      }
+      inversion H; subst; clear H;
+      remember {| root := _; started := _ |} as ft';
+      assert (ft' = ft) by eauto using Map_TID_Facts.MapsTo_fun;
+      subst; simpl; trivial.
+    Qed.
+
+    Lemma some_to_ief:
+      forall x s f,
+      get_ief x s = Some f -> IEF x f s.
+    Proof.
+      unfold get_ief; intros.
+      destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(ft, (R,?))]; rewrite R in *; clear R. {
+        inversion H.
+      }
+      destruct ft as (r, []); inversion H; subst; clear H. {
+        auto using ief_nil.
+      }
+      eauto using ief_cons.
+    Qed.
+
+    Lemma none_to_not_ief:
+      forall x s f,
+      get_ief x s = None ->
+      ~ IEF x f s.
+    Proof.
+      intros.
+      unfold not; intros N.
+      apply ief_to_some in N.
+      rewrite N in *; inversion H.
+    Qed.
+
+    Let maps_to_to_ief:
+      forall x ft s,
+      Map_TID.MapsTo x ft s ->
+      IEF x (ief ft) s.
+    Proof.
+      intros.
+      destruct ft as (f, l).
+      destruct l; simpl. {
+        auto using ief_nil.
+      }
+      eauto using ief_cons.
+    Qed.
+
+    Lemma not_ief_to_none:
+      forall x s,
+      (forall f, ~ IEF x f s) ->
+      get_ief x s = None.
+    Proof.
+      intros.
+      unfold get_ief.
+      destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(ft, (R,?))]; rewrite R in *; clear R. {
+        trivial.
+      }
+      apply maps_to_to_ief in H0.
+      apply H in H0.
+      contradiction.
+    Qed.
+  End IEF_dec.
 
   Lemma root_to_in:
     forall t f s,
@@ -1046,6 +1147,26 @@ Section Defs.
   Definition Enabled s t :=
   forall o, Valid s t o -> exists s', Reduces s (t, o) s'.
 
+  Tactic Notation "expect" uconstr(X) constr(f) :=
+  (match goal with
+  [ H: X |- _ ] => f H
+  end).
+
+  Let root_to_ief:
+    forall x f s,
+    (forall f, ~ Current x f s) ->
+    Root x f s ->
+    IEF x f s.
+  Proof.
+    intros.
+    match goal with [H: Root x _ _ |- _ ] => inversion H; subst; clear H end.
+    destruct l. {
+      auto using ief_nil.
+    }
+    assert (X:Current x f0 s) by eauto using current_def.
+    contradict X; eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
   Theorem progress:
     forall s,
     (* Given that a finish-state is a DAG *)
@@ -1057,13 +1178,15 @@ Section Defs.
     ((* [f] is nonempty and every task in [f] reduces. *)
       Nonempty f s
       /\
-      (forall t, Root t f s -> Enabled s t)
+      (forall x, Root x f s -> Enabled s x)
+      /\
+      (forall x, Root x f s -> IEF x f s)
     )
     \/
     ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
       Empty f s
       /\
-      exists t, Current t f s /\ Enabled s t
+      exists x, Current x f s /\ Enabled s x
     ).
   Proof.
     intros.
@@ -1072,42 +1195,48 @@ Section Defs.
     apply dag_f_edge_to_c_edge,
           dag_c_edge_to_fgraph_edge,
           dag_cond in H.
-    destruct H as [H|H]. {
-      destruct H0 as (t, Hi).
+    destruct H as [H|(y, (f, (Hs, Hr)))]. {
+      destruct H0 as (y, Hi).
       apply Map_TID_Extra.in_to_mapsto in Hi.
       destruct Hi as ((g,l), mt).
-      assert (Hr: Root t g s) by eauto using root_def.
+      assert (Hr: Root y g s) by eauto using root_def.
       exists g.
       left.
-      split. {
-        eauto using nonempty_def.
+      split; eauto using nonempty_def.
+      assert (forall x f, ~Current x f s). {
+        unfold not; intros ? ? N.
+        inversion N; subst; clear N.
+        assert (X:Current x f s) by eauto using current_def.
+        contradict X; eauto using Map_TID_Extra.mapsto_to_in.
       }
+      split; auto.
       intros.
       destruct (blocking_dec o). {
         inversion b; subst; clear b.
         match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
         assert (g0 = g) by eauto using root_fun, root_def; subst.
-        assert (~ Current t0 f s) by eauto using Map_TID_Extra.mapsto_to_in.
-        assert (Current t0 f s) by eauto using current_def.
-        contradiction.
+        assert (Xc: Current x f s) by eauto using current_def.
+        contradict Xc.
+        eauto using Map_TID_Extra.mapsto_to_in.
       }
       eauto using progress_nonblocking.
     }
-    destruct H as (t, (f, (Hs, Hr))).
     destruct (empty_nonempty_dec f s). {
       exists f.
       left; split; auto.
-      intros.
-      destruct (blocking_dec o). {
-        inversion b; subst; clear b.
-        subst.
-        match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
-        assert (g = f) by eauto using root_fun, root_def; subst.
-        assert (~ Current t0 f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
-        assert (Current t0 f0 s) by eauto using current_def.
-        contradiction.
+      split. {
+        intros.
+        destruct (blocking_dec o). {
+          inversion b; subst; clear b.
+          subst.
+          match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
+          assert (g = f) by eauto using root_fun, root_def; subst.
+          assert (X: ~ Current x f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
+          contradict X; eauto using current_def.
+        }
+        eauto using progress_nonblocking.
       }
-      eauto using progress_nonblocking.
+      eauto using root_to_ief.
     }
     exists f.
     right;
@@ -1156,7 +1285,9 @@ Module Trace.
       ((* [f] is nonempty and every task in [f] reduces. *)
         Nonempty f s
         /\
-        forall t, Root t f s -> Enabled s t
+        (forall t, Root t f s -> Enabled s t)
+        /\
+        (forall x, Root x f s -> IEF x f s)
       )
       \/
       ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
@@ -1180,7 +1311,7 @@ Module Trace.
       Enabled s t.
     Proof.
       intros.
-      edestruct progress as (f, [([],?)|(Hx,(t,(?,?)))]);
+      edestruct progress as (f, [([],(?,?))|(Hx,(t,(?,?)))]);
         eauto using reduces_n_to_dag.
     Qed.
   End Props.

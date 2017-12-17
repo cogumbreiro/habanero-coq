@@ -77,17 +77,19 @@ Section Props.
     ((* [f] is nonempty and every task in [f] reduces. *)
       Nonempty f (state s)
       /\
-      forall t, Root t f (state s) -> Enabled s t
+      (forall x, Root x f (state s) -> Enabled s x)
+      /\
+      (forall x, Root x f (state s) -> IEF x f (state s))
     )
     \/
     ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
       Empty f (state s)
       /\
-      exists t, Current t f (state s) /\ Enabled s t
+      exists x, Current x f (state s) /\ Enabled s x
     ).
   Proof.
     intros.
-    edestruct Trace.progress_ex as (f,[(Hx,Hy)|(Hx,(x,(Hy,Hz)))]); eauto using spec;
+    edestruct Trace.progress_ex as (f,[(Hx,(Hy,?))|(Hx,(x,(Hy,Hz)))]); eauto using spec;
     exists f. {
       left.
       split; auto.
