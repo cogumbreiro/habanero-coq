@@ -3,7 +3,9 @@
 *.v.d
 *~
 *.aux
+*.crashcoqide
 /Makefile
 /Makefile.bak
 /all.pdf
 /html
+/Makefile.conf
