@@ -12,7 +12,7 @@ install_coq() {
 install_aniceto() {
   if (echo -e "Require Aniceto.List.\n" | coqtop 2>&1 | grep Error); then
     echo "Installing Aniceto..." &&
-    opam pin add --dev-repo coq-aniceto https://bitbucket.org/cogumbreiro/aniceto-coq.git
+    opam pin add --dev-repo coq-aniceto https://gitlab.com/cogumbreiro/aniceto-coq.git
   fi
 }
 coq_shell_url="https://raw.githubusercontent.com/gares/opam-coq-shell/master/src/opam-coq"
