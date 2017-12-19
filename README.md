@@ -8,10 +8,10 @@ properties, such as deadlock freedom and race freedom.
 The overarching goal of the project is to provide theoretical framework,
 read a Coq library, for the verification of synchronization mechanisms.
 
-# Publications page
+# Publications
 
-[**Formalization of phase ordering. Tiago Cogumbreiro, Jun Shirako, and Vivek Sarkar. In Proceedings of PLACES'16, 2016. To appear.**](https://github.com/cogumbreiro/habanero-coq/blob/places16/README.md)
-
+* Formalization of Habanero Phasers using Coq. Tiago Cogumbreiro, Jun Shirako, and Vivek Sarkar. JLAMP, 90:50–60, 2017. [*Download PDF.*](http://cogumbreiro.github.io/assets/cogumbreiro-formalizing-phasers.pdf) [*Online interpreter.*](https://cogumbreiro.github.io/jlamp17/)
+* Formalization of phase ordering. Tiago Cogumbreiro, Jun Shirako, and Vivek Sarkar. In Proceedings of PLACES'16, 2016. [*Download PDF.*](https://github.com/cogumbreiro/habanero-coq/blob/places16/README.md)
 
 # Overview
 
@@ -20,30 +20,18 @@ We are currently working on:
 * deadlock-free subset of phaser operations
 * async-finish 
 
-# Using Habanero-Coq
+# Using
 
-We use [OPAM](https://opam.ocaml.org/) and [Coq Shell](https://github.com/coq/opam-coq-shell)
-for the development.
-
-This project depends on [Aniceto](https://bitbucket.org/cogumbreiro/aniceto-coq),
-so you need to install it first:
-```
-git clone https://bitbucket.org/cogumbreiro/aniceto-coq
-```
+Make sure you have [OPAM] installed.
 
 To setup the requirements of this software do:
 ```
-source configure.sh # to install dependencies and setup the environment
+./configure.sh # to install dependencies and setup the environment
 ```
 
-# Setting up CoqIDE in MacOS X
+# Dependencies
 
-To setup CoqIDE in MacOS you need to set the path of `coqtop` to be aware
-of your OPAM installation.
+* [OPAM] for the development.
+* [Aniceto](https://bitbucket.org/cogumbreiro/aniceto-coq) (installed automatically)
 
-Navigate to `CoqIDE -> Externals -> coqtop` and set the output of the
-following command:
-
-```
-which coqtop
-```
+[OPAM]: https://opam.ocaml.org/
