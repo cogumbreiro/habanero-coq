@@ -250,11 +250,9 @@ Module State.
   Structure t := make {
     finishes: finish_t;
     phasers: Map_FID.t phasermap_t;
-    spec_1: InclFtoP (f_state finishes) phasers;
-    spec_2: InclPtoF phasers (f_state finishes);
-    spec_3: TaskToFinish phasers (f_state finishes);
   }.
 
+(*
   Lemma incl_f_to_p:
     forall (s:t),
     forall x,
@@ -285,7 +283,7 @@ Module State.
     intros.
     eapply spec_3 in H; eauto.
   Qed.
-
+*)
   Import Progress.
   Import Semantics.
   Module F := Syntax2.
@@ -318,7 +316,7 @@ Module State.
   end.
 
   Section GetPhasermap_dec.
-  (*
+
     Lemma some_to_get_phasermap:
       forall s a m,
       get_phasermap s a = Some m -> GetPhasermap s a m.
@@ -334,8 +332,10 @@ Module State.
       remember (F.get_ief x _).
       symmetry in Heqo1.
       destruct o0. {
-        apply Map_FID_Facts.find_mapsto_iff in H.
-        eauto using get_phasermap_none, F.some_to_ief.
+        apply F.some_to_ief in Heqo1.
+        destruct (Map_FID_Extra.find_rw f (phasers s)) as [(R,?)|(?,(R,?))];
+        rewrite R in *; inversion H; subst; clear H.
+        auto using get_phasermap_none.
       }
       inversion H.
     Qed.
@@ -395,7 +395,7 @@ Module State.
       edestruct get_phasermap_inv_none_ief as (f, Hx); eauto.
       contradict Hx.
       auto using F.none_to_not_ief.
-    Qed.*)
+    Qed.
   End GetPhasermap_dec.
 
   Inductive GetContext s a : (fid*context) -> Prop :=
@@ -411,7 +411,6 @@ Module State.
   end.
 
   Section GetContext_dec.
-  (*
     Lemma get_context_to_some:
       forall s a ctx,
       GetContext s a ctx ->
@@ -444,18 +443,32 @@ Module State.
         auto using get_context_def.
       }
       inversion H.
-    Qed.*)
+    Qed.
+
+    Lemma get_context_fun:
+      forall s a ctx ctx',
+      GetContext s a ctx ->
+      GetContext s a ctx' ->
+      ctx' = ctx.
+    Proof.
+      intros.
+      apply get_context_to_some in H.
+      apply get_context_to_some in H0.
+      rewrite H in *.
+      inversion H0.
+      auto.
+    Qed.
   End GetContext_dec.
 
   Inductive Reduces: t -> (tid*op) -> t -> Prop :=
   | reduces_def:
-    forall s x o s' pm' f ctx S1 S2 S3,
+    forall s x o s' pm' f ctx (*S1 S2 S3*),
     GetContext s (x, o) (f, ctx) ->
     Semantics.CtxReduces ctx x o (pm', s') ->
     Reduces s (x, o) {|
       finishes := s';
       phasers := Map_FID.add f pm' (phasers s);
-      spec_1 := S1; spec_2:=S2; spec_3:=S3
+      (*spec_1 := S1; spec_2:=S2; spec_3:=S3*)
     |}.
 (*
   Section SR.
@@ -502,12 +515,15 @@ Module Progress.
   Import Semantics.
   Import Typesystem.
   Import State.
+  Section Defs.
+  Variable s:State.t.
+  Variable spec_1: InclFtoP (f_state (finishes s)) (phasers s).
+  Variable spec_2: InclPtoF (phasers s) (f_state (finishes s)).
+  Variable spec_3: TaskToFinish (phasers s) (f_state (finishes s)).
 
   Notation CanReduce s x o := (exists s', Reduces s (x, o) s').
 
   Section CtxProgress.
-
-    Variable s:State.t.
 
     (** Given the id of a IEF *)
     Variable f: fid.
@@ -527,6 +543,31 @@ Module Progress.
     (** For the sake of progress, say that state [f] is nonemty *)
     Variable nonempty:
        ~ Map_TID.Empty fs.
+
+    Let incl_f_to_p:
+      forall x,
+      F.In x (f_state (finishes s)) ->
+      Map_FID.In x (phasers s).
+    Proof.
+      auto.
+    Qed.
+
+    Let incl_p_to_f:
+      forall x,
+      Map_FID.In x (phasers s) ->
+      F.In x (f_state (finishes s)).
+    Proof.
+      auto.
+    Qed.
+
+    Let task_mem:
+      forall x pm f,
+      Map_FID.MapsTo f pm (phasers s) ->
+      Phasermap.In x (pm_state pm) ->
+      F.Root x f (f_state (finishes s)) \/ F.Started x f (f_state (finishes s)).
+    Proof.
+      auto.
+    Qed.
 
     (** Say that any task in the phaser map is either the root task or
       started in [f]. *)
@@ -685,6 +726,46 @@ Module Progress.
 
   Import State.
 
+  Let progress_push_finish:
+    forall x o f,
+    Valid s x o ->
+    creates_finish o = Some f ->
+    CanReduce s x o.
+  Proof.
+    intros.
+    assert (GetContext s (x, o) (f, (DF.make, finishes s)))
+    by auto using get_context_def, get_phasermap_some.
+    assert (exists ctx', CtxReduces (DF.make, finishes s) x o ctx'). {
+      destruct o; inversion H0; subst;
+      remember (DF.make, finishes s) as ctx.
+      - assert (translate (INIT f) = only_f (F.INIT f)) by auto.
+        assert (Hr: exists sf, Finish.DF.Reduces (snd ctx) (x, F.INIT f) sf). { 
+          assert (Syntax2.Nonblocking (F.INIT f)) by auto using Syntax2.nonblocking_init.
+          inversion H; subst.
+          apply Finish.DF.progress_nonblocking; simpl; auto.
+          match goal with H: Typesystem.Valid _ _ _ |- _ =>
+            inversion H; subst; clear H
+          end; 
+          match goal with H1: translate (INIT f) = _, H2: translate (INIT f) = _ |- _ =>
+            simpl in *; inversion H1; inversion H2
+          end;
+          subst;
+          auto.
+          match goal with [ H1: GetContext _ _ ?c1, H2: GetContext _ _ ?c2 |- _ ]
+          => 
+            assert (Heq :c1 = c2) by eauto using get_context_fun;
+            inversion Heq; subst; clear Heq
+          end.
+          auto.
+        }
+        destruct Hr as (fs, Hr).
+        exists (fst ctx, fs).
+        eauto using reduces_f.
+      - 
+    }
+    State.Reduces
+  Qed.
+
   Theorem progress:
     forall (s:State.t),
     Nonempty s ->
@@ -700,22 +781,25 @@ Module Progress.
     edestruct Finish.DF.progress_ex as (f,[(Hx, (Hy,Hz))|Hx]); eauto. {
       assert (Hc: exists pm, Map_FID.MapsTo f pm (phasers s)). {
         assert (F.In f (f_state (finishes s))) by auto using Syntax2.nonempty_to_in.
-        auto using Map_FID_Extra.in_to_mapsto, spec_1.
+        auto using Map_FID_Extra.in_to_mapsto, incl_f_to_p.
       }
       destruct Hc as (pm, Hmt).
-      GetContext
-      assert (forall (ctx:context), exists (k:op_kind),
-        k <> task_op /\
-        exists t,
-        Syntax2.Root t f (f_state (finishes s)) /\
-        (forall o,
-          get_op_kind o = k ->
-          Typesystem.Valid ctx t o ->
-          exists ctx', Semantics.CtxReduces ctx t o ctx')
-      ). {
-        intros.
-        Check ctx_progress f (finishes s) pm.
+      (* -- *)
+      destruct (ctx_progress _ _ _ Hmt Hx Hy) as (k, (?, (x, (?,?)))).
+      exists k.
+      split; auto.
+      exists x.
+      intros.
+      remember (creates_finish o).
+      destruct o0. {
+        
       }
+      assert (Typesystem.Valid (pm, finishes s) x o). {
+        match goal with H: State.Valid _ _ _ |- _ =>
+          inversion H; subst; clear H
+        end.
+      }
+      (* -- *)
       destruct ctx_progress with (ief:=f) (s:=finishes s) (p:=pm)
         as (k, (?, (x, (root, prog))));
       eauto using spec_3.
