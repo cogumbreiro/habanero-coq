@@ -622,7 +622,7 @@ Module Progress.
         eapply Semantics.reduces_both; eauto.
       Qed.
 
-      Let ctx_progress_empty
+      Lemma ctx_progress_empty
         (pm_is_empty: Empty pm):
         exists x,
         Syntax2.Root x f fs /\
@@ -773,7 +773,6 @@ Module Progress.
   Qed.
 
   Theorem progress:
-    forall (s:State.t),
     Nonempty s ->
     exists (k:op_kind),
     k <> task_op /\
@@ -784,269 +783,53 @@ Module Progress.
     exists s', Reduces s (x, o) s'.
   Proof.
     intros.
-    edestruct Finish.DF.progress_ex as (f,[(Hx, (Hy,Hz))|Hx]); eauto. {
+    edestruct Finish.DF.progress_ex as (f,[(Hx, (Hy,Hz))|(Hx,(x,(Hy,Hz)))]); eauto. {
       assert (Hc: exists pm, Map_FID.MapsTo f pm (phasers s)). {
         assert (F.In f (f_state (finishes s))) by auto using Syntax2.nonempty_to_in.
-        auto using Map_FID_Extra.in_to_mapsto, incl_f_to_p.
+        auto using Map_FID_Extra.in_to_mapsto.
       }
       destruct Hc as (pm, Hmt).
       (* -- *)
-      destruct (ctx_progress _ _ _ Hmt Hx Hy) as (k, (?, (x, (?,?)))).
+      destruct (ctx_progress _ _  Hmt Hx Hy) as (k, (?, (x, (?,?)))).
       exists k.
       split; auto.
       exists x.
       intros.
       remember (creates_finish o).
-      destruct o0. {
-        
-      }
-      assert (Typesystem.Valid (pm, finishes s) x o). {
-        match goal with H: State.Valid _ _ _ |- _ =>
+      symmetry in Heqo0.
+      destruct o0; eauto.
+      match goal with H: Valid _ _ _ |- _ => inversion H end.
+      assert (ctx = (pm, finishes s)). {
+        match goal with H: GetContext _ _ _ |- _ =>
           inversion H; subst; clear H
         end.
+        assert (F.IEF x f (f_state (finishes s))) by auto.
+        match goal with H: GetPhasermap _ _ _ |- _ =>
+          inversion H; subst; clear H;
+          match goal with
+            H1: creates_finish _ = _,
+            H2: creates_finish _ = _ |- _ =>
+            rewrite H1 in H2; inversion H2; clear H2
+          end
+        end.
+        match goal with
+        H3: F.IEF _ ?f1 _,
+        H4: F.IEF _ ?f2 _ |- _ => assert (f2 = f1) by eauto using F.ief_fun
+        end.
+        subst.
+        match goal with
+        H3: Map_FID.MapsTo _ ?m1 _,
+        H4: Map_FID.MapsTo _ ?m2 _ |- _ => assert (m2 = m1) by eauto using Map_FID_Facts.MapsTo_fun
+        end.
+        subst.
+        trivial.
       }
-      (* -- *)
-      destruct ctx_progress with (ief:=f) (s:=finishes s) (p:=pm)
-        as (k, (?, (x, (root, prog))));
-      eauto using spec_3.
-      exists k; split; auto.
-      exists x.
-      intros.
-      match goal with [H: Valid _ _ _ |- _] => inversion H; subst end.
-      assert (ctx = (pm, finishes s)). {
-        destruct ctx as (pm', fs).
-        match goal with [H: GetContext _ _ _ |- _] => inversion H; subst; clear H end.
-        assert (pm' = pm); subst; auto.
-        match goal with [H: GetPhasermap _ _ _ |- _ ] => inversion H; subst; clear H end. {
-          assert (f0 = f) by eauto using F.ief_fun.
-          subst.
-          eauto using Map_FID_Facts.MapsTo_fun.
-        }
-        destruct o; match goal with H: creates_finish _ = _ |- _ => inversion H; subst end.
-        - simpl in *.
-          contradiction.
-        - simpl in *.
-          match goal with H: Typesystem.Valid _ _ _|- _ =>
-            inversion H; subst; clear H;
-            match goal with H: translate _ = _ |- _ =>
-              inversion H; subst; clear H
-            end
-          end.
-          match goal with H: Typesystem.F_T.Valid _ _ _ |- _ =>
-            inversion H; subst; clear H
-          end.
-          match goal with H: ~  Typesystem.F_T.In _ _ |- _ =>
-            contradict H
-          end.
-          
-      assert (exists ctx', CtxReduces (pm, finishes s)
+      subst.
+      assert (Hc: exists ctx', CtxReduces (pm, finishes s) x o ctx') by eauto.
+      destruct Hc as ((pm', fs'), Hc).
+      eauto using reduces_def.
     }
   Qed.
+End Defs.
 End Progress.
-    
-(*
-  Definition set_phasers (s:t) m
-    (S1: forall x, F.In x (finishes s) <-> Map_FID.In x m) : t :=
-  make (finishes s) m S1.
 
-  Definition set_finishes (s:t) m
-    (S1: forall x, F.In x m <-> Map_FID.In x (phasers s)): t :=
-  make m (phasers s) S1.
-
-  Definition put_phasermap (s:t) (f:fid) (m:phasermap_t) 
-  (S1: forall x, F.In x (finishes s)): t.
-  Proof.
-    refine (set_phasers s (Map_FID.add f m (phasers s)) _).
-    split; intros;
-    rewrite Map_FID_Facts.add_in_iff in *.
-    - destruct s.
-      simpl in *.
-      rewrite spec_2 in H.
-      auto.
-    - destruct H.
-      + subst.
-        auto.
-      + auto.
-  Qed.*)
-  (*
-  Definition set_finish (s:t) (u:tid) (m:F.task)
-  (S1: forall x, F.In x (finishes s)): t.
-  Proof.
-    refine (set_finishes s (Map_TID.add u m (finishes s)) _).
-    intros.
-    split; intros.
-    - apply Map_FID_Facts.add_in_iff in H.
-  Qed.
-  mk_state f s.(get_fstate).*)
-End State.
-
-    Lemma ctx_progress:
-      forall ctx,
-      exists (k:op_kind),
-      k <> task_op /\
-      exists t,
-      forall o,
-      get_op_kind o = k ->
-      Valid ctx t o ->
-      exists ctx', Semantics.CtxReduces ctx t o ctx'.
-    Proof.
-      intros.
-      F_P.progress
-    Qed.
-
-  Section CtxTrans.
-    Import Lang.FinishNotations.
-    Open Scope finish_scope.
-
-    Lemma ctx_reduce_le_some:
-      forall m f t o o' ctx f',
-      CtxReduces (m, f) t o ctx ->
-      as_f_op o = Some o' ->
-      FS.Disjoint f' o' ->
-      f <= f' ->
-      exists ctx', CtxReduces (m, f') t o ctx'.
-    Proof.
-      intros.
-      destruct ctx as (m1, f1).
-      inversion H; subst; simpl in *.
-      - apply translate_only_p_impl_as_f_op in H5.
-        rewrite H5 in H0.
-        inversion H0.
-      - assert (Hx := H5).
-        apply translate_only_f_impl_as_f_op in Hx.
-        rewrite Hx in H0.
-        inversion H0; subst; clear H0.
-        apply F_P.reduce_le with (f3:=f') in H6; auto.
-        destruct H6 as (f4, R).
-        exists (m1, f4).
-        apply reduces_f with (o':=o'); simpl; auto.
-      - assert (Hx := H5).
-        apply translate_both_impl_as_f_op in Hx.
-        rewrite H0 in Hx.
-        inversion Hx; subst; clear Hx.
-        apply F_P.reduce_le with (f3:=f') in H7; auto.
-        destruct H7 as (f4, ?).
-        exists (m1, f4).
-        apply reduces_both with (o_p:=o_p) (o_f:=o_f); simpl; auto.
-    Qed.
-
-    Lemma ctx_reduce_le_none:
-      forall m f t o ctx f',
-      CtxReduces (m, f) t o ctx ->
-      as_f_op o = None ->
-      exists ctx', CtxReduces (m, f') t o ctx'.
-    Proof.
-      intros.
-      assert (X: exists o', translate o = only_p o'). {
-        destruct o; compute in H0; inversion H0; simpl; eauto.
-      }
-      destruct X as (o_p, X).
-      inversion H; simpl in *.
-      - rewrite H1 in X.
-        inversion X; subst; clear X.
-        exists (m0, f').
-        apply reduces_p with (o':=o_p); auto.
-      - rewrite H1 in X.
-        inversion X.
-      - rewrite H1 in X.
-        inversion X.
-    Qed.
-  End CtxTrans.
-
-  Section ApplyCtx.
-  Variable s: state.
-  Require HJ.Finish.Lang.
-  Require HJ.Finish.Semantics.
-  Import Lang.FinishNotations.
-  Open Scope finish_scope.
-
-
-  Notation ROOT := (get_finish s).
-
-  Variable finish_t_spec_2: UniqueIEF ROOT.
-  Variable finish_t_spec_1: IEFFun ROOT.
-
-  Variable get_fstate_spec:
-    forall x l,
-    FIDPath x l ROOT ->
-    exists m, Map_FID.MapsTo l m (get_fstate s).
-
-  Let exists_flat:
-    F_P.Nonempty ROOT ->
-    exists f h m,
-    FIDPath f h ROOT /\
-    Progress.Flat f /\ 
-    Map_FID.MapsTo h m (get_fstate s).
-  Proof.
-    intros.
-    apply F_P.find_flat in H.
-    destruct H as (x, (Hf, Hr)).
-    exists x.
-    apply le_to_fid_path in Hr.
-    destruct Hr as (p, Hp).
-    exists p.
-    assert (Hx := Hp).
-    apply get_fstate_spec in Hx.
-    destruct Hx as (m, Hx).
-    exists m.
-    intuition.
-  Qed.
-
-  Require Import HJ.Finish.LangDec.
-  Require Import Coq.Classes.Morphisms.
-
-  Let split_reqs_aux f (t:tid) (o:op) := is_registered t f.
-  Program Instance split_reqs_aux_Proper f: Proper (TID.eq ==> eq ==> eq) (split_reqs_aux f) := {
-  }.
-  Next Obligation.
-    auto with *.
-  Qed.
-
-  Require Import Aniceto.Option.
-
-  Variable in_pm_in_f:
-    forall f t m h,
-    FIDPath f h ROOT ->
-    Map_FID.MapsTo h m (get_fstate s) ->
-    In t (Phasermap.state m) ->
-    F.Registered t f.
-
-  Let flat_to_ief:
-    forall t f,
-    F.Registered t f ->
-    Progress.Flat f ->
-    IEF t f.
-  Proof.
-    intros.
-    destruct H.
-    destruct a as [|x].
-    - auto using ief_ready.
-    - apply ief_blocked with (x:=x); auto.
-      destruct H0.
-      apply H0 in H.
-      inversion H.
-      auto using F.registered_absurd_nil.
-  Qed.
-
-  Variable root_nonempty:
-    F_P.Nonempty ROOT.
-
-  Theorem progress:
-    exists t h f m,
-    FIDPath f h ROOT /\
-    Map_FID.MapsTo h m (get_fstate s) /\
-    forall i,
-    Valid (m, f) t i ->
-    exists c', CtxReduces (m,f) t i c'.
-  Proof.
-    intros.
-    destruct (exists_flat) as (f, (h, (?,(?,(Hflat,?))))); eauto.
-    apply ctx_progress with (p:=x) in Hflat; auto.
-    destruct Hflat as (t, ?).
-    exists t.
-    exists h.
-    exists f.
-    exists x.
-    split; auto.
-  Qed.
-End ApplyCtx.
