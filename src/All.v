@@ -735,35 +735,41 @@ Module Progress.
     intros.
     assert (GetContext s (x, o) (f, (DF.make, finishes s)))
     by auto using get_context_def, get_phasermap_some.
-    assert (exists ctx', CtxReduces (DF.make, finishes s) x o ctx'). {
-      destruct o; inversion H0; subst;
+    assert (Hc: exists ctx', CtxReduces (DF.make, finishes s) x o ctx'). {
       remember (DF.make, finishes s) as ctx.
-      - assert (translate (INIT f) = only_f (F.INIT f)) by auto.
-        assert (Hr: exists sf, Finish.DF.Reduces (snd ctx) (x, F.INIT f) sf). { 
-          assert (Syntax2.Nonblocking (F.INIT f)) by auto using Syntax2.nonblocking_init.
-          inversion H; subst.
-          apply Finish.DF.progress_nonblocking; simpl; auto.
-          match goal with H: Typesystem.Valid _ _ _ |- _ =>
-            inversion H; subst; clear H
-          end; 
-          match goal with H1: translate (INIT f) = _, H2: translate (INIT f) = _ |- _ =>
-            simpl in *; inversion H1; inversion H2
-          end;
-          subst;
-          auto.
-          match goal with [ H1: GetContext _ _ ?c1, H2: GetContext _ _ ?c2 |- _ ]
-          => 
-            assert (Heq :c1 = c2) by eauto using get_context_fun;
-            inversion Heq; subst; clear Heq
-          end.
-          auto.
+      assert (Hf: exists o_f, translate o = only_f o_f). {
+        destruct o; inversion H0; subst; simpl; eauto.
+      }
+      destruct Hf as (o_f, Hf).
+      assert (Hr: exists sf, Finish.DF.Reduces (snd ctx) (x, o_f) sf). { 
+        assert (Syntax2.Nonblocking o_f). {
+          destruct o; inversion H0; subst; simpl in *;
+          inversion Hf; subst;
+          eauto using Syntax2.nonblocking_init, Syntax2.nonblocking_begin_finish.
         }
-        destruct Hr as (fs, Hr).
-        exists (fst ctx, fs).
-        eauto using reduces_f.
-      - 
+        inversion H; subst.
+        apply Finish.DF.progress_nonblocking; simpl; auto.
+        destruct o; inversion H0; subst; simpl in *;
+        inversion Hf; subst;
+        match goal with H: Typesystem.Valid _ _ _ |- _ =>
+          inversion H; subst; clear H
+        end;
+        match goal with H1: translate _ = _ |- _ =>
+          simpl in H1; inversion H1
+        end;
+        match goal with [ H1: GetContext _ _ ?c1, H2: GetContext _ _ ?c2 |- _ ]
+        => 
+          assert (Heq :c1 = c2) by eauto using get_context_fun;
+          inversion Heq; subst; clear Heq
+        end;
+        auto.
+      }
+      destruct Hr as (fs, Hr).
+      exists (fst ctx, fs).
+      eauto using reduces_f.
     }
-    State.Reduces
+    destruct Hc as ((?,?), Hc).
+    eauto using State.reduces_def.
   Qed.
 
   Theorem progress:
