@@ -252,38 +252,6 @@ Module State.
     phasers: Map_FID.t phasermap_t;
   }.
 
-(*
-  Lemma incl_f_to_p:
-    forall (s:t),
-    forall x,
-    F.In x (f_state (finishes s)) ->
-    Map_FID.In x (phasers s).
-  Proof.
-    intros.
-    apply spec_1; auto.
-  Qed.
-
-  Lemma incl_p_to_f:
-    forall (s:t),
-    forall x,
-    Map_FID.In x (phasers s) ->
-    F.In x (f_state (finishes s)).
-  Proof.
-    intros.
-    apply spec_2; auto.
-  Qed.
-
-  Lemma task_mem:
-    forall (s:t),
-    forall x pm f,
-    Map_FID.MapsTo f pm (phasers s) ->
-    Phasermap.In x (pm_state pm) ->
-    F.Root x f (f_state (finishes s)) \/ F.Started x f (f_state (finishes s)).
-  Proof.
-    intros.
-    eapply spec_3 in H; eauto.
-  Qed.
-*)
   Import Progress.
   Import Semantics.
   Module F := Syntax2.
@@ -462,33 +430,14 @@ Module State.
 
   Inductive Reduces: t -> (tid*op) -> t -> Prop :=
   | reduces_def:
-    forall s x o s' pm' f ctx (*S1 S2 S3*),
+    forall s x o s' pm' f ctx,
     GetContext s (x, o) (f, ctx) ->
     Semantics.CtxReduces ctx x o (pm', s') ->
     Reduces s (x, o) {|
       finishes := s';
       phasers := Map_FID.add f pm' (phasers s);
-      (*spec_1 := S1; spec_2:=S2; spec_3:=S3*)
     |}.
-(*
-  Section SR.
-    Lemma ctx_to_reduces:
-      forall s x o f ctx pm' fs',
-      GetContext s (x, o) (f, ctx) ->
-      Semantics.CtxReduces ctx x o (pm', fs') ->
-      exists S1 S2 S3,
-      Reduces s (x, o) {|
-        finishes := fs';
-        phasers := Map_FID.add f pm' (phasers s);
-        spec_1 := S1; spec_2:=S2; spec_3:=S3
-      |}.
-    Proof.
-      intros.
-      inversion H0; subst; clear H0.
-      - 
-    Qed.
-  End SR.
-*)
+
   Inductive Valid s x o : Prop :=
   | valid_def:
     forall f ctx,
@@ -497,18 +446,10 @@ Module State.
     Valid s x o.
 
   Definition Nonempty s := (~ Map_TID.Empty (f_state (finishes s))).
-(*
-  Section Props.
 
-    Definition get_context s a :=
-    
-  
-    Lemma get_context_fun:
-  End Props.*)
 End State.
 
 Module P_P := HJ.Phasers.DF.
-(*Require HJ.Finish.Progress.*)
 Module F_P := HJ.Finish.DF.
 
 Module Progress.
@@ -522,27 +463,6 @@ Module Progress.
   Variable spec_3: TaskToFinish (phasers s) (f_state (finishes s)).
 
   Notation CanReduce s x o := (exists s', Reduces s (x, o) s').
-
-  Section CtxProgress.
-
-    (** Given the id of a IEF *)
-    Variable f: fid.
-
-    (** Let [ief] have a type [f]. *)
-    Notation ffs := (State.finishes s).
-    Notation fs := (f_state ffs).
-    Variable ief_defined:
-      F.In f fs.
-    Variable p : phasermap_t.
-    Variable mt: Map_FID.MapsTo f p (phasers s).
-    Notation pm := (pm_state p).
-
-    (** Let [p] be the phaser map of [f]. *)
-    Let ctx : context := (p, ffs).
-
-    (** For the sake of progress, say that state [f] is nonemty *)
-    Variable nonempty:
-       ~ Map_TID.Empty fs.
 
     Let incl_f_to_p:
       forall x,
@@ -568,6 +488,27 @@ Module Progress.
     Proof.
       auto.
     Qed.
+
+  Section CtxProgress.
+
+    (** Given the id of a IEF *)
+    Variable f: fid.
+
+    (** Let [ief] have a type [f]. *)
+    Notation ffs := (State.finishes s).
+    Notation fs := (f_state ffs).
+    Variable ief_defined:
+      F.In f fs.
+    Variable p : phasermap_t.
+    Variable mt: Map_FID.MapsTo f p (phasers s).
+    Notation pm := (pm_state p).
+
+    (** Let [p] be the phaser map of [f]. *)
+    Let ctx : context := (p, ffs).
+
+    (** For the sake of progress, say that state [f] is nonemty *)
+    Variable nonempty:
+       ~ Map_TID.Empty fs.
 
     (** Say that any task in the phaser map is either the root task or
       started in [f]. *)
@@ -829,6 +770,16 @@ Module Progress.
       destruct Hc as ((pm', fs'), Hc).
       eauto using reduces_def.
     }
+    (* we can run any operation, but for simplicity sake, let's do finish *)
+    exists finish_op.
+    split. {
+      unfold not; intros N; inversion N.
+    }
+    exists x.
+    intros.
+    destruct o; match goal with
+      H: get_op_kind _ = _ |- _ => inversion H; subst; clear H
+    end.
   Qed.
 End Defs.
 End Progress.
