@@ -633,7 +633,7 @@ Module Progress.
           simpl; auto.
         }
         assert (Hp: exists m, DF.Reduces p (x, DROP_ALL) m). {
-          apply DF.progress_unblocking; auto.
+          apply P_P.progress_nonblocking; auto.
           unfold not; intros N; inversion N.
         }
         assert (Finish.DF.Enabled ffs x) by auto.
@@ -779,7 +779,35 @@ Module Progress.
     intros.
     destruct o; match goal with
       H: get_op_kind _ = _ |- _ => inversion H; subst; clear H
-    end.
+    end. {
+      assert (creates_finish (BEGIN_FINISH f0) = Some f0) by auto.
+      eauto.
+    }
+    match goal with H: Valid _ _ ?o |- _ =>
+      remember o as of;
+      inversion H; subst; clear H
+    end;
+    match goal with H: Typesystem.Valid _ _ _ |- _ =>
+      inversion H; subst; clear H
+    end;
+    match goal with H: translate _ = _ |- _ =>
+      simpl in H; inversion H
+    end; subst.
+    destruct ctx as (pm, fs).
+    assert (fs = finishes s). {
+      match goal with H: GetContext _ _ _ |- _ =>
+      inversion H; subst; clear H
+      end.
+      trivial.
+    }
+    subst.
+    edestruct Hz as (f', ?); eauto.
+    assert (R: exists pm', DF.Reduces (fst (pm, finishes s)) (x, DROP_ALL) pm'). {
+      apply P_P.progress_nonblocking; auto.
+      unfold not; intros N; inversion N.
+    }
+    destruct R as (pm', Rp).
+    eauto using reduces_def, reduces_both.
   Qed.
 End Defs.
 End Progress.
