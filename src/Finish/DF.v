@@ -1,5 +1,5 @@
 Require Import Vars.
-Require Import Syntax2.
+Require Import Finish.Lang.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
@@ -15,26 +15,15 @@ Section Defs.
   Inductive Reduces: t -> (tid*op) -> t -> Prop :=
   | reduces_def:
     forall t o pm1 pm2,
-    Syntax2.Reduces (state pm1) (t, o) (state pm2) ->
+    Lang.Reduces (state pm1) (t, o) (state pm2) ->
     history pm2 = (t,o)::(history pm1) ->
     Reduces pm1 (t, o) pm2.
 End Defs.
 
 Section Props.
-(*
-  Let progress_aux:
-    forall o x m s',
-    Syntax2.Reduces (state m) (x, o) s' ->
-    exists n, Reduces m (x, o) n.
-  Proof.
-    intros.
-    eapply Trace.reduces_n_cons; eauto.
-  Qed.
-*)
-
   Program Definition reduces_step_aux
     x o (s:t) s'
-    (Hr: Syntax2.Reduces (state s) (x, o) s') :=
+    (Hr: Lang.Reduces (state s) (x, o) s') :=
     {| state := s'; history := (x,o)::(history s) |}.
   Next Obligation.
     destruct s.
@@ -42,7 +31,7 @@ Section Props.
   Qed. (* leave it open *)
 
   Lemma reduces_step:
-    forall x o s s' (X : Syntax2.Reduces (state s) (x, o) s'),
+    forall x o s s' (X : Lang.Reduces (state s) (x, o) s'),
     exists s',
     Reduces s (x, o) s'.
   Proof.
@@ -57,11 +46,11 @@ Section Props.
 
   Let enabled_to_enabled:
     forall s t,
-    Syntax2.Enabled (state s) t ->
+    Lang.Enabled (state s) t ->
     Enabled s t.
   Proof.
     intros.
-    unfold Enabled, Syntax2.Enabled in *.
+    unfold Enabled, Lang.Enabled in *.
     intros ? Hv.
     apply H in Hv.
     destruct Hv as (s', Hr).

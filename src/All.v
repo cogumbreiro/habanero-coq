@@ -1,14 +1,14 @@
 Require HJ.Phasers.Progress.
 Require HJ.Phasers.Lang.
 Require HJ.Phasers.Typesystem.
-Require HJ.Finish.Syntax2.
+Require HJ.Finish.Lang.
 Require HJ.Finish.DF.
 Require HJ.Phasers.DF.
 
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Phasermap.
 
-Module F := HJ.Finish.Syntax2.
+Module F := HJ.Finish.Lang.
 Module P := HJ.Phasers.Lang.
 
 Notation finish_t := Finish.DF.t.
@@ -187,7 +187,6 @@ Module Typesystem.
   Import Semantics.
   Module P_T := HJ.Phasers.Typesystem.
   Module P_R := HJ.Phasers.SubjectReduction.
-  Module F_T := HJ.Finish.Syntax2.
 
   Inductive Valid (ctx:context) (t:tid): op -> Prop :=
   | valid_only_p:
@@ -254,7 +253,6 @@ Module State.
 
   Import Progress.
   Import Semantics.
-  Module F := Syntax2.
 
   Inductive GetPhasermap s: (tid*op) -> (fid * phasermap_t) -> Prop :=
   | get_phasermap_none:
@@ -566,7 +564,7 @@ Module Progress.
       Lemma ctx_progress_empty
         (pm_is_empty: Empty pm):
         exists x,
-        Syntax2.Root x f fs /\
+        F.Root x f fs /\
         (forall o,
         Typesystem.Valid ctx x o ->
         exists ctx', Semantics.CtxReduces ctx x o ctx').
@@ -590,7 +588,7 @@ Module Progress.
         exists (k:op_kind),
         k <> task_op /\
         exists x,
-        Syntax2.Root x f fs /\
+        F.Root x f fs /\
         (forall o,
         get_op_kind o = k ->
         Typesystem.Valid ctx x o ->
@@ -648,7 +646,7 @@ Module Progress.
         exists (k:op_kind),
         k <> task_op /\
         exists x,
-        Syntax2.Root x f fs /\
+        F.Root x f fs /\
         (forall o,
           get_op_kind o = k ->
           Typesystem.Valid ctx x o ->
@@ -683,10 +681,10 @@ Module Progress.
       }
       destruct Hf as (o_f, Hf).
       assert (Hr: exists sf, Finish.DF.Reduces (snd ctx) (x, o_f) sf). { 
-        assert (Syntax2.Nonblocking o_f). {
+        assert (F.Nonblocking o_f). {
           destruct o; inversion H0; subst; simpl in *;
           inversion Hf; subst;
-          eauto using Syntax2.nonblocking_init, Syntax2.nonblocking_begin_finish.
+          eauto using F.nonblocking_init, F.nonblocking_begin_finish.
         }
         inversion H; subst.
         apply Finish.DF.progress_nonblocking; simpl; auto.
@@ -726,7 +724,7 @@ Module Progress.
     intros.
     edestruct Finish.DF.progress_ex as (f,[(Hx, (Hy,Hz))|(Hx,(x,(Hy,Hz)))]); eauto. {
       assert (Hc: exists pm, Map_FID.MapsTo f pm (phasers s)). {
-        assert (F.In f (f_state (finishes s))) by auto using Syntax2.nonempty_to_in.
+        assert (F.In f (f_state (finishes s))) by auto using F.nonempty_to_in.
         auto using Map_FID_Extra.in_to_mapsto.
       }
       destruct Hc as (pm, Hmt).
