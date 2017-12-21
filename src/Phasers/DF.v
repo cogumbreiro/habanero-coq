@@ -82,7 +82,7 @@ Section Props.
     edestruct Progress.progress_empty; eauto using spec.
   Qed.
 
-  Lemma progress_unblocking:
+  Lemma progress_nonblocking:
     forall pm t i,
     i <> WAIT_ALL ->
     Typesystem.Op.Valid (state pm) t i ->
