@@ -1242,9 +1242,242 @@ Section Defs.
     right;
     split; eauto using progress_empty.
   Qed.
-
 End Defs.
 
+Module Task.
+
+  Inductive Root: fid -> task -> Prop :=
+  | root_def:
+    forall f l,
+    Root f {| root := f; started := l |}.
+
+  Inductive Started: fid -> task -> Prop :=
+  | started_def:
+    forall f g l,
+    List.In f l ->
+    Started f {| root := g; started := l |}.
+
+  Inductive In: fid -> task -> Prop :=
+  | in_root:
+    forall f ft,
+    Root f ft ->
+    In f ft
+  | in_started:
+    forall f ft,
+    Started f ft ->
+    In f ft.
+End Task.
+
+Section Props.
+
+  Lemma root_inv_add:
+    forall x y ft s f,
+    Root y f (Map_TID.add x ft s) ->
+    (x = y /\ Task.Root f ft) \/ Root y f s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply Map_TID_Facts.add_mapsto_iff in H0.
+    destruct H0 as [(?,?)|(?,?)].
+    + subst.
+      auto using Task.root_def.
+    + eauto using root_def, in_root.
+  Qed.
+
+  Lemma in_inv_add:
+    forall f x ft s,
+    In f (Map_TID.add x ft s) ->
+    Task.In f ft \/ In f s.
+  Proof.
+    intros.
+    inversion H.
+    - apply root_inv_add in H0.
+      destruct H0 as [(?, ?)|?].
+      + auto using Task.in_root.
+      + eauto using in_root.
+    - apply started_inv_add in H0.
+      destruct H0 as [(?,?)|(?,?)]. {
+        destruct ft in *; simpl in *.
+        auto using Task.in_started, Task.started_def.
+      }
+      eauto using in_started.
+  Qed.
+
+  Let task_root_to_root:
+    forall x ft s f,
+    Map_TID.MapsTo x ft s ->
+    Task.Root f ft ->
+    Root x f s.
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using root_def.
+  Qed.
+
+  Let task_started_to_started:
+    forall x ft s f,
+    Map_TID.MapsTo x ft s ->
+    Task.Started f ft ->
+    Started x f s.
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using started_def.
+  Qed.
+
+  Let task_in_to_in:
+    forall x ft s f,
+    Task.In f ft ->
+    Map_TID.MapsTo x ft s ->
+    In f s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    + eauto using task_root_to_root, in_root.
+    + eauto using task_started_to_started, in_started.
+  Qed.
+
+  Let task_in_inv_eq_make:
+    forall f g,
+    Task.In f (make g) ->
+    f = g.
+  Proof.
+    intros.
+    unfold make in *.
+    inversion H; subst; clear H;
+    inversion H0; subst; clear H0.
+    - trivial.
+    - inversion H2.
+  Qed.
+
+  Let task_root_inv_eq:
+    forall f g l,
+    Task.Root f {| root := g; started := l |} ->
+    g = f.
+  Proof.
+    intros.
+    inversion H; auto.
+  Qed.
+
+  Let task_root_cons:
+    forall f g l h,
+    Task.Root f {| root := g; started := l |} ->
+    Task.Root f {| root := g; started := h::l |}.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    auto using Task.root_def.
+  Qed.
+
+  Let task_started_cons:
+    forall f g l h,
+    Task.Started f {| root := g; started := l |} ->
+    Task.Started f {| root := g; started := h::l |}.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    auto using Task.started_def, List.in_cons.
+  Qed.
+
+  Let task_in_cons:
+    forall f g l h,
+    Task.In f {| root := g; started := l |} ->
+    Task.In f {| root := g; started := h::l |}.
+  Proof.
+    intros.
+    inversion H; subst; clear H. {
+      auto using task_root_cons, Task.in_root.
+    }
+    auto using task_started_cons, Task.in_started.
+  Qed.
+
+  Let in_ief:
+    forall x ft s,
+    Map_TID.MapsTo x ft s ->
+    In (ief ft) s.
+  Proof.
+    intros.
+    destruct ft as (f, [|g]); simpl.
+    + eauto using in_root, root_def.
+    + eauto using in_started, in_eq, started_def.
+  Qed.
+
+  Let root_inv_remove:
+    forall x f s y,
+    Root y f (Map_TID.remove x s) ->
+    x <> y /\ Root y f s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply Map_TID_Facts.remove_mapsto_iff in H0.
+    destruct H0 as (?, ?).
+    eauto using root_def.
+  Qed.
+
+  Let started_inv_remove:
+    forall x f s y,
+    Started y f (Map_TID.remove x s) ->
+    x <> y /\ Started y f s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply Map_TID_Facts.remove_mapsto_iff in H1.
+    destruct H1 as (?, ?).
+    eauto using started_def.
+  Qed.
+
+  Let in_inv_remove:
+    forall x s f,
+    In f (Map_TID.remove x s) ->
+    In f s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    - apply root_inv_remove in H0.
+      destruct H0.
+      eauto using in_root.
+    - apply started_inv_remove in H0.
+      destruct H0.
+      eauto using in_started.
+  Qed.
+
+  Lemma reduces_in_inv:
+    forall x f o s s',
+    In f s' ->
+    Reduces s (x, o) s' ->
+    (o = INIT f /\ ~ In f s) \/
+    (o = BEGIN_FINISH f /\ ~ In f s) \/
+    In f s.
+  Proof.
+    intros.
+    inversion H0; subst; clear H0;
+    try (apply in_inv_add in H; destruct H; auto).
+    - match goal with H: Task.In _ (make _) |- _ =>
+        apply task_in_inv_eq_make in H
+      end.
+      subst; auto.
+    - match goal with H: Task.In _ _ |- _ =>
+        inversion H; subst; clear H
+      end.
+      + assert (g = f) by eauto.
+        subst.
+        eauto using in_root, root_def.
+      + match goal with H: Task.Started _ _ |- _ =>
+          inversion H; subst; clear H
+        end.
+        match goal with H: List.In _ _ |- _ =>
+          inversion H; subst; clear H
+        end.
+        * auto.
+        * eauto using started_def, in_started.
+    - eauto using task_in_to_in, task_in_cons.
+    - match goal with H: Task.In _ (make _) |- _ =>
+        apply task_in_inv_eq_make in H
+      end; subst.
+      eauto using in_ief.
+    - eauto using in_inv_remove.
+  Qed.
+End Props.
 
 Module Trace.
   Definition t := (list (tid * op)) % type.
