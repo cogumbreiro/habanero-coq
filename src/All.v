@@ -783,7 +783,7 @@ Section Defs.
     match goal with H:Finish.DF.Reduces _ _ _ |- _ => inversion H; subst; clear H end
     ).
     - auto.
-    - edestruct F.reduces_in_inv as [(?,?)|[(?,?)|?]]; eauto.
+    - edestruct F.reduces_in_inv as [(?,?)|[(?,?)|?]]; eauto 3. (* don't try too hard *)
       + subst.
         destruct o; match goal with H: Semantics.translate _ = _ |- _ =>
           simpl in *;
@@ -798,7 +798,7 @@ Section Defs.
         end.
         assert (y = f) by (eapply get_phasermap_inv_eq_begin_finish; eauto).
         auto.
-    - edestruct F.reduces_in_inv as [(?,?)|[(?,?)|?]]; eauto;
+    - edestruct F.reduces_in_inv as [(?,?)|[(?,?)|?]]; eauto 3; (* whithout this number it gets sluggish *)
       subst;
       destruct o; match goal with H: Semantics.translate _ = _ |- _ =>
         simpl in *;
