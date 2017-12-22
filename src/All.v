@@ -234,18 +234,6 @@ End Typesystem.
 
 Module State.
 
-  Definition InclFtoP {elt} fs ps :=
-    forall x, F.In x fs -> Map_FID.In (elt:=elt) x ps.
-
-  Definition InclPtoF {elt} ps fs :=
-    forall x, Map_FID.In (elt:=elt) x ps -> F.In x fs.
-
-  Definition TaskToFinish ps fs :=
-    forall x pm f,
-    Map_FID.MapsTo f pm ps ->
-    Phasermap.In x (pm_state pm) ->
-    F.Root x f fs \/ F.Started x f fs.
-
   Structure t := make {
     finishes: finish_t;
     phasers: Map_FID.t phasermap_t;
@@ -404,6 +392,16 @@ Module Progress.
   Import Semantics.
   Import Typesystem.
   Import State.
+
+  Definition InclFtoP {elt} fs ps :=
+    forall x, F.In x fs -> Map_FID.In (elt:=elt) x ps.
+
+  Definition TaskToFinish ps fs :=
+    forall x pm f,
+    Map_FID.MapsTo f pm ps ->
+    Phasermap.In x (pm_state pm) ->
+    F.Root x f fs \/ F.Started x f fs.
+
   Section Defs.
   Variable s:State.t.
   Variable spec_1: InclFtoP (f_state (finishes s)) (phasers s).
@@ -763,12 +761,12 @@ Section Defs.
   Qed.
   Lemma sr_incl_f_to_p:
     forall s s' x o,
-    State.InclFtoP (f_state (State.finishes s)) (State.phasers s) ->
+    Progress.InclFtoP (f_state (State.finishes s)) (State.phasers s) ->
     State.Reduces s (x, o) s' ->
-    State.InclFtoP (f_state (State.finishes s')) (State.phasers s').
+    Progress.InclFtoP (f_state (State.finishes s')) (State.phasers s').
   Proof.
     intros.
-    unfold State.InclFtoP in *; intros y; intros.
+    unfold Progress.InclFtoP in *; intros y; intros.
     inversion H0; subst; clear H0; simpl in *.
     rewrite Map_FID_Facts.add_in_iff.
     match goal with H: Semantics.CtxReduces _ _ _ _ |- _ =>
@@ -804,6 +802,68 @@ Section Defs.
         simpl in *;
         inversion H; symmetry in H; subst
       end.
+  Qed.
+
+  Let ief_to_root_or_started:
+    forall x f s,
+    F.IEF x f (f_state (State.finishes s)) ->
+    F.Root x f (f_state (State.finishes s)) \/ F.Started x f (f_state (State.finishes s)).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    - eauto using F.root_def.
+    - eauto using F.started_def, List.in_eq.
+  Qed.
+
+  Let not_in_make:
+    forall x,
+    ~ In x (pm_state DF.make).
+  Proof.
+    unfold not; intros x N.
+    inversion N; subst; clear N.
+    unfold DF.make in *; simpl in *.
+    unfold make in *.
+    apply Map_PHID_Facts.empty_mapsto_iff in H.
+    assumption.
+  Qed.
+
+  Lemma sr_task_to_finish:
+    forall s s' x o,
+    Progress.TaskToFinish (State.phasers s) (f_state (State.finishes s)) ->
+    State.Reduces s (x, o) s' ->
+    Progress.TaskToFinish (State.phasers s') (f_state (State.finishes s')).
+  Proof.
+    intros.
+    unfold Progress.TaskToFinish in *; intros y pm'; intros.
+    inversion H0; subst; clear H0; simpl in *.
+    apply Map_FID_Facts.add_mapsto_iff in H1.
+    destruct H1 as [(?,?)|(?,?)]; subst. {
+      match goal with H: State.GetPhasermap _ _ _ |- _ =>
+      inversion H; subst; clear H; simpl in *
+      end. {
+        match goal with H: Semantics.CtxReduces _ _ _ _ |- _ =>
+        inversion H; subst; clear H
+        end; simpl in *.
+        - match goal with H: DF.Reduces _ _ _ |- _ =>
+            inversion H; subst; clear H
+          end.
+          edestruct Phasermap.reduces_in_inv as [(?,(?,?))|[(?,(?,?))|?]]; eauto 4;
+          subst;
+          destruct o; match goal with
+            H: Semantics.translate _ = _ |- _ =>
+            inversion H; subst; clear H; auto
+          end.
+        - eapply H in H2; eauto.
+          + match goal with
+            H: State.GetPhasermap _ _ _ |- _ =>
+            inversion H; subst; clear H; simpl in *
+            end; eauto 2.
+            match goal with
+            H: In _ make |- _ => apply not_in_make in H end.
+            contradiction.
+        - 
+      
+    }
   Qed.
 End Defs.
 End SR.

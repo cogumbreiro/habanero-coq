@@ -1477,6 +1477,144 @@ Section Props.
       eauto using in_ief.
     - eauto using in_inv_remove.
   Qed.
+
+  Let root_add_neq:
+    forall y f s x ft,
+    Root y f s ->
+    x <> y ->
+    Root y f (Map_TID.add x ft s).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using root_def, Map_TID.add_2.
+  Qed.
+
+  Lemma root_reduces:
+    forall x y f s s' o,
+    Root y f s ->
+    Reduces s (x, o) s' ->
+    (y = x /\ exists g, o = INIT g) \/
+    (y = x /\ o = END_TASK) \/
+    Root y f s'.
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    - destruct (TID.eq_dec x y); subst. {
+        eauto 4.
+      }
+      eauto using root_add_neq.
+    - destruct (TID.eq_dec x y); subst. {
+        assert (Root y g s) by eauto using root_def.
+        assert (f = g) by eauto using root_fun.
+        subst.
+        eauto using root_def, Map_TID.add_1.
+      }
+      eauto using root_add_neq.
+    - destruct (TID.eq_dec x y); subst. {
+        assert (Root y g s) by eauto using root_def.
+        assert (f = g) by eauto using root_fun.
+        subst.
+        eauto using root_def, Map_TID.add_1.
+      }
+      eauto using root_add_neq.
+    - destruct (TID.eq_dec y u); subst. {
+        apply root_to_in in H.
+        contradiction.
+      }
+      eauto using root_add_neq.
+    - destruct (TID.eq_dec y x); subst. {
+        auto.
+      }
+      assert (Root x f0 s) by eauto using root_def.
+      right.
+      right.
+      inversion H; subst; clear H.
+      eapply root_def; eauto using Map_TID.remove_2.
+  Qed.
+
+  Let started_add_neq:
+    forall y f s x ft,
+    Started y f s ->
+    x <> y ->
+    Started y f (Map_TID.add x ft s).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using started_def, Map_TID.add_2.
+  Qed.
+
+  Lemma started_to_in:
+    forall x f s,
+    Started x f s ->
+    Map_TID.In x s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
+  Lemma started_reduces:
+    forall x y f s s' o,
+    Started y f s ->
+    Reduces s (x, o) s' ->
+    (y = x /\ o = END_FINISH f) \/
+    Started y f s'.
+  Proof.
+    intros.
+    inversion H0; subst; clear H0;
+    destruct (TID.eq_dec x y); subst; try (right; auto using started_add_neq; fail).
+    - apply started_to_in in H.
+      contradiction.
+    - inversion H; subst; clear H.
+      match goal with
+      H1: Map_TID.MapsTo y ?a _, H2: Map_TID.MapsTo y ?b _ |- _ =>
+      assert(R: a = b) by eauto using Map_TID_Facts.MapsTo_fun;
+      inversion R; subst; clear R
+      end.
+      assert (List.In f (f0::l0)) by auto using List.in_cons.
+      eauto 4 using started_def, Map_TID.add_1.
+    - inversion H; subst; clear H.
+      match goal with
+      H1: Map_TID.MapsTo y ?a _, H2: Map_TID.MapsTo y ?b _ |- _ =>
+      assert(R: b = a) by eauto using Map_TID_Facts.MapsTo_fun;
+      inversion R; subst; clear R
+      end.
+      match goal with H: List.In _ _ |- _ =>
+        inversion H; subst; clear H
+      end; auto.
+      eauto 4 using started_def, Map_TID.add_1.
+    - destruct (TID.eq_dec u y); subst; try (right; auto using started_add_neq; fail).
+      assert (Map_TID.In y s) by eauto using started_to_in.
+      contradiction.
+    - destruct (TID.eq_dec u y); subst; try (right; auto using started_add_neq; fail).
+      assert (Map_TID.In y s) by eauto using started_to_in.
+      contradiction.
+    - inversion H; subst; clear H.
+      match goal with
+      H1: Map_TID.MapsTo y ?a _, H2: Map_TID.MapsTo y ?b _ |- _ =>
+      assert(R: b = a) by eauto using Map_TID_Facts.MapsTo_fun;
+      inversion R; subst; clear R
+      end.
+      match goal with H: List.In _ _ |- _ => inversion H end.
+    - right.
+      inversion H; subst; clear H.
+      eapply started_def; eauto using Map_TID.remove_2.
+  Qed.
+  Lemma root_or_started_reduces:
+    forall y f s o s' x,
+    Root y f s \/ Started y f s ->
+    Reduces s (x, o) s' ->
+    (Root y f s /\ y = x /\ exists g, o = INIT g) \/
+    (Root y f s /\ y = x /\ o = END_TASK) \/
+    (Started y f s /\ y = x /\ o = END_FINISH f) \/
+    Root y f s' \/
+    Started y f s'.
+  Proof.
+    intros.
+    destruct H.
+    - edestruct root_reduces as [(?,?)|[Hx|Hy]]; eauto.
+    - edestruct started_reduces; eauto.
+  Qed.
 End Props.
 
 Module Trace.

@@ -586,3 +586,238 @@ Section Decidability.
     contradiction.
   Defined.
 End Decidability.
+
+Section InInv.
+  Let in_add_inv:
+    forall x p ph s,
+    In x (Map_PHID.add p ph s) ->
+    Map_TID.In x ph \/ In x s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    apply Map_PHID_Facts.add_mapsto_iff in H0.
+    destruct H0 as [(?,?)|(?,?)]. {
+      subst.
+      auto.
+    }
+    eauto using in_def.
+  Qed.
+
+  Let in_make_inv:
+    forall x y,
+    Map_TID.In y (Phaser.make x) ->
+    y = x.
+  Proof.
+    intros.
+    apply Map_TID_Extra.in_to_mapsto in H.
+    destruct H as (?, mt).
+    apply make_mapsto in mt.
+    destruct mt; auto.
+  Qed.
+
+  Let ph_in_signal_inv:
+    forall x y ph,
+    Map_TID.In x (signal y ph) ->
+    Map_TID.In x ph.
+  Proof.
+    unfold signal, Phaser.update; intros.
+    destruct (Map_TID_Extra.find_rw y ph) as [(R,?)|(?,(R,?))];
+    rewrite R in *; clear R. {
+      assumption.
+    }
+    apply Map_TID_Extra.F.add_in_iff in H.
+    destruct H. {
+      subst.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    assumption.
+  Qed.
+
+  Let ph_in_try_signal_inv:
+    forall x y ph,
+    Map_TID.In x (try_signal y ph) ->
+    Map_TID.In x ph.
+  Proof.
+    unfold try_signal, Phaser.update; intros.
+    destruct (Map_TID_Extra.find_rw y ph) as [(R,?)|(?,(R,?))];
+    rewrite R in *; clear R. {
+      assumption.
+    }
+    apply Map_TID_Extra.F.add_in_iff in H.
+    destruct H. {
+      subst.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    assumption.
+  Qed.
+
+  Let ph_in_wait_inv:
+    forall x y ph,
+    Map_TID.In x (wait y ph) ->
+    Map_TID.In x ph.
+  Proof.
+    unfold wait, Phaser.update; intros.
+    destruct (Map_TID_Extra.find_rw y ph) as [(R,?)|(?,(R,?))];
+    rewrite R in *; clear R. {
+      assumption.
+    }
+    apply Map_TID_Facts.add_in_iff in H.
+    destruct H. {
+      subst.
+      eauto using Map_TID_Extra.mapsto_to_in.
+    }
+    assumption.
+  Qed.
+
+  Let ph_in_drop_inv:
+    forall x y ph,
+    Map_TID.In x (drop y ph) ->
+    y <> x /\ Map_TID.In x ph.
+  Proof.
+    unfold drop, Phaser.update; intros.
+    apply Map_TID_Facts.remove_in_iff in H.
+    assumption.
+  Qed.
+
+  Let ph_in_async_1_inv:
+    forall x y p ph h,
+    Map_TID.In y (async_1 p x h ph) ->
+    get_new_task p = y \/ Map_TID.In y ph.
+  Proof.
+    unfold async_1; intros.
+    destruct (Map_PHID_Extra.find_rw h (get_args p)) as [(R,?)|(?,(R,?))];
+    rewrite R in *; clear R. {
+      auto.
+    }
+    unfold register in *.
+    destruct (Map_TID_Extra.find_rw x ph) as [(R,?)|(?,(R,?))];
+    rewrite R in *; clear R. {
+      auto.
+    }
+    simpl in *.
+    apply Map_TID_Facts.add_in_iff in H.
+    auto.
+  Qed.
+
+  Let in_signal_inv:
+    forall x y p s,
+    In x (ph_signal p y s) ->
+    In x s.
+  Proof.
+    unfold ph_signal, update.
+    intros.
+    destruct (Map_PHID_Extra.find_rw p s) as [(R,?)|(?,(R,?))];
+    rewrite R in *; clear R. {
+      assumption.
+    }
+    apply in_add_inv in H.
+    destruct H; eauto using in_def, ph_in_signal_inv.
+  Qed.
+
+  Let in_drop_inv:
+    forall x y p s,
+    In x (ph_drop p y s) ->
+    In x s.
+  Proof.
+    unfold ph_drop, update.
+    intros.
+    destruct (Map_PHID_Extra.find_rw p s) as [(R,?)|(?,(R,?))];
+    rewrite R in *; clear R. {
+      assumption.
+    }
+    apply in_add_inv in H.
+    destruct H; auto.
+    apply ph_in_drop_inv in H.
+    destruct H; eauto using in_def.
+  Qed.
+
+  Let in_signal_all_inv:
+    forall x y s,
+    In x (signal_all y s) ->
+    In x s.
+  Proof.
+    unfold signal_all, foreach.
+    intros.
+    inversion H; subst; clear H.
+    rewrite Map_PHID_Facts.mapi_mapsto_iff in *; auto.
+    destruct H0 as (ph', (?,mt)).
+    subst.
+    eauto using in_def, ph_in_try_signal_inv.
+  Qed.
+
+  Let in_wait_all_inv:
+    forall x y s,
+    In x (wait_all y s) ->
+    In x s.
+  Proof.
+    unfold wait_all, foreach.
+    intros.
+    inversion H; subst; clear H.
+    rewrite Map_PHID_Facts.mapi_mapsto_iff in *; auto.
+    destruct H0 as (ph', (?,mt)).
+    subst.
+    eauto using in_def, ph_in_wait_inv.
+  Qed.
+
+  Let in_drop_all_inv:
+    forall x y s,
+    In x (drop_all y s) ->
+    y <> x /\ In x s.
+  Proof.
+    unfold drop_all, foreach.
+    intros.
+    inversion H; subst; clear H.
+    rewrite Map_PHID_Facts.mapi_mapsto_iff in *; auto.
+    destruct H0 as (ph', (?,mt)).
+    subst.
+    apply ph_in_drop_inv in H1.
+    destruct H1.
+    eauto using in_def.
+  Qed.
+
+  Let in_async_inv:
+    forall x y s p,
+    In x (async p y s) ->
+    get_new_task p = x \/ In x s.
+  Proof.
+    unfold async, foreach.
+    intros.
+    inversion H; subst; clear H.
+    rewrite Map_PHID_Facts.mapi_mapsto_iff in *. {
+      destruct H0 as (ph', (?,mt)).
+      subst.
+      apply ph_in_async_1_inv in H1.
+      destruct H1;
+      eauto using in_def.
+    }
+    intros.
+    subst.
+    auto.
+  Qed.
+
+  Lemma reduces_in_inv:
+    forall x y o s s',
+    In y s' ->
+    Reduces s x o s' ->
+    (y = x /\ exists p, o = PH_NEW p) \/
+    (exists p, get_new_task p = y /\ o = ASYNC p) \/
+    In y s.
+  Proof.
+    intros.
+    destruct o; inversion H0; subst; clear H0; simpl in *;
+    inversion H1; subst; clear H1.
+    - unfold ph_new in *.
+      apply in_add_inv in H.
+      destruct H; auto.
+      apply in_make_inv in H.
+      eauto 4.
+    - eauto using in_signal_inv.
+    - eauto using in_drop_inv.
+    - eauto using in_signal_all_inv.
+    - eauto using in_wait_all_inv.
+    - apply in_drop_all_inv in H.
+      destruct H; auto.
+    - apply in_async_inv in H.
+      destruct H; eauto.
+  Qed.
+End InInv.

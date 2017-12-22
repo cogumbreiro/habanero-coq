@@ -1,7 +1,7 @@
 Require Import Coq.Lists.List.
 Import ListNotations.
 
-Require Import Lang.
+Require Import Phasers.Lang.
 Require Import Vars.
 Require HJ.Phasers.Typesystem.
 Require HJ.Phasers.WellFormed.
@@ -27,7 +27,7 @@ Section Defs.
   Proof.
     refine ({| state := make; history := nil |}).
     auto using Trace.reduces_n_nil.
-  Qed.
+  Defined.
 
 End Defs.
 
