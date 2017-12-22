@@ -739,3 +739,71 @@ Module Progress.
 End Defs.
 End Progress.
 
+Module SR.
+Section Defs.
+  Let get_phasermap_inv_eq_init:
+    forall s x g f pm, 
+    State.GetPhasermap s (x, Semantics.INIT g) (f, pm) ->
+    g = f.
+  Proof.
+    intros.
+    inversion H; subst; clear H; simpl in *;
+    match goal with H: Some _ = _ |- _ => inversion H end.
+    trivial.
+  Qed.
+  Let get_phasermap_inv_eq_begin_finish:
+    forall s x g f pm, 
+    State.GetPhasermap s (x, Semantics.BEGIN_FINISH g) (f, pm) ->
+    g = f.
+  Proof.
+    intros.
+    inversion H; subst; clear H; simpl in *;
+    match goal with H: Some _ = _ |- _ => inversion H end.
+    trivial.
+  Qed.
+  Lemma sr_incl_f_to_p:
+    forall s s' x o,
+    State.InclFtoP (f_state (State.finishes s)) (State.phasers s) ->
+    State.Reduces s (x, o) s' ->
+    State.InclFtoP (f_state (State.finishes s')) (State.phasers s').
+  Proof.
+    intros.
+    unfold State.InclFtoP in *; intros y; intros.
+    inversion H0; subst; clear H0; simpl in *.
+    rewrite Map_FID_Facts.add_in_iff.
+    match goal with H: Semantics.CtxReduces _ _ _ _ |- _ =>
+    inversion H; subst; clear H
+    end; simpl in *;
+    try (
+      match goal with H:F.Reduces _ _ _ |- _ =>
+      inversion H; subst; clear H
+      end
+    );
+    try (
+    match goal with H:Finish.DF.Reduces _ _ _ |- _ => inversion H; subst; clear H end
+    ).
+    - auto.
+    - edestruct F.reduces_in_inv as [(?,?)|[(?,?)|?]]; eauto.
+      + subst.
+        destruct o; match goal with H: Semantics.translate _ = _ |- _ =>
+          simpl in *;
+          inversion H; symmetry in H; subst
+        end.
+        assert (y = f) by (eapply get_phasermap_inv_eq_init; eauto).
+        auto.
+      + subst.
+        destruct o; match goal with H: Semantics.translate _ = _ |- _ =>
+          simpl in *;
+          inversion H; symmetry in H; subst
+        end.
+        assert (y = f) by (eapply get_phasermap_inv_eq_begin_finish; eauto).
+        auto.
+    - edestruct F.reduces_in_inv as [(?,?)|[(?,?)|?]]; eauto;
+      subst;
+      destruct o; match goal with H: Semantics.translate _ = _ |- _ =>
+        simpl in *;
+        inversion H; symmetry in H; subst
+      end.
+  Qed.
+End Defs.
+End SR.
