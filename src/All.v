@@ -197,12 +197,12 @@ Module Typesystem.
   | valid_only_f:
     forall i o,
     translate i = only_f o ->
-    F_T.Valid (f_state (snd ctx)) t o ->
+    F.Valid (f_state (snd ctx)) t o ->
     Valid ctx t i
   | valid_both:
     forall i o o',
     translate i = both o o' ->
-    F_T.Valid (f_state (snd ctx)) t o' ->
+    F.Valid (f_state (snd ctx)) t o' ->
     P_T.Op.Valid (pm_state (fst ctx)) t o ->
     Valid ctx t i.
 
@@ -210,7 +210,7 @@ Module Typesystem.
     forall p f t i o,
     Valid (p, f) t i ->
     as_f_op i = Some o ->
-    F_T.Valid (f_state f) t o.
+    F.Valid (f_state f) t o.
   Proof.
     intros.
     inversion H; (subst; simpl in *).
@@ -254,7 +254,7 @@ Module State.
   Import Progress.
   Import Semantics.
 
-  Inductive GetPhasermap s: (tid*op) -> (fid * phasermap_t) -> Prop :=
+  Inductive GetPhasermap s: (tid*op) -> (fid*phasermap_t) -> Prop :=
   | get_phasermap_none:
     forall x o f pm,
     F.IEF x f (f_state (finishes s)) ->
@@ -301,7 +301,7 @@ Module State.
         apply F.some_to_ief in Heqo1.
         destruct (Map_FID_Extra.find_rw f (phasers s)) as [(R,?)|(?,(R,?))];
         rewrite R in *; inversion H; subst; clear H.
-        auto using get_phasermap_none.
+        eauto using get_phasermap_none.
       }
       inversion H.
     Qed.
@@ -362,75 +362,25 @@ Module State.
       contradict Hx.
       auto using F.none_to_not_ief.
     Qed.
-  End GetPhasermap_dec.
 
-  Inductive GetContext s a : (fid*context) -> Prop :=
-  | get_context_def:
-    forall f pm,
-    GetPhasermap s a (f, pm) ->
-    GetContext s a (f, (pm, finishes s)).
-
-  Definition get_context s a :=
-  match get_phasermap s a with
-  | Some (f, pm) => Some (f, (pm, finishes s))
-  | _ => None
-  end.
-
-  Section GetContext_dec.
-    Lemma get_context_to_some:
-      forall s a ctx,
-      GetContext s a ctx ->
-      get_context s a = Some ctx.
+    Lemma get_phasermap_fun:
+      forall s a m n,
+      GetPhasermap s a m ->
+      GetPhasermap s a n ->
+      n = m.
     Proof.
       intros.
-      inversion H; subst; clear H.
-      unfold get_context.
+      apply get_phasermap_to_some in H.
       apply get_phasermap_to_some in H0.
-      rewrite H0.
-      trivial.
+      rewrite H in H0; inversion H0; auto.
     Qed.
-
-    Lemma some_to_get_context:
-      forall s a ctx,
-      get_context s a = Some ctx ->
-      GetContext s a ctx.
-    Proof.
-      intros.
-      unfold get_context in *.
-      remember (get_phasermap _ _).
-      symmetry in Heqo.
-      destruct o. {
-        apply some_to_get_phasermap in Heqo.
-        inversion H; subst; clear H.
-        destruct p.
-        match goal with
-        H: Some _ = Some _ |- _ => inversion H; subst
-        end.
-        auto using get_context_def.
-      }
-      inversion H.
-    Qed.
-
-    Lemma get_context_fun:
-      forall s a ctx ctx',
-      GetContext s a ctx ->
-      GetContext s a ctx' ->
-      ctx' = ctx.
-    Proof.
-      intros.
-      apply get_context_to_some in H.
-      apply get_context_to_some in H0.
-      rewrite H in *.
-      inversion H0.
-      auto.
-    Qed.
-  End GetContext_dec.
+  End GetPhasermap_dec.
 
   Inductive Reduces: t -> (tid*op) -> t -> Prop :=
   | reduces_def:
-    forall s x o s' pm' f ctx,
-    GetContext s (x, o) (f, ctx) ->
-    Semantics.CtxReduces ctx x o (pm', s') ->
+    forall s x o s' pm' f pm,
+    GetPhasermap s (x, o) (f, pm) ->
+    Semantics.CtxReduces (pm, (finishes s)) x o (pm', s') ->
     Reduces s (x, o) {|
       finishes := s';
       phasers := Map_FID.add f pm' (phasers s);
@@ -438,9 +388,9 @@ Module State.
 
   Inductive Valid s x o : Prop :=
   | valid_def:
-    forall f ctx,
-    GetContext s (x, o) (f, ctx) ->
-    Typesystem.Valid ctx x o ->
+    forall f pm,
+    GetPhasermap s (x, o) (f, pm) ->
+    Typesystem.Valid (pm, (finishes s)) x o ->
     Valid s x o.
 
   Definition Nonempty s := (~ Map_TID.Empty (f_state (finishes s))).
@@ -457,8 +407,7 @@ Module Progress.
   Section Defs.
   Variable s:State.t.
   Variable spec_1: InclFtoP (f_state (finishes s)) (phasers s).
-  Variable spec_2: InclPtoF (phasers s) (f_state (finishes s)).
-  Variable spec_3: TaskToFinish (phasers s) (f_state (finishes s)).
+  Variable spec_2: TaskToFinish (phasers s) (f_state (finishes s)).
 
   Notation CanReduce s x o := (exists s', Reduces s (x, o) s').
 
@@ -466,14 +415,6 @@ Module Progress.
       forall x,
       F.In x (f_state (finishes s)) ->
       Map_FID.In x (phasers s).
-    Proof.
-      auto.
-    Qed.
-
-    Let incl_p_to_f:
-      forall x,
-      Map_FID.In x (phasers s) ->
-      F.In x (f_state (finishes s)).
     Proof.
       auto.
     Qed.
@@ -536,7 +477,7 @@ Module Progress.
         forall o o' x pm,
         F.Root x f fs ->
         Semantics.translate o = Semantics.only_f o' ->
-        F_T.Valid fs x o' ->
+        F.Valid fs x o' ->
         exists ctx', Semantics.CtxReduces (pm, ffs) x o ctx'.
       Proof.
         intros.
@@ -549,7 +490,7 @@ Module Progress.
         forall o o_f o_p x pm pm',
         F.Root x f fs ->
         Semantics.translate o = Semantics.both o_p o_f ->
-        F_T.Valid fs x o_f ->
+        F.Valid fs x o_f ->
         Phasers.DF.Reduces pm (x, o_p) pm' ->
         exists ctx', Semantics.CtxReduces (pm, ffs) x o ctx'.
       Proof.
@@ -672,8 +613,8 @@ Module Progress.
     CanReduce s x o.
   Proof.
     intros.
-    assert (GetContext s (x, o) (f, (DF.make, finishes s)))
-    by auto using get_context_def, get_phasermap_some.
+    assert (GetPhasermap s (x, o) (f, DF.make))
+    by auto using get_phasermap_some.
     assert (Hc: exists ctx', CtxReduces (DF.make, finishes s) x o ctx'). {
       remember (DF.make, finishes s) as ctx.
       assert (Hf: exists o_f, translate o = only_f o_f). {
@@ -696,12 +637,11 @@ Module Progress.
         match goal with H1: translate _ = _ |- _ =>
           simpl in H1; inversion H1
         end;
-        match goal with [ H1: GetContext _ _ ?c1, H2: GetContext _ _ ?c2 |- _ ]
+        match goal with [ H1: GetPhasermap _ _ ?m1, H2: GetPhasermap _ _ ?m2 |- _ ]
         => 
-          assert (Heq :c1 = c2) by eauto using get_context_fun;
+          assert (Heq: m1 = m2) by eauto using get_phasermap_fun;
           inversion Heq; subst; clear Heq
-        end;
-        auto.
+        end; auto.
       }
       destruct Hr as (fs, Hr).
       exists (fst ctx, fs).
@@ -738,10 +678,7 @@ Module Progress.
       symmetry in Heqo0.
       destruct o0; eauto.
       match goal with H: Valid _ _ _ |- _ => inversion H end.
-      assert (ctx = (pm, finishes s)). {
-        match goal with H: GetContext _ _ _ |- _ =>
-          inversion H; subst; clear H
-        end.
+      assert (pm0 = pm). {
         assert (F.IEF x f (f_state (finishes s))) by auto.
         match goal with H: GetPhasermap _ _ _ |- _ =>
           inversion H; subst; clear H;
@@ -791,14 +728,6 @@ Module Progress.
     match goal with H: translate _ = _ |- _ =>
       simpl in H; inversion H
     end; subst.
-    destruct ctx as (pm, fs).
-    assert (fs = finishes s). {
-      match goal with H: GetContext _ _ _ |- _ =>
-      inversion H; subst; clear H
-      end.
-      trivial.
-    }
-    subst.
     edestruct Hz as (f', ?); eauto.
     assert (R: exists pm', DF.Reduces (fst (pm, finishes s)) (x, DROP_ALL) pm'). {
       apply P_P.progress_nonblocking; auto.
