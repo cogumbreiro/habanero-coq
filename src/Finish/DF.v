@@ -30,6 +30,11 @@ Section Props.
     eapply Trace.reduces_n_cons; eauto.
   Qed. (* leave it open *)
 
+  Program Definition empty := {| state := Lang.empty; history := nil |}.
+  Next Obligation.
+    auto using Trace.reduces_n_nil.
+  Defined.
+
   Lemma reduces_step:
     forall x o s s' (X : Lang.Reduces (state s) (x, o) s'),
     exists s',

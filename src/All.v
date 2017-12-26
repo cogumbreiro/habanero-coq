@@ -5,6 +5,8 @@ Require HJ.Finish.Lang.
 Require HJ.Finish.DF.
 Require HJ.Phasers.DF.
 
+Require Coq.Lists.List.
+
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Phasermap.
 
@@ -238,6 +240,8 @@ Module State.
     finishes: finish_t;
     phasers: Map_FID.t phasermap_t;
   }.
+
+  Definition empty := {| finishes := Finish.DF.empty; phasers := Map_FID.empty phasermap_t |}.
 
   Import Progress.
   Import Semantics.
@@ -1017,3 +1021,114 @@ Section Defs.
   Qed.
 End Defs.
 End SR.
+
+Import Coq.Lists.List.
+
+Module Trace.
+
+  Definition t := (list (tid * Semantics.op)) % type.
+
+  Inductive ReducesN: State.t -> t -> Prop :=
+  | reduces_n_nil:
+    ReducesN State.empty nil
+  | reduces_n_cons:
+    forall t l o s s',
+    ReducesN s l ->
+    State.Reduces s (t, o) s' ->
+    ReducesN s' ((t,o)::l).
+
+End Trace.
+
+
+Module DF.
+Section Defs.
+
+  Structure t := {
+    state : State.t;
+    history : Trace.t;
+    spec: Trace.ReducesN state history
+  }.
+
+  (** A typed reduction *)
+
+  Inductive Reduces: t -> (tid*Semantics.op) -> t -> Prop :=
+  | reduces_def:
+    forall t o s1 s2,
+    State.Reduces (state s1) (t, o) (state s2) ->
+    history s2 = (t,o)::(history s1) ->
+    Reduces s1 (t, o) s2.
+
+  Let incl_f_to_p_aux:
+    forall h s,
+    Trace.ReducesN s h ->
+    Progress.InclFtoP (f_state (State.finishes s)) (State.phasers s).
+  Proof.
+    induction h; intros; simpl in *. {
+      inversion H; subst; clear H.
+      unfold Progress.InclFtoP; intros.
+      apply F.not_in_empty in H.
+      contradiction.
+    }
+    inversion H; subst; clear H.
+    apply IHh in H3; clear IHh.
+    eauto using SR.sr_incl_f_to_p.
+  Qed.
+
+  Let incl_f_to_p:
+    forall s,
+    Progress.InclFtoP (f_state (State.finishes (state s))) (State.phasers (state s)).
+  Proof.
+    intros.
+    destruct s; simpl in *.
+    eauto.
+  Qed.
+
+  Let task_to_finish_aux:
+    forall h s,
+    Trace.ReducesN s h ->
+    Progress.TaskToFinish (State.phasers s) (f_state (State.finishes s)).
+  Proof.
+    induction h; intros;
+    inversion H; subst; clear H. {
+      unfold Progress.TaskToFinish; intros.
+      unfold State.empty in *; simpl in *.
+      rewrite Map_FID_Facts.empty_mapsto_iff in *.
+      contradiction.
+    }
+    apply IHh in H3; clear IHh.
+    eauto using SR.sr_task_to_finish.
+  Qed.
+
+  Let task_to_finish:
+    forall s,
+    Progress.TaskToFinish (State.phasers (state s)) (f_state (State.finishes (state s))).
+  Proof.
+    intros.
+    destruct s; simpl in *.
+    eauto.
+  Qed.
+
+  Theorem progress:
+    forall (s:t),
+    State.Nonempty (state s) ->
+    exists k,
+    k <> Semantics.task_op /\
+    (exists x,
+      forall o, Semantics.get_op_kind o = k ->
+      State.Valid (state s) x o -> exists s', Reduces s (x, o) s').
+  Proof.
+    intros.
+    edestruct Progress.progress as (k, (?,(x,Hx))); eauto.
+    exists k.
+    split; auto.
+    exists x; intros.
+    edestruct Hx as (s', Hr); eauto 1.
+    assert (R: Trace.ReducesN s' ((x,o)::history s)). {
+      eapply Trace.reduces_n_cons; eauto using spec.
+    }
+    exists ({| state := s'; history := (x,o)::history s; spec:= R|}).
+    eapply reduces_def; simpl; auto.
+  Qed.
+
+End Defs.
+

@@ -1652,6 +1652,30 @@ Section Props.
     subst.
     auto using root_make_1.
   Qed.
+
+  Lemma not_started_empty:
+    forall x f,
+    ~ Started f x empty.
+  Proof.
+    unfold not, empty; intros.
+    inversion H; subst; clear H.
+    rewrite Map_TID_Facts.empty_mapsto_iff in *.
+    contradiction.
+  Qed.
+
+  Lemma not_in_empty:
+    forall x,
+    ~ In x empty.
+  Proof.
+    intros.
+    unfold not; intros N.
+    inversion N; subst; clear N. {
+      apply not_root_empty in H.
+      contradiction.
+    }
+    apply not_started_empty in H.
+    contradiction.
+  Qed.
 End Props.
 
 Module Trace.
