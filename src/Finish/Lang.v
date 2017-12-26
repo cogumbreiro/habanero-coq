@@ -956,7 +956,7 @@ Section Defs.
       rewrite N in *; inversion H.
     Qed.
 
-    Let maps_to_to_ief:
+    Lemma maps_to_to_ief:
       forall x ft s,
       Map_TID.MapsTo x ft s ->
       IEF x (ief ft) s.
@@ -967,6 +967,21 @@ Section Defs.
         auto using ief_nil.
       }
       eauto using ief_cons.
+    Qed.
+
+    Lemma ief_inv_1:
+      forall x ft s f,
+      Map_TID.MapsTo x ft s ->
+      IEF x f s ->
+      ief ft = f.
+    Proof.
+      intros.
+      apply ief_to_some in H0.
+      unfold get_ief in *.
+      destruct (Map_TID_Extra.find_rw x s) as [(R,mt)|(ft',(R,?))];
+      rewrite R in *; inversion H0; subst; clear H0.
+      assert (ft' = ft) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      trivial.
     Qed.
 
     Lemma not_ief_to_none:
@@ -1614,6 +1629,28 @@ Section Props.
     destruct H.
     - edestruct root_reduces as [(?,?)|[Hx|Hy]]; eauto.
     - edestruct started_reduces; eauto.
+  Qed.
+
+  Lemma root_make_1:
+    forall x f s,
+    Root x f (Map_TID.add x (make f) s).
+  Proof.
+    intros.
+    apply root_def with (l:=nil); unfold make; simpl.
+    auto using Map_TID.add_1.
+  Qed.
+
+  Lemma reduces_inv_ief_root:
+    forall f x y s s',
+    IEF x f s ->
+    Reduces s (x, BEGIN_TASK y) s' ->
+    Root y f s'.
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    assert (ief ft = f) by eauto using ief_inv_1.
+    subst.
+    auto using root_make_1.
   Qed.
 End Props.
 

@@ -820,4 +820,29 @@ Section InInv.
     - apply in_async_inv in H.
       destruct H; eauto.
   Qed.
+
+  Lemma reduces_drop_all_not_in:
+    forall pm x pm',
+    Reduces pm x DROP_ALL pm' ->
+    ~ In x pm'.
+  Proof.
+    intros.
+    unfold not; intros N.
+    inversion H; subst; clear H.
+    simpl in *.
+    apply in_drop_all_inv in N.
+    destruct N.
+    contradiction.
+  Qed.
+
+  Lemma not_in_make:
+    forall x,
+    ~ In x make.
+  Proof.
+    intros.
+    unfold not, make in *; intros N.
+    inversion N; subst; clear N.
+    rewrite Map_PHID_Facts.empty_mapsto_iff in *.
+    assumption.
+  Qed.
 End InInv.

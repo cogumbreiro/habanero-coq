@@ -853,16 +853,89 @@ Section Defs.
             H: Semantics.translate _ = _ |- _ =>
             inversion H; subst; clear H; auto
           end.
-        - eapply H in H2; eauto.
-          + match goal with
-            H: State.GetPhasermap _ _ _ |- _ =>
-            inversion H; subst; clear H; simpl in *
-            end; eauto 2.
+        - match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
+          inversion H; subst; clear H end.
+          eapply H in H2; eauto.
+          eapply F.root_or_started_reduces in H2; eauto 1.
+          destruct H2 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
+          try (
             match goal with
-            H: In _ make |- _ => apply not_in_make in H end.
+              H1: Semantics.translate _ = _,
+              H2: Semantics.creates_finish _ = _ |- _ =>
+              destruct o; inversion H1; subst;
+              inversion H2
+            end
+          ).
+        - match goal with H: DF.Reduces _ _ _ |- _ =>
+            inversion H; subst; clear H
+          end.
+          edestruct Phasermap.reduces_in_inv as [(?,(?,?))|[(?,(?,?))|?]]; eauto 4;
+          subst;
+          destruct o; match goal with
+            H: Semantics.translate _ = _ |- _ =>
+            inversion H; subst; clear H; auto
+          end.
+          + eauto using DF.reduces_inv_ief_root.
+          + eapply H in H0; eauto.
+            match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
+            inversion H; subst; clear H end.
+            eapply F.root_or_started_reduces in H0; eauto 1.
+            destruct H0 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
+            try (
+              match goal with
+                H1: Semantics.translate _ = _,
+                H2: Semantics.creates_finish _ = _ |- _ =>
+                destruct o; inversion H1; subst;
+                inversion H2
+              end
+            );
+            try (inversion H1); auto.
+          + eapply H in H0; eauto.
+            match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
+            inversion H; subst; clear H end.
+            eapply F.root_or_started_reduces in H0; eauto 1.
+            destruct H0 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
+            try (
+              match goal with
+                H1: Semantics.translate _ = _,
+                H2: Semantics.creates_finish _ = _ |- _ =>
+                destruct o; inversion H1; subst;
+                inversion H2
+              end
+            );
+            try (inversion H1); auto.
+            match goal with H: Reduces _ _ _ _ |- _ =>
+              apply Phasermap.reduces_drop_all_not_in in H
+            end.
             contradiction.
-        - 
-      
+          + eapply H in H0; eauto.
+            match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
+            inversion H; subst; clear H end.
+            eapply F.root_or_started_reduces in H0; eauto 1.
+            destruct H0 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
+            try (
+              match goal with
+                H1: Semantics.translate _ = _,
+                H2: Semantics.creates_finish _ = _ |- _ =>
+                destruct o; inversion H1; subst;
+                inversion H2
+              end
+            );
+            try (inversion H1); auto.
+            match goal with H: Reduces _ _ _ _ |- _ =>
+              apply Phasermap.reduces_drop_all_not_in in H
+            end.
+            contradiction.
+      }
+      match goal with H: Semantics.creates_finish _ = _ |- _ =>
+      destruct o; inversion H; subst; clear H end;
+      match goal with H: Semantics.CtxReduces _ _ _ _ |- _ =>
+        inversion H; subst; clear H
+      end;
+      match goal with H: Semantics.translate _ = _ |- _ =>
+        inversion H; subst; clear H
+      end; simpl in *;
+      apply Phasermap.not_in_make in H2; contradiction.
     }
   Qed.
 End Defs.

@@ -113,4 +113,15 @@ Section Props.
     destruct H as (t, Hx);
     eauto using enabled_to_enabled.
   Qed.
+
+  Lemma reduces_inv_ief_root:
+    forall (x y:tid) f (s s':t),
+    IEF x f (state s) ->
+    Reduces s (x, BEGIN_TASK y) s' ->
+    Root y f (state s').
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using Lang.reduces_inv_ief_root.
+  Qed.
 End Props.
