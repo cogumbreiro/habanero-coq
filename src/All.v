@@ -837,7 +837,7 @@ Section Defs.
     unfold Progress.TaskToFinish in *; intros y pm'; intros.
     inversion H0; subst; clear H0; simpl in *.
     apply Map_FID_Facts.add_mapsto_iff in H1.
-    destruct H1 as [(?,?)|(?,?)]; subst. {
+    destruct H1 as [(?,?)|(?,?)]; subst. { (* mapsto *)
       match goal with H: State.GetPhasermap _ _ _ |- _ =>
       inversion H; subst; clear H; simpl in *
       end. {
@@ -926,7 +926,7 @@ Section Defs.
               apply Phasermap.reduces_drop_all_not_in in H
             end.
             contradiction.
-      }
+      } (* else of getphasermap *)
       match goal with H: Semantics.creates_finish _ = _ |- _ =>
       destruct o; inversion H; subst; clear H end;
       match goal with H: Semantics.CtxReduces _ _ _ _ |- _ =>
@@ -936,7 +936,84 @@ Section Defs.
         inversion H; subst; clear H
       end; simpl in *;
       apply Phasermap.not_in_make in H2; contradiction.
+    } (* else of mapsto *)
+    match goal with H: State.GetPhasermap _ _ _ |- _ =>
+    inversion H; subst; clear H; simpl in *
+    end. {
+      match goal with H: Semantics.CtxReduces _ _ _ _ |- _ =>
+        inversion H; subst; clear H; simpl in *
+      end.
+      - eauto.
+      - match goal with
+          H1: Semantics.translate _ = _,
+          H2: Semantics.creates_finish _ = _
+        |- _ =>
+          destruct o; simpl in *; inversion H1; inversion H2
+        end.
+      - eapply H in H2; eauto.
+        match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
+        inversion H; subst; clear H end.
+        eapply F.root_or_started_reduces in H2; eauto 1.
+        destruct H2 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
+        try (
+          match goal with
+            H1: Semantics.translate _ = _,
+            H2: Semantics.creates_finish _ = _ |- _ =>
+            destruct o; inversion H1; subst;
+            inversion H2
+          end
+        ); auto.
+        + assert (f0 = f). {
+            assert (F.IEF x f (f_state (State.finishes s))). {
+              match goal with H: Lang.Reduces _ _ _ |- _ =>
+              inversion H; subst; clear H
+              end.
+              simpl in *.
+              assert (f1 = f). {
+                inversion Hx; subst; clear Hx.
+                match goal with
+                  H1: Map_TID.MapsTo x ?a _,
+                  H2: Map_TID.MapsTo x ?b _ |- _ =>
+                assert (R: a = b) by eauto using Map_TID_Facts.MapsTo_fun; subst;
+                inversion R; subst; clear R
+                end.
+                trivial.
+              }
+              subst; auto using F.ief_nil.
+            }
+            eauto using F.ief_fun.
+          }
+          contradiction.
+        + assert (f0 = f). {
+            assert (F.IEF x f (f_state (State.finishes s))). {
+              match goal with H: Lang.Reduces _ _ _ |- _ =>
+              inversion H; subst; clear H
+              end.
+              simpl in *.
+              eauto using F.ief_cons.
+            }
+            eauto using F.ief_fun.
+          }
+          contradiction.
     }
+    match goal with H: Semantics.creates_finish _ = _ |- _ =>
+    destruct o; inversion H; subst; clear H end;
+    match goal with H: Semantics.CtxReduces _ _ _ _ |- _ =>
+      inversion H; subst; clear H
+    end;
+    match goal with H: Semantics.translate _ = _ |- _ =>
+      inversion H; subst; clear H
+    end; simpl in *;
+    match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
+    inversion H; subst; clear H end;
+    match goal with H: F.Reduces _ _ _ |- _ =>
+    assert (Hr := H);
+    eapply F.root_or_started_reduces in H ; eauto;
+    destruct H as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst
+    end; try inversion H4; subst; auto.
+    apply F.root_to_in in Hx.
+    inversion Hr; subst.
+    contradiction.
   Qed.
 End Defs.
 End SR.
