@@ -27,5 +27,5 @@ src/Finish/DF.v
 src/Common.v
 src/Bijection.v
 src/Node.v
-#src/All.v
+src/All.v
 

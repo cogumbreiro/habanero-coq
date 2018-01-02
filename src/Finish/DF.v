@@ -71,9 +71,9 @@ Section Props.
     ((* [f] is nonempty and every task in [f] reduces. *)
       Nonempty f (state s)
       /\
-      (forall x, Root x f (state s) -> Enabled s x)
+      (forall x, Bind x f (state s) -> Enabled s x)
       /\
-      (forall x, Root x f (state s) -> IEF x f (state s))
+      (forall x, Bind x f (state s) -> IEF x f (state s))
     )
     \/
     ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
@@ -123,10 +123,10 @@ Section Props.
     forall (x y:tid) f (s s':t),
     IEF x f (state s) ->
     Reduces s (x, BEGIN_TASK y) s' ->
-    Root y f (state s').
+    Bind y f (state s').
   Proof.
     intros.
     inversion H0; subst; clear H0.
-    eauto using Lang.reduces_inv_ief_root.
+    eauto using Lang.reduces_inv_ief_bind.
   Qed.
 End Props.

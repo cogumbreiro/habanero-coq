@@ -24,16 +24,58 @@ Require Import Aniceto.Graphs.FGraph.
 
 Section Defs.
 
+  (**
+    An example:
+    [[
+                                                    // (p, INIT f1)
+    int iters = 0; delta = epsilon+1;
+    while ( delta > epsilon ) {
+      finish {                                      // (p, BEGIN_FINISH f2)
+        for ( jj = 1 ; jj <= n ; jj++ ) {
+          final int j = jj;
+          async {                                   // (p, BEGIN_TASK t_i)
+            newA[j] = (oldA[j-1]+oldA[j+1])/2.0f ;
+            diff[j] = Math.abs(newA[j]-oldA[j]);
+          }                                         // (t_i, END_TASK)
+        }
+      }
+      delta = diff.sum(); iters++;
+      temp = newA; newA = oldA; oldA = temp;
+    } // while
+    System.out.println("Iterations: " + iters);
+                                                   // (p, END_TASK)
+    ]]
+    
+   *)
+
+  (** When a task starts it is bound to a finish; when a finish has zero
+      bound tasks it is ready to synchronize;
+      each task maintains a stack of finish scopes it opened. *)
+
   Structure task := {
-    root: fid;
-    started: list fid;
+    bind: fid;
+    open: list fid;
   }.
 
-  Definition make f := {| root := f; started := nil |}.
+  (** Upon creation a task is initialized with its bound finish [f]. *)
+
+  Definition make f := {| bind := f; open := nil |}.
+
+  (** The state of the program keeps track of the finish state per task. *)
 
   Definition state := Map_TID.t task.
 
+  (** The initial state of the program is empty. *)
+
   Definition empty : state := Map_TID.empty task.
+
+  (** These are the existing operations. Action [init f]
+  is invoked at the beginning of a program by the first task.
+  To start a finish scope we have operation [BEGIN_FINISH].
+  To end a finish scope we have operation [END_FINISH].
+  A task may spawn another with operation [BEGIN_TASK].
+  The last operation a task invokes is [END_TASK] to signal
+  its termination. *)
 
   Inductive op :=
   | INIT: fid -> op
@@ -42,40 +84,25 @@ Section Defs.
   | BEGIN_TASK: tid -> op
   | END_TASK: op.
 
+  (** We call an action to the pair [tid] and [op]eration. *)
+
   Definition action := (tid * op) % type.
+
+  (** The Inner-most Enclosing Finish (IEF) is defined as expected. *)
 
   Definition ief (ft:task) :=
   match ft with
-  | {| root := f; started := nil |} => f
-  | {| root := g; started := (f::l)%list |} =>  f
+  | {| bind := f; open := nil |} => f
+  | {| bind := g; open := (f::l)%list |} =>  f
   end.
-
-  Inductive Root : tid -> fid -> state -> Prop :=
-  | root_def:
-    forall t f l s,
-    Map_TID.MapsTo t {| root := f; started := l |} s ->
-    Root t f s.
-
-  Inductive Started : tid -> fid -> state -> Prop :=
-  | started_def:
-    forall t f l s g,
-    List.In f l ->
-    Map_TID.MapsTo t {| root := g; started := l |} s ->
-    Started t f s.
-
-  Inductive Current : tid -> fid -> state -> Prop :=
-  | current_def:
-    forall t f l s g,
-    Map_TID.MapsTo t {| root := g; started := (f::l) |} s ->
-    Current t f s.
 
   Inductive IEF x f s: Prop :=
   | ief_nil:
-    Map_TID.MapsTo x {| root := f; started := nil |} s ->
+    Map_TID.MapsTo x {| bind := f; open := nil |} s ->
     IEF x f s
   | ief_cons:
     forall g l,
-    Map_TID.MapsTo x {| root := g; started := f::l |} s ->
+    Map_TID.MapsTo x {| bind := g; open := f::l |} s ->
     IEF x f s.
 
   Definition get_ief x s :=
@@ -84,46 +111,90 @@ Section Defs.
   | None => None
   end.
 
+  (** For simplictiy we define the bind operation on a state. *)
+
+  Inductive Bind : tid -> fid -> state -> Prop :=
+  | bind_def:
+    forall t f l s,
+    Map_TID.MapsTo t {| bind := f; open := l |} s ->
+    Bind t f s.
+
+  (** We also define the open operation on a state *)
+
+  Inductive Open : tid -> fid -> state -> Prop :=
+  | open_def:
+    forall t f l s g,
+    List.In f l ->
+    Map_TID.MapsTo t {| bind := g; open := l |} s ->
+    Open t f s.
+
+  (** The current open operation is the top of the open stack. *)
+
+  Inductive Current : tid -> fid -> state -> Prop :=
+  | current_def:
+    forall t f l s g,
+    Map_TID.MapsTo t {| bind := g; open := (f::l) |} s ->
+    Current t f s.
+
+  (** We say that a finish-id is in a state if it is mentioned in a bind
+  or a open relation. *)
+
   Inductive In (f:fid) s : Prop :=
-  | in_root:
+  | in_bind:
     forall t,
-    Root t f s ->
+    Bind t f s ->
     In f s
-  | in_started:
+  | in_open:
     forall t,
-    Started t f s ->
+    Open t f s ->
     In f s.
+
+  (** A finish is empty if there is no task that is bound to it. *)
 
   Inductive Empty f s : Prop :=
   | empty_def:
-    (forall x, ~ Root x f s) ->
+    (forall x, ~ Bind x f s) ->
     Empty f s.
 
+  (** We are now ready to define the semantics of the async-finish API. *)
+
   Inductive Reduces : state -> action -> state -> Prop :=
+  (** The first task [t] of an async-finish computation initializes a
+  finish [f] (where [f] is not a member of state [s]). *)
   | reduces_init:
     forall s t f,
     ~ In f s ->
     ~ Map_TID.In t s ->
     Reduces s (t, INIT f) (Map_TID.add t (make f) s)
+  (** An existing task [t] pushes a finish scope [f] in its stack [l] of
+      open finishes; we must ensure that [f] is not mentioned in
+      state [s]. *)
   | reduces_begin_finish:
     forall t f s l g,
     ~ In f s ->
-    Map_TID.MapsTo t {| root := g; started := l |} s ->
+    Map_TID.MapsTo t {| bind := g; open := l |} s ->
     Reduces s (t, BEGIN_FINISH f) (
-      Map_TID.add t {| root := g; started := f::l |} s)
+      Map_TID.add t {| bind := g; open := f::l |} s)
+  (** Synchronization happens when [f] is at the top of open tasks
+    and [f] is empty; the side effect is that the task pops [f] from the stack
+    of open finishes. *)
   | reduces_end_finish:
     forall s t f l g,
-    Map_TID.MapsTo t {| root := g; started := (f::l) % list |} s ->
+    Map_TID.MapsTo t {| bind := g; open := (f::l) % list |} s ->
     Empty f s ->
-    Reduces s (t, END_FINISH f) (Map_TID.add t {| root := g; started := l |} s)
+    Reduces s (t, END_FINISH f) (Map_TID.add t {| bind := g; open := l |} s)
+  (** A task [t] spawns a task [u]. The new task [u] is bound to the
+      IEF of [t]. XXX: replace this by Prop *)
   | reduces_begin_task:
     forall s t u ft,
     ~ Map_TID.In u s ->
     Map_TID.MapsTo t ft s ->
     Reduces s (t, BEGIN_TASK u) (Map_TID.add u (make (ief ft)) s)
+  (** A task [t] executes operation [END_TASK] at the end of its lifecycle;
+      we ensure  that the task has zero finish scopes. *)
   | reduces_end_task:
     forall t f s ,
-    Map_TID.MapsTo t {| root := f; started := nil |} s ->
+    Map_TID.MapsTo t {| bind := f; open := nil |} s ->
     Reduces s (t, END_TASK) (Map_TID.remove t s).
 
   Inductive Valid s : tid -> op -> Prop :=
@@ -139,7 +210,7 @@ Section Defs.
     Valid s t (BEGIN_FINISH f)
   | valid_end_finish:
     forall t f g l,
-    Map_TID.MapsTo t {| root := g; started := (f::l) % list |} s ->
+    Map_TID.MapsTo t {| bind := g; open := (f::l) % list |} s ->
     Valid s t (END_FINISH f)
   | valid_begin_task:
     forall t u,
@@ -148,43 +219,43 @@ Section Defs.
     Valid s t (BEGIN_TASK u)
   | typecheck_end_task:
     forall t f,
-    Map_TID.MapsTo t {| root := f; started := nil |} s ->
+    Map_TID.MapsTo t {| bind := f; open := nil |} s ->
     Valid s t END_TASK.
 
   Inductive FEdge s : (fid * fid) -> Prop :=
   | f_edge_def:
     forall f g t,
-    Root t f s ->
-    Started t g s ->
+    Bind t f s ->
+    Open t g s ->
     FEdge s (f, g).
 
   Inductive CEdge s : (fid * fid) -> Prop :=
   | c_edge_def:
     forall f g t,
-    Root t f s ->
+    Bind t f s ->
     Current t g s ->
     CEdge s (f, g).
 
-  Let root_inv_add:
+  Let bind_inv_add:
     forall u g t s ft,
-    Root u g (Map_TID.add t ft s) ->
-    (t = u /\ exists l, ft = {| root := g; started := l |}) \/ (t <> u /\ Root u g s).
+    Bind u g (Map_TID.add t ft s) ->
+    (t = u /\ exists l, ft = {| bind := g; open := l |}) \/ (t <> u /\ Bind u g s).
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.add_mapsto_iff in H0.
-    destruct H0 as [(?,?)|(?,?)]; eauto using root_def.
+    destruct H0 as [(?,?)|(?,?)]; eauto using bind_def.
   Qed.
 
-  Lemma root_inv_add_make:
+  Lemma bind_inv_add_make:
     forall t u f g s,
-    Root t f (Map_TID.add u (make g) s) ->
+    Bind t f (Map_TID.add u (make g) s) ->
     (t = u /\ f = g) \/ 
-    (Root t f s /\ u <> t).
+    (Bind t f s /\ u <> t).
   Proof.
     unfold make; intros.
     match goal with
-    | H: Root _ _ _ |- _  =>  apply root_inv_add in H;
+    | H: Bind _ _ _ |- _  =>  apply bind_inv_add in H;
       destruct H as [(?,(l,R))|(?,i)]
     end. {
       simpl in *.
@@ -213,12 +284,12 @@ Section Defs.
 
   Definition current (ft:task) :=
   match ft with
-  | {| root := f; started := nil |} => None
-  | {| root := g; started := (f::l)%list |} =>  Some f
+  | {| bind := f; open := nil |} => None
+  | {| bind := g; open := (f::l)%list |} =>  Some f
   end.
 
   Definition task_edges (ft:task) :=
-  List.map (fun f => (root ft, f)) (started ft).
+  List.map (fun f => (bind ft, f)) (open ft).
 
   Definition f_edges (s:state) : list (fid * fid) := 
   List.flat_map task_edges (Map_TID_Extra.values s).
@@ -226,60 +297,60 @@ Section Defs.
   Definition c_edges (s:state) : list (fid * fid) := 
   let c_edge (ft:task) :=
   match current ft with
-  | Some g => Some (root ft, g)
+  | Some g => Some (bind ft, g)
   | None => None
   end in
   List.omap c_edge (Map_TID_Extra.values s).
 
-  Lemma root_eq:
+  Lemma bind_eq:
     forall t ft s,
     Map_TID.MapsTo t ft s ->
-    Root t (root ft) s.
+    Bind t (bind ft) s.
   Proof.
     intros.
     destruct ft; simpl in *.
-    eauto using root_def.
+    eauto using bind_def.
   Qed.
 
-  Lemma in_to_root:
+  Lemma in_to_bind:
     forall t s,
     Map_TID.In t s ->
-    exists f, Root t f s.
+    exists f, Bind t f s.
   Proof.
     intros.
     apply Map_TID_Extra.in_to_mapsto in H.
     destruct H as (ft, mt).
-    eauto using root_eq.
+    eauto using bind_eq.
   Qed.
 
-  Lemma not_root_empty:
+  Lemma not_bind_empty:
     forall t f,
-    ~ Root t f empty.
+    ~ Bind t f empty.
   Proof.
     unfold not, empty; intros ? ? N.
     inversion N; subst; clear N.
     apply Map_TID_Facts.empty_mapsto_iff in H; auto.
   Qed.
 
-  Lemma started_eq:
+  Lemma open_eq:
     forall f t ft s,
     Map_TID.MapsTo t ft s ->
-    List.In f (started ft) ->
-    Started t f s.
+    List.In f (open ft) ->
+    Open t f s.
   Proof.
     intros.
     destruct ft.
     simpl in *.
-    eauto using started_def.
+    eauto using open_def.
   Qed.
 
   Lemma f_edge_eq:
     forall t f ft s,
     Map_TID.MapsTo t ft s ->
-    List.In f (started ft) ->
-    FEdge s (root ft, f).
+    List.In f (open ft) ->
+    FEdge s (bind ft, f).
   Proof.
-    eauto using f_edge_def, root_eq, started_eq.
+    eauto using f_edge_def, bind_eq, open_eq.
   Qed.
 
   Lemma in_to_f_edge:
@@ -313,7 +384,7 @@ Section Defs.
     inversion H1; subst.
     eapply Map_TID_Facts.MapsTo_fun in H; eauto.
     inversion H; subst; clear H.
-    exists {| root := f; started := l |}.
+    exists {| bind := f; open := l |}.
     split. {
       eauto using Map_TID_Extra.values_spec_2.
     }
@@ -356,17 +427,17 @@ Section Defs.
     apply Map_TID_Extra.values_spec_1 in Hi.
     destruct Hi as (t, mt).
     simpl in *.
-    destruct started0. {
+    destruct open0. {
       inversion Hj.
     }
     inversion Hj; subst; clear Hj.
-    eauto using root_def, current_def, c_edge_def.
+    eauto using bind_def, current_def, c_edge_def.
   Qed.
 
-  Lemma started_inv_add:
+  Lemma open_inv_add:
     forall t g s u ft,
-    Started t g (Map_TID.add u ft s) ->
-    (u = t /\ List.In g (started ft)) \/ (u <> t /\ Started t g s).
+    Open t g (Map_TID.add u ft s) ->
+    (u = t /\ List.In g (open ft)) \/ (u <> t /\ Open t g s).
   Proof.
     intros.
     inversion H; subst; clear H.
@@ -374,16 +445,16 @@ Section Defs.
     destruct H1 as [(?,?)|(?,?)]. {
       subst; auto.
     }
-    eauto using started_def.
+    eauto using open_def.
   Qed.
 
-  Lemma started_inv_add_make:
+  Lemma open_inv_add_make:
     forall t g f s u,
-    Started t g (Map_TID.add u (make f) s) ->
-    u <> t /\ Started t g s.
+    Open t g (Map_TID.add u (make f) s) ->
+    u <> t /\ Open t g s.
   Proof.
     unfold make; intros.
-    apply started_inv_add in H.
+    apply open_inv_add in H.
     destruct H as [(?,?)|(?,?)]. {
       contradiction.
     }
@@ -402,8 +473,8 @@ Section Defs.
       inversion H; subst; clear H
     end.
     match goal with
-    | H: Started _ _ _ |- _ =>
-      apply started_inv_add_make in H;
+    | H: Open _ _ _ |- _ =>
+      apply open_inv_add_make in H;
       destruct H as (?, Hs)
     end.
     assert (g <> f). {
@@ -411,11 +482,11 @@ Section Defs.
       match goal with
       | H: ~ In _ _ |- _ => contradict H
       end.
-      eauto using in_started.
+      eauto using in_open.
     }
     match goal with
-    | H: Root _ _ _ |- _ =>
-      apply root_inv_add_make in H; auto;
+    | H: Bind _ _ _ |- _ =>
+      apply bind_inv_add_make in H; auto;
       destruct H as [(?,?)|(?,?)]; subst; try contradiction
     end.
     unfold Edge.
@@ -457,19 +528,19 @@ Section Defs.
 
   Let f_edge_inv_add_begin_finish:
     forall t f l g s x y,
-    FEdge (Map_TID.add t {| root := g; started := f :: l |} s) (x, y) ->
-    Map_TID.MapsTo t {| root := g; started := l |} s ->
+    FEdge (Map_TID.add t {| bind := g; open := f :: l |} s) (x, y) ->
+    Map_TID.MapsTo t {| bind := g; open := l |} s ->
     (g = x /\ f = y) \/ FEdge s (x, y).
   Proof.
     intros.
     match goal with
     H: FEdge _ _ |- _ => inversion H; subst; clear H
     end.
-    match goal with H: Started _ _ _ |- _ => apply started_inv_add in H;
+    match goal with H: Open _ _ _ |- _ => apply open_inv_add in H;
       rename H into Hs
     end.
     match goal with
-    H: Root _ _ _ |- _ => apply root_inv_add in H;
+    H: Bind _ _ _ |- _ => apply bind_inv_add in H;
     destruct H as [(?,(k,R))|(?,?)]
     end. {
       inversion R; clear R.
@@ -479,7 +550,7 @@ Section Defs.
           auto.
         }
         subst.
-        eauto using root_def, started_def, f_edge_def.
+        eauto using bind_def, open_def, f_edge_def.
       }
       subst.
       contradiction.
@@ -492,8 +563,8 @@ Section Defs.
 
   Let f_edges_rw_add_begin_finish_1:
     forall t g f l s p,
-    Edge (f_edges (Map_TID.add t {| root := g; started := f :: l |} s)) p ->
-    Map_TID.MapsTo t {| root := g; started := l |} s ->
+    Edge (f_edges (Map_TID.add t {| bind := g; open := f :: l |} s)) p ->
+    Map_TID.MapsTo t {| bind := g; open := l |} s ->
     Edge ((g,f)::(f_edges s)) p.
   Proof.
     unfold Edge; intros.
@@ -514,7 +585,7 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using in_root.
+    eauto using in_bind.
   Qed.
 
   Lemma f_edge_snd_to_in:
@@ -524,7 +595,7 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using in_started.
+    eauto using in_open.
   Qed.
 
   Lemma reaches_fst_to_in:
@@ -551,48 +622,48 @@ Section Defs.
     apply Graph.reaches_impl with (E:=Edge (f_edges s)); unfold Edge; auto using in_to_f_edge.
   Qed.
 
-  Lemma started_inv_add_eq:
+  Lemma open_inv_add_eq:
     forall t g f l s,
-    Started t g (Map_TID.add t {| root := f; started := l |} s) ->
+    Open t g (Map_TID.add t {| bind := f; open := l |} s) ->
     List.In g l.
   Proof.
     intros.
-    apply started_inv_add in H.
+    apply open_inv_add in H.
     destruct H as [(?,?)|(N,_)]; try contradiction.
     auto.
   Qed.
 
-  Lemma started_inv_add_neq:
+  Lemma open_inv_add_neq:
     forall t g f l s u,
-    Started t g (Map_TID.add u {| root := f; started := l |} s) ->
+    Open t g (Map_TID.add u {| bind := f; open := l |} s) ->
     t <> u ->
-    Started t g s.
+    Open t g s.
   Proof.
     intros.
-    apply started_inv_add in H.
+    apply open_inv_add in H.
     destruct H as [(?,?)|(N,?)]; subst; try contradiction.
     auto.
   Qed.
 
   Lemma f_edge_finished:
     forall t g l s f p,
-    FEdge (Map_TID.add t {| root := g; started := l |} s) p ->
-    Map_TID.MapsTo t {| root := g; started := f :: l |} s ->
+    FEdge (Map_TID.add t {| bind := g; open := l |} s) p ->
+    Map_TID.MapsTo t {| bind := g; open := f :: l |} s ->
     Empty f s  ->
     FEdge s p.
   Proof.
     intros.
     inversion H; subst; clear H.
     match goal with
-      H2: Root _ _ _ |- _ =>
-      apply root_inv_add in H2;
+      H2: Bind _ _ _ |- _ =>
+      apply bind_inv_add in H2;
       destruct H2 as [(?, (?, R))|(?,?)]
     end. {
       inversion R; subst; clear R.
-      match goal with H: Started _ _ _ |- _ => apply started_inv_add_eq in H end.
-      eauto using f_edge_def, root_def, in_cons, started_def.
+      match goal with H: Open _ _ _ |- _ => apply open_inv_add_eq in H end.
+      eauto using f_edge_def, bind_def, in_cons, open_def.
     }
-    match goal with H: Started _ _ _ |- _ => apply started_inv_add_neq in H;auto end.
+    match goal with H: Open _ _ _ |- _ => apply open_inv_add_neq in H;auto end.
     eauto using f_edge_def.
   Qed.
 
@@ -603,51 +674,51 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    apply root_inv_add_make in H0.
+    apply bind_inv_add_make in H0.
     destruct H0 as [(?,?)|(?,Hr)]. {
       subst.
-      apply started_inv_add_make in H1.
+      apply open_inv_add_make in H1.
       destruct H1 as (N,_); contradiction.
     }
-    apply started_inv_add_make in H1.
+    apply open_inv_add_make in H1.
     destruct H1; eauto using f_edge_def.
   Qed.
 
-  Lemma root_inv_remove:
+  Lemma bind_inv_remove:
     forall t f u s,
-    Root t f (Map_TID.remove u s) ->
-    u <> t /\ Root t f s.
+    Bind t f (Map_TID.remove u s) ->
+    u <> t /\ Bind t f s.
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.remove_mapsto_iff in H0.
     destruct H0.
-    eauto using root_def.
+    eauto using bind_def.
   Qed.
 
-  Lemma started_inv_remove:
+  Lemma open_inv_remove:
     forall t f u s,
-    Started t f (Map_TID.remove u s) ->
-    u <> t /\ Started t f s.
+    Open t f (Map_TID.remove u s) ->
+    u <> t /\ Open t f s.
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.remove_mapsto_iff in H1.
     destruct H1.
-    eauto using started_def.
+    eauto using open_def.
   Qed.
 
   Lemma f_edge_end_task:
     forall t s p f,
     FEdge (Map_TID.remove t s) p ->
-    Map_TID.MapsTo t {| root := f; started := [] |} s ->
+    Map_TID.MapsTo t {| bind := f; open := [] |} s ->
     FEdge s p.
   Proof.
     intros.
     inversion H; subst; clear H.
-    apply root_inv_remove in H1.
+    apply bind_inv_remove in H1.
     destruct H1 as (?,Hr).
-    apply started_inv_remove in H2.
+    apply open_inv_remove in H2.
     destruct H2 as (?,Hs).
     eauto using f_edge_def.
   Qed.
@@ -668,7 +739,7 @@ Section Defs.
       assert (f <> g). {
         unfold not; intros; subst.
         assert (In g s). {
-          eauto using root_def, in_root.
+          eauto using bind_def, in_bind.
         }
         contradiction.
       }
@@ -716,10 +787,10 @@ Section Defs.
     unfold Edge; auto using in_to_c_edge.
   Qed.
 
-  Lemma started_nil_to_not_started:
+  Lemma open_nil_to_not_open:
     forall x g s,
-    Map_TID.MapsTo x {| root := g; started := [] |} s ->
-    forall f, ~ Started x f s.
+    Map_TID.MapsTo x {| bind := g; open := [] |} s ->
+    forall f, ~ Open x f s.
   Proof.
     unfold not; intros.
     inversion H0; subst; clear H0.
@@ -728,9 +799,9 @@ Section Defs.
     contradiction.
   Qed.
 
-  Lemma started_nil_to_not_current:
+  Lemma open_nil_to_not_current:
     forall x g s,
-    Map_TID.MapsTo x {| root := g; started := [] |} s ->
+    Map_TID.MapsTo x {| bind := g; open := [] |} s ->
     forall f, ~ Current x f s.
   Proof.
     unfold not; intros.
@@ -743,7 +814,7 @@ Section Defs.
     forall s, 
     DAG (Edge (c_edges s)) ->
     (forall x, Map_TID.In x s -> forall f, ~ Current x f s) \/
-    (exists t f, Current t f s /\ forall u, Root u f s -> forall g, ~ Current u g s).
+    (exists t f, Current t f s /\ forall u, Bind u f s -> forall g, ~ Current u g s).
   Proof.
     intros.
     remember (c_edges s).
@@ -753,9 +824,9 @@ Section Defs.
       destruct H0 as (ft, mt).
       destruct ft as (g, l).
       destruct l. {
-        eauto using started_nil_to_not_current.
+        eauto using open_nil_to_not_current.
       }
-      assert (He: CEdge s (g, f0)) by eauto using List.in_eq, current_def, c_edge_def, root_def.
+      assert (He: CEdge s (g, f0)) by eauto using List.in_eq, current_def, c_edge_def, bind_def.
       apply c_edge_to_edge in He.
       rewrite <- Heql in *.
       inversion He.
@@ -887,7 +958,7 @@ Section Defs.
   Inductive Nonempty (f:fid) (s:state) : Prop :=
   | nonempty_def:
     forall x,
-    Root x f s ->
+    Bind x f s ->
     Nonempty f s.
 
   Lemma nonempty_to_in:
@@ -897,12 +968,12 @@ Section Defs.
   Proof.
     intros.
     inversion H.
-    eauto using in_root.
+    eauto using in_bind.
   Qed.
 
-  Let has_root t f s :=
+  Let has_bind t f s :=
   match Map_TID.find t s with
-  | Some ft => if FID.eq_dec f (root ft) then true else false
+  | Some ft => if FID.eq_dec f (bind ft) then true else false
   | _ => false
   end.
 
@@ -926,7 +997,7 @@ Section Defs.
         contradiction.
       }
       inversion H; subst; clear H;
-      remember {| root := _; started := _ |} as ft';
+      remember {| bind := _; open := _ |} as ft';
       assert (ft' = ft) by eauto using Map_TID_Facts.MapsTo_fun;
       subst; simpl; trivial.
     Qed.
@@ -1000,9 +1071,9 @@ Section Defs.
     Qed.
   End IEF_dec.
 
-  Lemma root_to_in:
+  Lemma bind_to_in:
     forall t f s,
-    Root t f s ->
+    Bind t f s ->
     Map_TID.In t s.
   Proof.
     intros.
@@ -1010,10 +1081,10 @@ Section Defs.
     eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
-  Lemma root_fun:
+  Lemma bind_fun:
     forall t f s g,
-    Root t f s ->
-    Root t g s ->
+    Bind t f s ->
+    Bind t g s ->
     f = g.
   Proof.
     intros.
@@ -1025,12 +1096,12 @@ Section Defs.
     trivial.
   Qed.
 
-  Lemma root_dec t f s:
-    { Root t f s } + { ~ Root t f s }.
+  Lemma bind_dec t f s:
+    { Bind t f s } + { ~ Bind t f s }.
   Proof.
-    remember (has_root t f s).
+    remember (has_bind t f s).
     symmetry in Heqb;
-    unfold has_root in *.
+    unfold has_bind in *.
     destruct b. {
       left.
       destruct (Map_TID_Extra.find_rw t s) as [(R,?)|((g,l),(R,?))];
@@ -1039,7 +1110,7 @@ Section Defs.
       - simpl in *.
         destruct (FID.eq_dec f g). {
           subst.
-          eauto using root_def.
+          eauto using bind_def.
         }
         inversion Heqb.
     }
@@ -1047,7 +1118,7 @@ Section Defs.
     destruct (Map_TID_Extra.find_rw t s) as [(R,?)|((g,l),(R,?))];
     rewrite R in *. {
       unfold not; intros N.
-      apply root_to_in in N.
+      apply bind_to_in in N.
       contradiction.
     }
     simpl in *.
@@ -1055,27 +1126,27 @@ Section Defs.
       inversion Heqb.
     }
     unfold not; intros N.
-    assert (Root t g s) by eauto using root_def.
-    assert (f = g)  by eauto using root_fun.
+    assert (Bind t g s) by eauto using bind_def.
+    assert (f = g)  by eauto using bind_fun.
     contradiction.
   Defined.
 
-  Let filter_root f s :=
-  Map_TID_Extra.filter (fun t ft => if FID.eq_dec f (root ft) then true else false) s.
+  Let filter_bind f s :=
+  Map_TID_Extra.filter (fun t ft => if FID.eq_dec f (bind ft) then true else false) s.
 
   Lemma empty_nonempty_dec f s:
     { Nonempty f s } + { Empty f s }.
   Proof.
-    destruct (Map_TID_Extra.any_in_dec (filter_root f s)) as [(t,Hi)|X];
-    unfold filter_root in *. {
+    destruct (Map_TID_Extra.any_in_dec (filter_bind f s)) as [(t,Hi)|X];
+    unfold filter_bind in *. {
       left.
       apply Map_TID_Extra.in_to_mapsto in Hi.
       destruct Hi as (ft, mt).
       apply Map_TID_Extra.filter_spec in mt; auto using tid_eq_rw.
       destruct mt as (mt, Hx).
-      destruct (FID.eq_dec f (root ft)). {
+      destruct (FID.eq_dec f (bind ft)). {
         subst.
-        eauto using nonempty_def, root_eq.
+        eauto using nonempty_def, bind_eq.
       }
       inversion Hx.
     }
@@ -1093,14 +1164,14 @@ Section Defs.
     contradiction.
   Defined.
 
-  Let current_to_started:
+  Let current_to_open:
     forall t f s,
     Current t f s ->
-    Started t f s.
+    Open t f s.
   Proof.
     intros.
     inversion H; subst.
-    eauto using started_def, List.in_eq.
+    eauto using open_def, List.in_eq.
   Qed.
 
   Let c_edge_to_f_edge:
@@ -1110,7 +1181,7 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using f_edge_def, current_to_started.
+    eauto using f_edge_def, current_to_open.
   Qed.
 
   Let dag_f_edge_to_c_edge:
@@ -1131,7 +1202,7 @@ Section Defs.
     intros.
     inversion H; subst; clear H.
     inversion H0; subst; clear H0.
-    apply Map_TID_Facts.MapsTo_fun with (e:={| root := g1; started := g :: l0 |}) in H1; auto.
+    apply Map_TID_Facts.MapsTo_fun with (e:={| bind := g1; open := g :: l0 |}) in H1; auto.
     inversion H1; subst; auto.
   Qed.
 
@@ -1152,7 +1223,7 @@ Section Defs.
         eauto using current_fun.
       }
       subst.
-      exists ((Map_TID.add t {| root := g; started := l |} s)).
+      exists ((Map_TID.add t {| bind := g; open := l |} s)).
       eapply reduces_end_finish; eauto.
     }
     auto using progress_nonblocking.
@@ -1167,14 +1238,14 @@ Section Defs.
   [ H: X |- _ ] => f H
   end).
 
-  Let root_to_ief:
+  Let bind_to_ief:
     forall x f s,
     (forall f, ~ Current x f s) ->
-    Root x f s ->
+    Bind x f s ->
     IEF x f s.
   Proof.
     intros.
-    match goal with [H: Root x _ _ |- _ ] => inversion H; subst; clear H end.
+    match goal with [H: Bind x _ _ |- _ ] => inversion H; subst; clear H end.
     destruct l. {
       auto using ief_nil.
     }
@@ -1193,9 +1264,9 @@ Section Defs.
     ((* [f] is nonempty and every task in [f] reduces. *)
       Nonempty f s
       /\
-      (forall x, Root x f s -> Enabled s x)
+      (forall x, Bind x f s -> Enabled s x)
       /\
-      (forall x, Root x f s -> IEF x f s)
+      (forall x, Bind x f s -> IEF x f s)
     )
     \/
     ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
@@ -1214,7 +1285,7 @@ Section Defs.
       destruct H0 as (y, Hi).
       apply Map_TID_Extra.in_to_mapsto in Hi.
       destruct Hi as ((g,l), mt).
-      assert (Hr: Root y g s) by eauto using root_def.
+      assert (Hr: Bind y g s) by eauto using bind_def.
       exists g.
       left.
       split; eauto using nonempty_def.
@@ -1229,7 +1300,7 @@ Section Defs.
       destruct (blocking_dec o). {
         inversion b; subst; clear b.
         match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
-        assert (g0 = g) by eauto using root_fun, root_def; subst.
+        assert (g0 = g) by eauto using bind_fun, bind_def; subst.
         assert (Xc: Current x f s) by eauto using current_def.
         contradict Xc.
         eauto using Map_TID_Extra.mapsto_to_in.
@@ -1245,13 +1316,13 @@ Section Defs.
           inversion b; subst; clear b.
           subst.
           match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
-          assert (g = f) by eauto using root_fun, root_def; subst.
+          assert (g = f) by eauto using bind_fun, bind_def; subst.
           assert (X: ~ Current x f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
           contradict X; eauto using current_def.
         }
         eauto using progress_nonblocking.
       }
-      eauto using root_to_ief.
+      eauto using bind_to_ief.
     }
     exists f.
     right;
@@ -1261,42 +1332,42 @@ End Defs.
 
 Module Task.
 
-  Inductive Root: fid -> task -> Prop :=
-  | root_def:
+  Inductive Bind: fid -> task -> Prop :=
+  | bind_def:
     forall f l,
-    Root f {| root := f; started := l |}.
+    Bind f {| bind := f; open := l |}.
 
-  Inductive Started: fid -> task -> Prop :=
-  | started_def:
+  Inductive Open: fid -> task -> Prop :=
+  | open_def:
     forall f g l,
     List.In f l ->
-    Started f {| root := g; started := l |}.
+    Open f {| bind := g; open := l |}.
 
   Inductive In: fid -> task -> Prop :=
-  | in_root:
+  | in_bind:
     forall f ft,
-    Root f ft ->
+    Bind f ft ->
     In f ft
-  | in_started:
+  | in_open:
     forall f ft,
-    Started f ft ->
+    Open f ft ->
     In f ft.
 End Task.
 
 Section Props.
 
-  Lemma root_inv_add:
+  Lemma bind_inv_add:
     forall x y ft s f,
-    Root y f (Map_TID.add x ft s) ->
-    (x = y /\ Task.Root f ft) \/ Root y f s.
+    Bind y f (Map_TID.add x ft s) ->
+    (x = y /\ Task.Bind f ft) \/ Bind y f s.
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.add_mapsto_iff in H0.
     destruct H0 as [(?,?)|(?,?)].
     + subst.
-      auto using Task.root_def.
-    + eauto using root_def, in_root.
+      auto using Task.bind_def.
+    + eauto using bind_def, in_bind.
   Qed.
 
   Lemma in_inv_add:
@@ -1306,38 +1377,38 @@ Section Props.
   Proof.
     intros.
     inversion H.
-    - apply root_inv_add in H0.
+    - apply bind_inv_add in H0.
       destruct H0 as [(?, ?)|?].
-      + auto using Task.in_root.
-      + eauto using in_root.
-    - apply started_inv_add in H0.
+      + auto using Task.in_bind.
+      + eauto using in_bind.
+    - apply open_inv_add in H0.
       destruct H0 as [(?,?)|(?,?)]. {
         destruct ft in *; simpl in *.
-        auto using Task.in_started, Task.started_def.
+        auto using Task.in_open, Task.open_def.
       }
-      eauto using in_started.
+      eauto using in_open.
   Qed.
 
-  Let task_root_to_root:
+  Let task_bind_to_bind:
     forall x ft s f,
     Map_TID.MapsTo x ft s ->
-    Task.Root f ft ->
-    Root x f s.
+    Task.Bind f ft ->
+    Bind x f s.
   Proof.
     intros.
     inversion H0; subst; clear H0.
-    eauto using root_def.
+    eauto using bind_def.
   Qed.
 
-  Let task_started_to_started:
+  Let task_open_to_open:
     forall x ft s f,
     Map_TID.MapsTo x ft s ->
-    Task.Started f ft ->
-    Started x f s.
+    Task.Open f ft ->
+    Open x f s.
   Proof.
     intros.
     inversion H0; subst; clear H0.
-    eauto using started_def.
+    eauto using open_def.
   Qed.
 
   Let task_in_to_in:
@@ -1348,8 +1419,8 @@ Section Props.
   Proof.
     intros.
     inversion H; subst; clear H.
-    + eauto using task_root_to_root, in_root.
-    + eauto using task_started_to_started, in_started.
+    + eauto using task_bind_to_bind, in_bind.
+    + eauto using task_open_to_open, in_open.
   Qed.
 
   Let task_in_inv_eq_make:
@@ -1365,45 +1436,45 @@ Section Props.
     - inversion H2.
   Qed.
 
-  Let task_root_inv_eq:
+  Let task_bind_inv_eq:
     forall f g l,
-    Task.Root f {| root := g; started := l |} ->
+    Task.Bind f {| bind := g; open := l |} ->
     g = f.
   Proof.
     intros.
     inversion H; auto.
   Qed.
 
-  Let task_root_cons:
+  Let task_bind_cons:
     forall f g l h,
-    Task.Root f {| root := g; started := l |} ->
-    Task.Root f {| root := g; started := h::l |}.
+    Task.Bind f {| bind := g; open := l |} ->
+    Task.Bind f {| bind := g; open := h::l |}.
   Proof.
     intros.
     inversion H; subst; clear H.
-    auto using Task.root_def.
+    auto using Task.bind_def.
   Qed.
 
-  Let task_started_cons:
+  Let task_open_cons:
     forall f g l h,
-    Task.Started f {| root := g; started := l |} ->
-    Task.Started f {| root := g; started := h::l |}.
+    Task.Open f {| bind := g; open := l |} ->
+    Task.Open f {| bind := g; open := h::l |}.
   Proof.
     intros.
     inversion H; subst; clear H.
-    auto using Task.started_def, List.in_cons.
+    auto using Task.open_def, List.in_cons.
   Qed.
 
   Let task_in_cons:
     forall f g l h,
-    Task.In f {| root := g; started := l |} ->
-    Task.In f {| root := g; started := h::l |}.
+    Task.In f {| bind := g; open := l |} ->
+    Task.In f {| bind := g; open := h::l |}.
   Proof.
     intros.
     inversion H; subst; clear H. {
-      auto using task_root_cons, Task.in_root.
+      auto using task_bind_cons, Task.in_bind.
     }
-    auto using task_started_cons, Task.in_started.
+    auto using task_open_cons, Task.in_open.
   Qed.
 
   Let in_ief:
@@ -1413,32 +1484,32 @@ Section Props.
   Proof.
     intros.
     destruct ft as (f, [|g]); simpl.
-    + eauto using in_root, root_def.
-    + eauto using in_started, in_eq, started_def.
+    + eauto using in_bind, bind_def.
+    + eauto using in_open, in_eq, open_def.
   Qed.
 
-  Let root_inv_remove:
+  Let bind_inv_remove:
     forall x f s y,
-    Root y f (Map_TID.remove x s) ->
-    x <> y /\ Root y f s.
+    Bind y f (Map_TID.remove x s) ->
+    x <> y /\ Bind y f s.
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.remove_mapsto_iff in H0.
     destruct H0 as (?, ?).
-    eauto using root_def.
+    eauto using bind_def.
   Qed.
 
-  Let started_inv_remove:
+  Let open_inv_remove:
     forall x f s y,
-    Started y f (Map_TID.remove x s) ->
-    x <> y /\ Started y f s.
+    Open y f (Map_TID.remove x s) ->
+    x <> y /\ Open y f s.
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.remove_mapsto_iff in H1.
     destruct H1 as (?, ?).
-    eauto using started_def.
+    eauto using open_def.
   Qed.
 
   Let in_inv_remove:
@@ -1448,12 +1519,12 @@ Section Props.
   Proof.
     intros.
     inversion H; subst; clear H.
-    - apply root_inv_remove in H0.
+    - apply bind_inv_remove in H0.
       destruct H0.
-      eauto using in_root.
-    - apply started_inv_remove in H0.
+      eauto using in_bind.
+    - apply open_inv_remove in H0.
       destruct H0.
-      eauto using in_started.
+      eauto using in_open.
   Qed.
 
   Lemma reduces_in_inv:
@@ -1476,15 +1547,15 @@ Section Props.
       end.
       + assert (g = f) by eauto.
         subst.
-        eauto using in_root, root_def.
-      + match goal with H: Task.Started _ _ |- _ =>
+        eauto using in_bind, bind_def.
+      + match goal with H: Task.Open _ _ |- _ =>
           inversion H; subst; clear H
         end.
         match goal with H: List.In _ _ |- _ =>
           inversion H; subst; clear H
         end.
         * auto.
-        * eauto using started_def, in_started.
+        * eauto using open_def, in_open.
     - eauto using task_in_to_in, task_in_cons.
     - match goal with H: Task.In _ (make _) |- _ =>
         apply task_in_inv_eq_make in H
@@ -1493,74 +1564,74 @@ Section Props.
     - eauto using in_inv_remove.
   Qed.
 
-  Let root_add_neq:
+  Let bind_add_neq:
     forall y f s x ft,
-    Root y f s ->
+    Bind y f s ->
     x <> y ->
-    Root y f (Map_TID.add x ft s).
+    Bind y f (Map_TID.add x ft s).
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using root_def, Map_TID.add_2.
+    eauto using bind_def, Map_TID.add_2.
   Qed.
 
-  Lemma root_reduces:
+  Lemma bind_reduces:
     forall x y f s s' o,
-    Root y f s ->
+    Bind y f s ->
     Reduces s (x, o) s' ->
     (y = x /\ exists g, o = INIT g) \/
     (y = x /\ o = END_TASK) \/
-    Root y f s'.
+    Bind y f s'.
   Proof.
     intros.
     inversion H0; subst; clear H0.
     - destruct (TID.eq_dec x y); subst. {
         eauto 4.
       }
-      eauto using root_add_neq.
+      eauto using bind_add_neq.
     - destruct (TID.eq_dec x y); subst. {
-        assert (Root y g s) by eauto using root_def.
-        assert (f = g) by eauto using root_fun.
+        assert (Bind y g s) by eauto using bind_def.
+        assert (f = g) by eauto using bind_fun.
         subst.
-        eauto using root_def, Map_TID.add_1.
+        eauto using bind_def, Map_TID.add_1.
       }
-      eauto using root_add_neq.
+      eauto using bind_add_neq.
     - destruct (TID.eq_dec x y); subst. {
-        assert (Root y g s) by eauto using root_def.
-        assert (f = g) by eauto using root_fun.
+        assert (Bind y g s) by eauto using bind_def.
+        assert (f = g) by eauto using bind_fun.
         subst.
-        eauto using root_def, Map_TID.add_1.
+        eauto using bind_def, Map_TID.add_1.
       }
-      eauto using root_add_neq.
+      eauto using bind_add_neq.
     - destruct (TID.eq_dec y u); subst. {
-        apply root_to_in in H.
+        apply bind_to_in in H.
         contradiction.
       }
-      eauto using root_add_neq.
+      eauto using bind_add_neq.
     - destruct (TID.eq_dec y x); subst. {
         auto.
       }
-      assert (Root x f0 s) by eauto using root_def.
+      assert (Bind x f0 s) by eauto using bind_def.
       right.
       right.
       inversion H; subst; clear H.
-      eapply root_def; eauto using Map_TID.remove_2.
+      eapply bind_def; eauto using Map_TID.remove_2.
   Qed.
 
-  Let started_add_neq:
+  Let open_add_neq:
     forall y f s x ft,
-    Started y f s ->
+    Open y f s ->
     x <> y ->
-    Started y f (Map_TID.add x ft s).
+    Open y f (Map_TID.add x ft s).
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using started_def, Map_TID.add_2.
+    eauto using open_def, Map_TID.add_2.
   Qed.
 
-  Lemma started_to_in:
+  Lemma open_to_in:
     forall x f s,
-    Started x f s ->
+    Open x f s ->
     Map_TID.In x s.
   Proof.
     intros.
@@ -1568,17 +1639,17 @@ Section Props.
     eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
-  Lemma started_reduces:
+  Lemma open_reduces:
     forall x y f s s' o,
-    Started y f s ->
+    Open y f s ->
     Reduces s (x, o) s' ->
     (y = x /\ o = END_FINISH f) \/
-    Started y f s'.
+    Open y f s'.
   Proof.
     intros.
     inversion H0; subst; clear H0;
-    destruct (TID.eq_dec x y); subst; try (right; auto using started_add_neq; fail).
-    - apply started_to_in in H.
+    destruct (TID.eq_dec x y); subst; try (right; auto using open_add_neq; fail).
+    - apply open_to_in in H.
       contradiction.
     - inversion H; subst; clear H.
       match goal with
@@ -1587,7 +1658,7 @@ Section Props.
       inversion R; subst; clear R
       end.
       assert (List.In f (f0::l0)) by auto using List.in_cons.
-      eauto 4 using started_def, Map_TID.add_1.
+      eauto 4 using open_def, Map_TID.add_1.
     - inversion H; subst; clear H.
       match goal with
       H1: Map_TID.MapsTo y ?a _, H2: Map_TID.MapsTo y ?b _ |- _ =>
@@ -1597,12 +1668,12 @@ Section Props.
       match goal with H: List.In _ _ |- _ =>
         inversion H; subst; clear H
       end; auto.
-      eauto 4 using started_def, Map_TID.add_1.
-    - destruct (TID.eq_dec u y); subst; try (right; auto using started_add_neq; fail).
-      assert (Map_TID.In y s) by eauto using started_to_in.
+      eauto 4 using open_def, Map_TID.add_1.
+    - destruct (TID.eq_dec u y); subst; try (right; auto using open_add_neq; fail).
+      assert (Map_TID.In y s) by eauto using open_to_in.
       contradiction.
-    - destruct (TID.eq_dec u y); subst; try (right; auto using started_add_neq; fail).
-      assert (Map_TID.In y s) by eauto using started_to_in.
+    - destruct (TID.eq_dec u y); subst; try (right; auto using open_add_neq; fail).
+      assert (Map_TID.In y s) by eauto using open_to_in.
       contradiction.
     - inversion H; subst; clear H.
       match goal with
@@ -1613,49 +1684,49 @@ Section Props.
       match goal with H: List.In _ _ |- _ => inversion H end.
     - right.
       inversion H; subst; clear H.
-      eapply started_def; eauto using Map_TID.remove_2.
+      eapply open_def; eauto using Map_TID.remove_2.
   Qed.
-  Lemma root_or_started_reduces:
+  Lemma bind_or_open_reduces:
     forall y f s o s' x,
-    Root y f s \/ Started y f s ->
+    Bind y f s \/ Open y f s ->
     Reduces s (x, o) s' ->
-    (Root y f s /\ y = x /\ exists g, o = INIT g) \/
-    (Root y f s /\ y = x /\ o = END_TASK) \/
-    (Started y f s /\ y = x /\ o = END_FINISH f) \/
-    Root y f s' \/
-    Started y f s'.
+    (Bind y f s /\ y = x /\ exists g, o = INIT g) \/
+    (Bind y f s /\ y = x /\ o = END_TASK) \/
+    (Open y f s /\ y = x /\ o = END_FINISH f) \/
+    Bind y f s' \/
+    Open y f s'.
   Proof.
     intros.
     destruct H.
-    - edestruct root_reduces as [(?,?)|[Hx|Hy]]; eauto.
-    - edestruct started_reduces; eauto.
+    - edestruct bind_reduces as [(?,?)|[Hx|Hy]]; eauto.
+    - edestruct open_reduces; eauto.
   Qed.
 
-  Lemma root_make_1:
+  Lemma bind_make_1:
     forall x f s,
-    Root x f (Map_TID.add x (make f) s).
+    Bind x f (Map_TID.add x (make f) s).
   Proof.
     intros.
-    apply root_def with (l:=nil); unfold make; simpl.
+    apply bind_def with (l:=nil); unfold make; simpl.
     auto using Map_TID.add_1.
   Qed.
 
-  Lemma reduces_inv_ief_root:
+  Lemma reduces_inv_ief_bind:
     forall f x y s s',
     IEF x f s ->
     Reduces s (x, BEGIN_TASK y) s' ->
-    Root y f s'.
+    Bind y f s'.
   Proof.
     intros.
     inversion H0; subst; clear H0.
     assert (ief ft = f) by eauto using ief_inv_1.
     subst.
-    auto using root_make_1.
+    auto using bind_make_1.
   Qed.
 
-  Lemma not_started_empty:
+  Lemma not_open_empty:
     forall x f,
-    ~ Started f x empty.
+    ~ Open f x empty.
   Proof.
     unfold not, empty; intros.
     inversion H; subst; clear H.
@@ -1670,10 +1741,10 @@ Section Props.
     intros.
     unfold not; intros N.
     inversion N; subst; clear N. {
-      apply not_root_empty in H.
+      apply not_bind_empty in H.
       contradiction.
     }
-    apply not_started_empty in H.
+    apply not_open_empty in H.
     contradiction.
   Qed.
 End Props.
@@ -1701,7 +1772,7 @@ Module Trace.
         apply Graph.reaches_to_in_fst in H.
         destruct H as (?,(?,?)).
         inversion H; subst; clear H.
-        apply not_root_empty in H1; auto.
+        apply not_bind_empty in H1; auto.
       - assert (DAG (FEdge s0)) by auto.
         eauto using dag_reduces.
     Qed.
@@ -1717,9 +1788,9 @@ Module Trace.
       ((* [f] is nonempty and every task in [f] reduces. *)
         Nonempty f s
         /\
-        (forall t, Root t f s -> Enabled s t)
+        (forall t, Bind t f s -> Enabled s t)
         /\
-        (forall x, Root x f s -> IEF x f s)
+        (forall x, Bind x f s -> IEF x f s)
       )
       \/
       ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
