@@ -22,8 +22,6 @@ Require Import Aniceto.Graphs.DAG.
 Require Import Aniceto.List.
 Require Import Aniceto.Graphs.FGraph.
 
-Section Defs.
-
   (**
     An example:
     [[
@@ -149,6 +147,61 @@ Section Defs.
     Open t f s ->
     In f s.
 
+Module Task.
+Section Defs.
+  Inductive Bind: fid -> task -> Prop :=
+  | bind_def:
+    forall f l,
+    Bind f {| bind := f; open := l |}.
+
+  Definition bind_dec (f:fid) (ft:task) : { Bind f ft } + { ~ Bind f ft }.
+  Proof.
+    destruct ft as (g, l).
+    destruct (FID.eq_dec f g). {
+      subst; auto using bind_def.
+    }
+    right; unfold not; intros N.
+    inversion N; subst.
+    contradiction.
+  Defined.
+
+  Inductive Open: fid -> task -> Prop :=
+  | open_def:
+    forall f g l,
+    List.In f l ->
+    Open f {| bind := g; open := l |}.
+
+  Definition open_dec f ft : { Open f ft } + { ~ Open f ft }.
+  Proof.
+    destruct ft as (g, l).
+    destruct (List.in_dec FID.eq_dec f l). {
+      auto using open_def.
+    }
+    right; unfold not; intros N.
+    inversion N; subst.
+    contradiction.
+  Defined.
+
+  Inductive In: fid -> task -> Prop :=
+  | in_bind:
+    forall f ft,
+    Bind f ft ->
+    In f ft
+  | in_open:
+    forall f ft,
+    Open f ft ->
+    In f ft.
+
+  Definition in_dec f ft : { In f ft } + { ~ In f ft }.
+  Proof.
+    destruct (bind_dec f ft); auto using in_bind.
+    destruct (open_dec f ft); auto using in_open.
+    right; unfold not; intros N.
+    inversion N; subst; contradiction.
+  Defined.
+End Defs.
+End Task.
+
   (** A finish is empty if there is no task that is bound to it. *)
 
   Inductive Empty f s : Prop :=
@@ -159,6 +212,7 @@ Section Defs.
   (** We are now ready to define the semantics of the async-finish API. *)
 
   Inductive Reduces : state -> action -> state -> Prop :=
+
   (** The first task [t] of an async-finish computation initializes a
   finish [f] (where [f] is not a member of state [s]). *)
   | reduces_init:
@@ -166,6 +220,7 @@ Section Defs.
     ~ In f s ->
     ~ Map_TID.In t s ->
     Reduces s (t, INIT f) (Map_TID.add t (make f) s)
+
   (** An existing task [t] pushes a finish scope [f] in its stack [l] of
       open finishes; we must ensure that [f] is not mentioned in
       state [s]. *)
@@ -175,6 +230,7 @@ Section Defs.
     Map_TID.MapsTo t {| bind := g; open := l |} s ->
     Reduces s (t, BEGIN_FINISH f) (
       Map_TID.add t {| bind := g; open := f::l |} s)
+
   (** Synchronization happens when [f] is at the top of open tasks
     and [f] is empty; the side effect is that the task pops [f] from the stack
     of open finishes. *)
@@ -183,6 +239,7 @@ Section Defs.
     Map_TID.MapsTo t {| bind := g; open := (f::l) % list |} s ->
     Empty f s ->
     Reduces s (t, END_FINISH f) (Map_TID.add t {| bind := g; open := l |} s)
+
   (** A task [t] spawns a task [u]. The new task [u] is bound to the
       IEF of [t]. XXX: replace this by Prop *)
   | reduces_begin_task:
@@ -190,6 +247,7 @@ Section Defs.
     ~ Map_TID.In u s ->
     Map_TID.MapsTo t ft s ->
     Reduces s (t, BEGIN_TASK u) (Map_TID.add u (make (ief ft)) s)
+
   (** A task [t] executes operation [END_TASK] at the end of its lifecycle;
       we ensure  that the task has zero finish scopes. *)
   | reduces_end_task:
@@ -236,6 +294,7 @@ Section Defs.
     Current t g s ->
     CEdge s (f, g).
 
+Section Defs.
   Let bind_inv_add:
     forall u g t s ft,
     Bind u g (Map_TID.add t ft s) ->
@@ -1134,7 +1193,7 @@ Section Defs.
   Let filter_bind f s :=
   Map_TID_Extra.filter (fun t ft => if FID.eq_dec f (bind ft) then true else false) s.
 
-  Lemma empty_nonempty_dec f s:
+  Lemma nonempty_empty_dec f s:
     { Nonempty f s } + { Empty f s }.
   Proof.
     destruct (Map_TID_Extra.any_in_dec (filter_bind f s)) as [(t,Hi)|X];
@@ -1307,7 +1366,7 @@ Section Defs.
       }
       eauto using progress_nonblocking.
     }
-    destruct (empty_nonempty_dec f s). {
+    destruct (nonempty_empty_dec f s). {
       exists f.
       left; split; auto.
       split. {
@@ -1329,30 +1388,6 @@ Section Defs.
     split; eauto using progress_empty.
   Qed.
 End Defs.
-
-Module Task.
-
-  Inductive Bind: fid -> task -> Prop :=
-  | bind_def:
-    forall f l,
-    Bind f {| bind := f; open := l |}.
-
-  Inductive Open: fid -> task -> Prop :=
-  | open_def:
-    forall f g l,
-    List.In f l ->
-    Open f {| bind := g; open := l |}.
-
-  Inductive In: fid -> task -> Prop :=
-  | in_bind:
-    forall f ft,
-    Bind f ft ->
-    In f ft
-  | in_open:
-    forall f ft,
-    Open f ft ->
-    In f ft.
-End Task.
 
 Section Props.
 
@@ -1637,6 +1672,229 @@ Section Props.
     intros.
     inversion H; subst; clear H.
     eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
+  Definition in_dec (f:fid) (s:state) :
+    { In f s } + { ~ In f s }.
+  Proof.
+    remember (fun (x:tid) ft => if Task.in_dec f ft then true else false) as helper.
+    destruct (Map_TID_Extra.exists_dec tid_eq_rw helper s) as [((x,ft),(mt, Heq))|(_,Hx)]. {
+      simpl in *.
+      rewrite Heqhelper in *.
+      destruct (Task.in_dec f ft). {
+        eauto using task_in_to_in.
+      }
+      inversion Heq.
+    }
+    right.
+    unfold not; intros N; inversion N; clear N.
+    - inversion H; subst; clear H.
+      apply Hx in H0.
+      destruct (Task.in_dec f {| bind := f; open := l |}). {
+        inversion H0.
+      }
+      assert (Task.In f {| bind := f; open := l |}) by auto using Task.in_bind, Task.bind_def.
+      contradiction.
+    - inversion H; subst; clear H.
+      apply Hx in H1.
+      destruct (Task.in_dec f {| bind := g; open := l |}). {
+        inversion H1.
+      }
+      assert (Task.In f {| bind := g; open := l |}) by auto using Task.in_open, Task.open_def.
+      contradiction.
+  Defined.
+
+  Inductive reduce_err :=
+  | TASK_EXIST: tid -> reduce_err
+  | TASK_NOT_EXIST: tid -> reduce_err
+  | FINISH_EXIST: fid -> reduce_err
+  | FINISH_NOT_EXIST: fid -> reduce_err
+  | FINISH_NONEMPTY: fid -> reduce_err
+  | FINISH_TOP_NEQ: fid -> reduce_err
+  | FINISH_OPEN_EMPTY: reduce_err.
+
+  Definition reduces s x o : state + reduce_err :=
+  match o with
+  | INIT f =>
+    if in_dec f s then inr (FINISH_EXIST f) else
+    match Map_TID.find x s with
+    | Some _ => inr (TASK_EXIST x)
+    | None => inl (Map_TID.add x (make f) s)
+    end
+  | BEGIN_FINISH f =>
+    if in_dec f s then inr (TASK_EXIST x) else
+    match Map_TID.find x s with
+    | None => inr (TASK_NOT_EXIST x)
+    | Some {| bind := g; open := l|} => inl (Map_TID.add x {| bind := g; open := f :: l |} s)
+    end
+  | END_FINISH f =>
+    match Map_TID.find x s with
+    | Some {| bind := g; open := h ::l|} =>
+      if FID.eq_dec f h then
+      (if nonempty_empty_dec f s then inr (FINISH_NONEMPTY f) else
+       inl (Map_TID.add x {| bind := g; open := l |} s)
+      )
+      else inr (FINISH_TOP_NEQ g)
+    | Some {| bind := g; open := [] |} => inr FINISH_OPEN_EMPTY
+    | None => inr (TASK_NOT_EXIST x)
+    end
+  | BEGIN_TASK y =>
+    match Map_TID.find y s, Map_TID.find x s with
+    | None, Some ft => inl (Map_TID.add y (make (ief ft)) s)
+    | Some _, _ => inr (TASK_EXIST y)
+    | _, None => inr (TASK_NOT_EXIST x)
+    end
+  | END_TASK =>
+    match Map_TID.find x s with
+    | Some {| bind := f; open := [] |} => inl (Map_TID.remove x s)
+    | _ => inr (TASK_NOT_EXIST x)
+    end
+  end.
+
+  Lemma reduces_some_to_prop:
+    forall s x o s',
+    reduces s x o = inl s' ->
+    Reduces s (x, o) s'.
+  Proof.
+    intros.
+    destruct o; simpl in *.
+    - destruct (in_dec f s). {
+        inversion H.
+      }
+      destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(?,(R,Hx))]; rewrite R in *; clear R. {
+        inversion H; subst; clear H.
+        auto using reduces_init.
+      }
+      inversion H.
+    - destruct (in_dec f s). {
+        inversion H.
+      }
+      destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|((g,l),(R,Hx))];
+      rewrite R in *; clear R;
+      inversion H; subst; clear H.
+      auto using reduces_begin_finish.
+    - destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|((g,l),(R,Hx))];
+      rewrite R in *; clear R;
+      inversion H; subst; clear H.
+      destruct l. {
+        inversion H1.
+      }
+      destruct (Map_FID_Extra.P.F.eq_dec f f0). {
+        symmetry in e; subst.
+        destruct (nonempty_empty_dec f s);
+        inversion H1; subst; clear H1.
+        auto using reduces_end_finish.
+      }
+      inversion H1.
+    - destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|((g,l),(R,Hx))];
+      rewrite R in *; clear R. {
+        destruct (Map_TID_Extra.find_rw t s) as [(R,Hy)|((h,m),(R,Hy))];
+        rewrite R in *; clear R;
+        inversion H.
+      }
+      destruct (Map_TID_Extra.find_rw t s) as [(R,Hy)|(ft,(R,Hy))];
+      rewrite R in *; clear R;
+      inversion H; subst; clear H.
+      remember(make _) as ft.
+      assert (R: ft = make (ief {| bind := g; open := l |})). {
+        rewrite Heqft in *; simpl.
+        auto.
+      }
+      rewrite R in *; clear R.
+      auto using reduces_begin_task.
+    - destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|((g,l),(R,Hx))];
+      rewrite R in *; clear R. {
+        inversion H.
+      }
+      destruct l; inversion H; subst; clear H.
+      eauto using reduces_end_task.
+  Qed.
+
+  Lemma empty_to_not_nonempty:
+    forall f s,
+    Empty f s ->
+    ~ Nonempty f s.
+  Proof.
+    intros.
+    unfold not; intros N.
+    inversion H; subst; clear H.
+    inversion N; subst; clear N.
+    assert (~ Bind x f s) by auto.
+    contradiction.
+  Qed.
+
+  Lemma nonempty_to_not_empty:
+    forall f s,
+    Nonempty f s ->
+    ~ Empty f s.
+  Proof.
+    unfold not; intros.
+    inversion H; subst; clear H.
+    inversion H0; subst; clear H0.
+    assert (~ Bind x f s) by auto.
+    contradiction.
+  Qed.
+
+  Lemma reduces_prop_to_some:
+    forall s x o s',
+    Reduces s (x, o) s' ->
+    reduces s x o = inl s'.
+  Proof.
+    intros.
+    inversion H; subst; clear H; simpl.
+    - destruct (in_dec f s). {
+        contradiction.
+      }
+      destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|((g,l),(R,Hx))];
+      rewrite R in *; clear R. {
+        trivial.
+      }
+      apply Map_TID_Extra.mapsto_to_in in Hx.
+      contradiction.
+    - destruct (in_dec f s). {
+        contradiction.
+      }
+      destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(ft,(R,Hx))];
+      rewrite R in *; clear R. {
+        apply Map_TID_Extra.mapsto_to_in in H5.
+        contradiction.
+      }
+      assert (ft = {| bind := g; open := l |}) by
+      eauto using Map_TID_Facts.MapsTo_fun; subst.
+      trivial.
+    - destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(ft,(R,Hx))];
+      rewrite R in *; clear R. {
+        apply Map_TID_Extra.mapsto_to_in in H3.
+        contradiction.
+      }
+      assert (ft = {| bind := g; open := f:: l |}) by
+      eauto using Map_TID_Facts.MapsTo_fun; subst.
+      destruct (FID.eq_dec f f). {
+        destruct (nonempty_empty_dec f s). {
+          apply nonempty_to_not_empty in n.
+          contradiction.
+        }
+        trivial.
+      }
+      contradiction.
+    - destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(ft',(R,Hx))];
+      rewrite R in *; clear R. {
+        contradict Hx.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      }
+      assert (ft' = ft) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      destruct (Map_TID_Extra.find_rw u s) as [(R,Hy)|(ft',(R,Hy))];
+      rewrite R in *; clear R. {
+        trivial.
+      }
+      apply Map_TID_Extra.mapsto_to_in in Hy; contradiction.
+    - destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(ft',(R,Hx))];
+      rewrite R in *; clear R. {
+        contradict Hx.
+        eauto using Map_TID_Extra.mapsto_to_in.
+      }
+      assert (ft' = {| bind := f; open := [] |}) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      trivial.
   Qed.
 
   Lemma open_reduces:

@@ -209,4 +209,11 @@ Module Map_FID_Props := FMapFacts.Properties Map_FID.
 Module Map_FID_Extra := MapUtil Map_FID.
 Definition fid := FID.t.
 
+Lemma fid_eq_rw:
+  forall k k' : fid, k = k' <-> k = k'.
+Proof.
+  intros.
+  auto with *.
+Qed.
+
 (* end hide  *)
