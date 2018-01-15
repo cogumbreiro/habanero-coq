@@ -1,3 +1,4 @@
+Require Import HJ.Tid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Phaser.
 Require Import HJ.Phasers.WellFormed.

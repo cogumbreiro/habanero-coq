@@ -9,11 +9,11 @@ Require Import Aniceto.List.
 Require PhaseOrdering.Phaser.
 
 Require Import Phasers.Taskview.
-Require Import Regmode.
-Require Import Vars.
+Require Import HJ.Phasers.Regmode.
+Require Import HJ.Vars.
+Require Import HJ.Tid.
 Require Import Node.
-Require Import Phasers.Phaser.
-
+Require Import HJ.Phasers.Phaser.
 
 Section WP_SP.
   (**
@@ -345,7 +345,7 @@ Section WP_SP.
     intros.
     inversion H; subst; clear H.
     destruct (TID.eq_dec x y). {
-      subst.
+      rewrite tid_eq_rw in *; subst.
       eauto using signal_phase_def, wait_mapsto_spec.
     }
     eauto using wait_2, signal_phase_def.
@@ -385,7 +385,7 @@ Section WP_SP.
     inversion H0; subst; clear H0.
     inversion H; subst; clear H.
     destruct (TID.eq_dec (get_task r) x). {
-      subst.
+      rewrite tid_eq_rw in *; subst.
       contradiction H0.
       eauto using Map_TID_Extra.mapsto_to_in.
     }
@@ -402,7 +402,7 @@ Section WP_SP.
     inversion H0; subst; clear H0.
     inversion H; subst; clear H.
     destruct (TID.eq_dec (get_task r) x). {
-      subst.
+      rewrite tid_eq_rw in *; subst.
       contradiction H0.
       eauto using Map_TID_Extra.mapsto_to_in.
     }
@@ -1455,7 +1455,7 @@ Section Defs.
   Proof.
     intros.
     destruct (TID.eq_dec x y). {
-      subst.
+      rewrite tid_eq_rw in *; subst.
       inversion H1; subst; clear H1.
       apply set_phase_to_get_phase in H3.
       assert (n = ph). {
@@ -1476,7 +1476,7 @@ Section Defs.
   Proof.
     intros.
     destruct (TID.eq_dec x y). {
-      subst.
+      rewrite tid_eq_rw in *; subst.
       eauto using copy_1.
     }
     eapply copy_2; eauto.
@@ -1595,7 +1595,7 @@ Section Sound.
     destruct o; inversion H2; simpl in *; subst;
     inversion H3; subst; clear H2 H3.
     - destruct (TID.eq_dec x t). {
-        subst.
+        rewrite tid_eq_rw in *; subst.
         eauto using signal_eq.
       }
       eapply inc_3 in H6; eauto using signal_phase_signal_2.
@@ -1605,7 +1605,7 @@ Section Sound.
       destruct H4 as (Hx,Hy).
       auto using signal_phase_drop_2.
     - destruct (TID.eq_dec (get_task r) t). {
-        subst.
+        rewrite tid_eq_rw in *; subst.
         apply signal_phase_register_1; auto.
         eauto using wf_phases_copy, copy_inv_eq, copy_4.
       }
@@ -1639,7 +1639,7 @@ Section Sound.
     intros.
     inversion H; subst; clear H.
     destruct (TID.eq_dec x y). {
-      subst.
+      rewrite tid_eq_rw in *; subst.
       apply wait_phase_def with (v:=Taskview.signal v);
       auto using signal_preserves_wait_phase, Phaser.signal_1.
     }
@@ -1701,7 +1701,7 @@ Section Sound.
     inversion H0; subst; clear H0.
     inversion H; subst; clear H.
     destruct (TID.eq_dec (get_task r) x). {
-      subst.
+      rewrite tid_eq_rw in *; subst.
       contradiction H0.
       eauto using Map_TID_Extra.mapsto_to_in.
     }
@@ -1726,7 +1726,7 @@ Section Sound.
       }
       eauto using wait_phase_signal_1.
     - destruct (TID.eq_dec t x). {
-        subst.
+        rewrite tid_eq_rw in *; subst.
         apply inc_inv in H5.
         rename n into xw.
         destruct H5 as (n, (Hg1, Hg2)).
@@ -1738,7 +1738,7 @@ Section Sound.
       destruct H3 as (?, Hg).
       eauto using wait_phase_drop_1.
     - destruct (TID.eq_dec (get_task r) t). {
-        subst.
+        rewrite tid_eq_rw in *; subst.
         apply wait_phase_register_1; auto.
         eauto using wf_phases_copy, copy_inv_eq, copy_4.
       }

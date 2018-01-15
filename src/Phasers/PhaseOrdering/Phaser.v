@@ -2,6 +2,7 @@ Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Arith.Compare_dec.
 Require Import Coq.Arith.Peano_dec.
 
+Require Import HJ.Tid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Taskview.
@@ -671,7 +672,7 @@ Section Facts.
     Proof.
       intros.
       destruct (TID.eq_dec t' t). {
-        subst.
+        rewrite tid_eq_rw in *; subst.
         assert (rw:=H).
         destruct o; simpl in *; try destruct H1.
         - right.
@@ -708,7 +709,7 @@ Section Facts.
     apply ph_rel_def.
     intros tz tx vz vx; intros.
     destruct (TID.eq_dec t tz). {
-      subst.
+      rewrite tid_eq_rw in *; subst.
       rename H1 into r.
       assert (i: Map_TID.In tz y) by (inversion r; eauto using register_inv_in).
       apply Map_TID_Extra.in_to_mapsto in i.

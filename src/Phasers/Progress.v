@@ -5,6 +5,7 @@ Require Import Coq.Lists.List.
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Lists.SetoidList.
 
+Require Import HJ.Tid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.PhaseDiff.

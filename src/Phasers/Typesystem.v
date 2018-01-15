@@ -1,3 +1,4 @@
+Require Import HJ.Tid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import Coq.Lists.List.

@@ -17,7 +17,8 @@ t0, end_finish f3
 *)
 Require Import Coq.Lists.List.
 Import ListNotations.
-Require Import Vars.
+Require Import Tid.
+Require Import Fid.
 Require Import Aniceto.Graphs.DAG.
 Require Import Aniceto.List.
 Require Import Aniceto.Graphs.FGraph.
@@ -1704,16 +1705,16 @@ Section Props.
       contradiction.
   Defined.
 
-  Inductive reduce_err :=
-  | TASK_EXIST: tid -> reduce_err
-  | TASK_NOT_EXIST: tid -> reduce_err
-  | FINISH_EXIST: fid -> reduce_err
-  | FINISH_NOT_EXIST: fid -> reduce_err
-  | FINISH_NONEMPTY: fid -> reduce_err
-  | FINISH_TOP_NEQ: fid -> reduce_err
-  | FINISH_OPEN_EMPTY: reduce_err.
+  Inductive reduces_err :=
+  | TASK_EXIST: tid -> reduces_err
+  | TASK_NOT_EXIST: tid -> reduces_err
+  | FINISH_EXIST: fid -> reduces_err
+  | FINISH_NOT_EXIST: fid -> reduces_err
+  | FINISH_NONEMPTY: fid -> reduces_err
+  | FINISH_TOP_NEQ: fid -> reduces_err
+  | FINISH_OPEN_EMPTY: reduces_err.
 
-  Definition reduces s x o : state + reduce_err :=
+  Definition reduces s x o : state + reduces_err :=
   match o with
   | INIT f =>
     if in_dec f s then inr (FINISH_EXIST f) else
@@ -2077,3 +2078,4 @@ Module Trace.
     Qed.
   End Props.
 End Trace.
+

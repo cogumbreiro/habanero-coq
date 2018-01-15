@@ -1,5 +1,5 @@
 Set Implicit Arguments.
-
+Require Import HJ.Tid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Phaser.

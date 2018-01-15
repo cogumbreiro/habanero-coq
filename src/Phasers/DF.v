@@ -2,6 +2,7 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 
 Require Import Phasers.Lang.
+Require Import Tid.
 Require Import Vars.
 Require HJ.Phasers.Typesystem.
 Require HJ.Phasers.WellFormed.

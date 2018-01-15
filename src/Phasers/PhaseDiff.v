@@ -5,6 +5,7 @@ Require Import Coq.Lists.List.
 Require Import Aniceto.List.
 Require Import Aniceto.Map.
 Require Import Aniceto.ListSet.
+Require Import HJ.Tid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 

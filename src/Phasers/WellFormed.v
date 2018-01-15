@@ -1,5 +1,5 @@
 Require Import HJ.Vars.
-
+Require Import HJ.Tid.
 Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Lists.List.
 

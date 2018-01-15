@@ -7,6 +7,8 @@ Require HJ.Phasers.DF.
 
 Require Coq.Lists.List.
 
+Require Import HJ.Tid.
+Require Import HJ.Fid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Phasermap.
 
@@ -235,7 +237,6 @@ End Typesystem.
 
 
 Module State.
-
   Structure t := make {
     finishes: finish_t;
     phasers: Map_FID.t phasermap_t;

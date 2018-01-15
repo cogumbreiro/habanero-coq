@@ -11,6 +11,7 @@ Require Import HJ.Phasers.TransDiff.
 Require Import HJ.Phasers.PhaseDiff.
 Require Import HJ.Phasers.Typesystem.
 Require Import HJ.Vars.
+Require Import HJ.Tid.
 
 Section SR.
 
@@ -37,7 +38,8 @@ Proof.
   intros.
   unfold wait_delta, tid_eq_sig.
   simpl.
-  destruct (TID.eq_dec t' t), (TID.eq_dec t t); intuition.
+  destruct (TID.eq_dec t' t), (TID.eq_dec t t);
+  rewrite tid_eq_rw in *; subst; intuition.
 Qed.
 
 Lemma wait_delta_right:
@@ -48,7 +50,8 @@ Proof.
   intros.
   unfold wait_delta, tid_eq_sig.
   simpl.
-  destruct (TID.eq_dec t' t), (TID.eq_dec t t); intuition.
+  destruct (TID.eq_dec t' t), (TID.eq_dec t t);
+  rewrite tid_eq_rw in *; subst; intuition.
 Qed.
 
 Lemma wait_delta_neq:
@@ -60,7 +63,8 @@ Proof.
   intros.
   unfold wait_delta, tid_eq_sig.
   simpl.
-  destruct (TID.eq_dec t1 t), (TID.eq_dec t2 t); intuition.
+  destruct (TID.eq_dec t1 t), (TID.eq_dec t2 t);
+  rewrite tid_eq_rw in *; subst; intuition.
 Qed.
 
 Lemma wait_phase_wait:
@@ -1354,7 +1358,7 @@ Section Async.
     apply async_1_mapsto in H0.
     destruct H0 as [?|(v',(r,(?,(?,mt'))))]. {
       unfold chg_tid.
-      destruct (Map_PHID_Extra.P.F.eq_dec x (get_new_task ps)). {
+      destruct (TID.eq_dec x (get_new_task ps)). {
         subst.
         inversion pre.
         contradiction H1.

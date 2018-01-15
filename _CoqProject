@@ -1,5 +1,7 @@
 -R src HJ
 
+src/Tid.v
+src/Fid.v
 src/Vars.v
 src/Phasers/Regmode.v
 src/Phasers/Taskview.v
@@ -24,7 +26,6 @@ src/Phasers/DF.v
 src/Finish/Lang.v
 src/Finish/DF.v
 #
-src/Common.v
 src/Bijection.v
 src/Node.v
 src/All.v

@@ -1,10 +1,9 @@
-Require Import HJ.Vars.
+Require Import HJ.Tid.
 Require Import HJ.Phasers.Regmode.
 Require Import HJ.Phasers.Taskview.
 Require Import Compare_dec.
 
 Section Defs.
-  Import HJ.Vars.Map_TID.
 
   (**
     A phaser is a map from task names [tid] into taskviews, represented
@@ -32,7 +31,7 @@ Section Defs.
     Task [t] becomes registered with the initial taskview [Taskview.make].
   *)
 
-  Definition make t := add t Taskview.make (Map_TID.empty taskview).
+  Definition make t := Map_TID.add t Taskview.make (Map_TID.empty taskview).
 
   (** * Signal *)
 
@@ -43,8 +42,8 @@ Section Defs.
   *)
 
   Definition update (t:tid) (f:taskview -> taskview) (ph:phaser) : phaser :=
-    match find t ph with
-    | Some v => add t (f v) ph
+    match Map_TID.find t ph with
+    | Some v => Map_TID.add t (f v) ph
     | None => ph
     end.
 
@@ -60,7 +59,7 @@ Section Defs.
   Definition signal_pre t ph :
     { SignalPre t ph } + { ~ SignalPre t ph }.
   Proof.
-    remember (find t ph).
+    remember (Map_TID.find t ph).
     symmetry in Heqo.
     destruct o as [v|]. {
       rewrite <- Map_TID_Facts.find_mapsto_iff in *.
@@ -113,7 +112,7 @@ Section Defs.
   Inductive Phase ph n : Prop :=
     phase_def:
       (forall t v,
-        MapsTo t v ph ->
+        Map_TID.MapsTo t v ph ->
         CanSignal (mode v) ->
         signal_phase v >= n) ->
       Phase ph n.
@@ -128,7 +127,7 @@ Section Defs.
 
   Let signalers_1:
     forall x v ph,
-    MapsTo x v ph ->
+    Map_TID.MapsTo x v ph ->
     CanSignal (mode v) ->
     List.In (x, signal_phase v) (signalers ph).
   Proof.
@@ -146,7 +145,7 @@ Section Defs.
   Let signalers_2:
     forall x n ph,
     List.In (x, n) (signalers ph) ->
-    exists v, MapsTo x v ph /\ CanSignal (mode v) /\ n = signal_phase v.
+    exists v, Map_TID.MapsTo x v ph /\ CanSignal (mode v) /\ n = signal_phase v.
   Proof.
     unfold signalers; intros.
     apply List.in_omap_2 in H.
@@ -212,7 +211,7 @@ Section Defs.
   Definition wait_pre x ph:
     { WaitPre x ph } + { ~ WaitPre x ph }.
   Proof.
-    remember (find x ph).
+    remember (Map_TID.find x ph).
     symmetry in Heqo.
     destruct o as [v|]. {
       rewrite <- Map_TID_Facts.find_mapsto_iff in *.
@@ -268,7 +267,7 @@ Section Defs.
     destruct (wait_pre x ph). {
       auto using try_wait_pre_can_wait.
     }
-    remember (find x ph).
+    remember (Map_TID.find x ph).
     symmetry in Heqo.
     destruct o as [v|]. {
       rewrite <- Map_TID_Facts.find_mapsto_iff in *.
@@ -317,7 +316,7 @@ Section Defs.
     contradiction.
   Defined.
 
-  Definition drop : tid -> phaser -> phaser := @remove taskview.
+  Definition drop : tid -> phaser -> phaser := @Map_TID.remove taskview.
 
   Definition drop_op := mk_rule DropPre drop_pre drop.
 
@@ -353,8 +352,8 @@ Section Defs.
   Definition register_pre r x ph:
     { RegisterPre r x ph } + { ~ RegisterPre r x ph }.
   Proof.
-    remember (find (get_task r) ph).
-    remember (find x ph).
+    remember (Map_TID.find (get_task r) ph).
+    remember (Map_TID.find x ph).
     symmetry in Heqo.
     symmetry in Heqo0.
     destruct o. {
@@ -395,8 +394,8 @@ Section Defs.
     *)
 
   Definition register (r:registry) (t:tid) (ph:phaser) : phaser := 
-    match find t ph with
-    | Some v => add (get_task r) (set_mode v (get_mode r)) ph
+    match Map_TID.find t ph with
+    | Some v => Map_TID.add (get_task r) (set_mode v (get_mode r)) ph
     | None => ph
     end.
 
@@ -874,7 +873,8 @@ Section Facts.
   Proof.
     intros.
     destruct (TID.eq_dec t' t). {
-      subst; left. intuition.
+      subst.
+      intuition.
     }
     right.
     intuition.
@@ -889,7 +889,8 @@ Section Facts.
   Proof.
     intros.
     destruct (TID.eq_dec t' t). {
-      subst; left. intuition.
+      subst.
+      left; intuition.
     }
     right.
     intuition.
@@ -1026,7 +1027,8 @@ Section Facts.
   Proof.
     intros.
     destruct (TID.eq_dec t' t). {
-      subst; left. intuition.
+      subst.
+      left. intuition.
     }
     right.
     intuition.

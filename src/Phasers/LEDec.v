@@ -3,6 +3,7 @@ Require Import Coq.Lists.List.
 
 Require Import Aniceto.Pair.
 
+Require Import HJ.Tid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.PhaseDiff.

@@ -1,4 +1,5 @@
-Require Import Vars.
+Require Import Tid.
+Require Import Fid.
 Require Import Finish.Lang.
 Require Import Coq.Lists.List.
 Import ListNotations.
