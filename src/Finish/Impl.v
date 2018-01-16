@@ -17,8 +17,9 @@ Section Defs.
     match pkg_op, pkg_arg with
     | 0, 0 => Some (INIT pkg_fid)
     | 1, 0 => Some (BEGIN_FINISH pkg_fid)
-    | 2, x => Some (BEGIN_TASK (taskid x))
-    | 3, 0 => Some END_TASK
+    | 2, 0 => Some (END_FINISH pkg_fid)
+    | 3, x => Some (BEGIN_TASK (taskid x))
+    | 4, 0 => Some END_TASK
     | _, _ => None
     end;
   }.
@@ -74,4 +75,4 @@ Extract Inlined Constant eq_nat_dec => "( = )".
 
 Extraction Language Ocaml.
 
-Extraction "ocaml/finish" run.
+Extraction "libhsem/lib/finish" run.
