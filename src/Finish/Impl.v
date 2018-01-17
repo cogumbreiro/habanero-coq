@@ -90,9 +90,9 @@ Section Defs.
   end.
 
   Definition checks_make := {|
-    enqueued := Map_TID.empty (list package);
-    last_time := Map_TID.empty nat;
-    curr_state := Map_TID.empty task
+    enqueued := Map_TID.empty _;
+    last_time := Map_TID.empty _;
+    curr_state := Map_TID.empty _
   |}.
 
 End Defs.
