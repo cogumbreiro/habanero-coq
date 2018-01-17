@@ -3,6 +3,7 @@ Require Import Coq.Arith.Peano_dec.
 Require Import HJ.Finish.Lang.
 Require Import HJ.Tid.
 Require Import HJ.Fid.
+Require Import Coq.Arith.EqNat.
 
 Section Defs.
   Structure package := make {
@@ -41,6 +42,59 @@ Section Defs.
   | None => inr (PKG_ERROR PARSE_ERROR)
   end.
 
+  Definition add1 s n p :=
+  if beq_nat n (pkg_time p)
+  then (run s p, (S n, nil))
+  else (inl s, (n, p::nil)).
+
+  Fixpoint add_all (s:state) (n:nat) (elems:list package) {struct elems} : ((state + run_err) * (nat * list package)) % type:=
+  match elems with
+  | nil => (inl s, (n, nil))
+  | p::ps =>
+    match ps with
+    | nil => add1 s n p
+    | _ =>
+      let result := add_all s n ps in
+      match fst result with
+      | inl s' => add1 s' n p
+      | _ => result
+      end
+    end
+  end.
+
+  Structure sem_state := {
+    enqueued : Map_TID.t (list package);
+    last_time : Map_TID.t nat;
+    curr_state : state;
+  }.
+
+  Definition checks_add (p:package) (s:sem_state) : (sem_state + run_err) %type :=
+  let x := pkg_tid p in
+  let ls := match Map_TID.find x (enqueued s) with
+  | Some ls => ls
+  | None => nil
+  end in
+  let n := match Map_TID.find x (last_time s) with
+  | Some n => n
+  | _ => 0
+  end in
+  let (s', y) := add_all (curr_state s) n ls in
+  let (n, ls) := y in
+  match s' with
+  | inl s' =>  inl {|
+      enqueued := Map_TID.add x ls (enqueued s);
+      last_time := Map_TID.add x n (last_time s);
+      curr_state := s'
+    |}
+  | inr x => inr x
+  end.
+
+  Definition checks_make := {|
+    enqueued := Map_TID.empty (list package);
+    last_time := Map_TID.empty nat;
+    curr_state := Map_TID.empty task
+  |}.
+
 End Defs.
 
 (* bools *)
@@ -75,4 +129,4 @@ Extract Inlined Constant eq_nat_dec => "( = )".
 
 Extraction Language Ocaml.
 
-Extraction "libhsem/lib/finish" run.
+Extraction "libhsem/lib/finish" checks_add checks_make.

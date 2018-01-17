@@ -10,14 +10,13 @@ type habanero_checks = [ `C ] structure
 let habanero_checks : habanero_checks typ = structure "habanero_checks"
 
 let habanero_checks_new () : habanero_checks ptr =
-    let result = Finish.Map_TID.empty in
+    let result = Finish.checks_make in
     Root.create result |> from_voidp habanero_checks
 
 let habanero_checks_free p =
-  if (ptr_compare (to_voidp p) null) == 0 then
-    ()
-  else
-  to_voidp p |> Root.release
+  if (ptr_compare (to_voidp p) null) == 0
+  then ()
+  else to_voidp p |> Root.release
 
 type action_t
 type habanero_action = action_t structure
@@ -43,27 +42,13 @@ let pkg_new a : Finish.package =
 let habanero_check (s:habanero_checks ptr) (a:habanero_action) : int =
     let ptr = to_voidp s in
     let s = Root.get ptr in
-    match Finish.run s (pkg_new a) with
-    | Inl s' ->
-      Root.set ptr s';
-      1
+    match Finish.checks_add (pkg_new a) s with
+    | Inl s' -> Root.set ptr s'; 1
     | Inr _ -> 0
 
 module Stubs(I : Cstubs_inverted.INTERNAL) =
 struct
   (* Expose the type 'struct handlers' to C. *)
-(*  let op_INIT = constant "INIT" int64_t
-  let op_BEGIN_FINISH  = constant "BEGIN_FINISH" int64_t
-  let op_END_FINISH  = constant "END_FINISH" int64_t
-  let op_BEGIN_TASK   = constant "BEGIN_TASK" int64_t
-  let op_END_TASK = constant "END_TASK" int64_t
-  let ops = enum "habanero_ops" [
-    `INIT, op_INIT;
-    `BEGIN_FINISH, op_BEGIN_FINISH;
-    `END_FINISH, op_END_FINISH;
-    `BEGIN_TASK, op_BEGIN_TASK;
-    `END_TASK, op_END_TASK;
-  ]*)
   let () = I.enum [
     ("INIT", Int64.of_int 0);
     ("BEGIN_FINISH", Int64.of_int 1);
@@ -76,9 +61,6 @@ struct
   let () = I.structure habanero_checks
   let () = I.internal "habanero_checks_new" (void @-> returning (ptr habanero_checks)) habanero_checks_new
   let () = I.internal "habanero_checks_free" (ptr habanero_checks @-> returning void) habanero_checks_free
-  (* We expose just a single function to C.  The first argument is a (pointer
-     to a) struct of callbacks, and the second argument is a string
-     representing a filename to parse. *)
   let () = I.internal "habanero_checks_add" (ptr habanero_checks @-> habanero_action @-> returning int)
     habanero_check
 end
