@@ -62,15 +62,15 @@ Section Defs.
     end
   end.
 
-  Structure sem_state := {
+  Structure checks := {
     enqueued : Map_TID.t (list package);
     last_time : Map_TID.t nat;
     curr_state : state;
   }.
 
-  Definition checks_add (p:package) (s:sem_state) : (sem_state + run_err) %type :=
+  Definition checks_add (p:package) s : (checks + run_err) %type :=
   let x := pkg_tid p in
-  let ls := match Map_TID.find x (enqueued s) with
+  let ls := p::match Map_TID.find x (enqueued s) with
   | Some ls => ls
   | None => nil
   end in
@@ -95,6 +95,99 @@ Section Defs.
     curr_state := Map_TID.empty _
   |}.
 
+  (** example of a reduction *)
+  Goal
+    forall p s',
+    pkg_time p = 0 ->
+    run (Map_TID.empty task) p = inl s'->
+    checks_add p checks_make = inl {|
+      enqueued := Map_TID.add (pkg_tid p) nil (Map_TID.empty _);
+      last_time := Map_TID.add (pkg_tid p) 1 (Map_TID.empty _);
+      curr_state := s'
+    |}.
+  Proof.
+    intros.
+    unfold checks_add, checks_make; simpl.
+    unfold add1.
+    remember (PeanoNat.Nat.eqb 0 (pkg_time p)).
+    symmetry in Heqb.
+    destruct b. {
+      rewrite PeanoNat.Nat.eqb_eq in *.
+      rewrite H0.
+      trivial.
+    }
+    rewrite PeanoNat.Nat.eqb_neq in *.
+    symmetry in H.
+    contradiction.
+  Qed.
+
+  (** another unit test of a reduction *)
+  Goal
+    forall p s' s'',
+    let e := Map_TID.add (pkg_tid p) nil (Map_TID.empty _) in
+    let l := Map_TID.add (pkg_tid p) 1 (Map_TID.empty _) in
+    let s := {|
+      enqueued := e;
+      last_time := l;
+      curr_state := s'
+    |} in
+    pkg_time p = 1 ->
+    run s' p = inl s'' ->
+    checks_add p s = inl {|
+      enqueued := Map_TID.add (pkg_tid p) nil e;
+      last_time := Map_TID.add (pkg_tid p) 2 l;
+      curr_state := s''
+    |}.
+  Proof.
+    intros.
+    unfold checks_add, checks_make; simpl.
+    unfold add1.
+    remember (PeanoNat.Nat.eqb 0 (pkg_time p)).
+    symmetry in Heqb.
+    destruct b. {
+      rewrite PeanoNat.Nat.eqb_eq in *.
+      rewrite H in *.
+      inversion Heqb.
+    }
+    rewrite PeanoNat.Nat.eqb_neq in *.
+    destruct (Map_TID_Extra.find_rw (pkg_tid p) e) as [(R,mt)|(?,(R,mt))];
+    rewrite R in *; clear R. {
+      unfold e in *.
+      contradiction mt.
+      rewrite Map_TID_Facts.add_in_iff.
+      auto.
+    }
+    destruct (Map_TID_Extra.find_rw (pkg_tid p) l) as [(R,mt2)|(z,(R,mt2))];
+    rewrite R in *; clear R. {
+      unfold l in *.
+      contradiction mt2.
+      rewrite Map_TID_Facts.add_in_iff.
+      auto.
+    }
+    assert (R: x = nil). {
+      unfold e in *.
+      rewrite Map_TID_Extra.P.F.add_mapsto_iff in *.
+      destruct mt as [(?,?)|(?,?)]; auto.
+      contradiction.
+    }
+    rewrite R; clear R.
+    assert (R: z = 1). {
+      unfold l in *.
+      rewrite Map_TID_Extra.P.F.add_mapsto_iff in *.
+      destruct mt2 as [(?,?)|(?,?)]; auto.
+      contradiction.
+    }
+    subst.
+    rewrite H0.
+    remember (PeanoNat.Nat.eqb 1 (pkg_time p)).
+    symmetry in Heqb0.
+    destruct b. {
+      trivial.
+    }
+    rewrite PeanoNat.Nat.eqb_neq in *.
+    symmetry in H.
+    contradiction.
+  Qed.
 End Defs.
 
 (* bools *)
