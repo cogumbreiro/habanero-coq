@@ -67,6 +67,9 @@ let habanero_check (s:habanero_checks ptr) (a:habanero_action) : int =
     | Inl s' -> Root.set ptr s'; 1
     | Inr _ -> 0
 
+let habanero_count (s: habanero_checks ptr) : int =
+    to_voidp s |> Root.get |> Finish.count_enqueued
+
 exception Err of string
 
 let habanero_parse (filename:string) : habanero_checks ptr =
@@ -95,4 +98,5 @@ struct
   let () = I.internal "habanero_checks_add" (ptr habanero_checks @-> habanero_action @-> returning int)
     habanero_check
   let () = I.internal "habanero_checks_open" (string @-> returning (ptr habanero_checks)) habanero_parse
+  let () = I.internal "habanero_checks_count_enqueued" (ptr habanero_checks @-> returning int) habanero_count
 end

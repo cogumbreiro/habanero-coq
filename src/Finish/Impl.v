@@ -95,16 +95,20 @@ Section Defs.
     curr_state := Map_TID.empty _
   |}.
 
+  Definition count_enqueued s :=
+    List.fold_left (fun x y => x + length y) (Map_TID_Extra.values (enqueued s)) 0.
+
   (** example of a reduction *)
   Goal
     forall p s',
     pkg_time p = 0 ->
     run (Map_TID.empty task) p = inl s'->
-    checks_add p checks_make = inl {|
+    let s'' := {|
       enqueued := Map_TID.add (pkg_tid p) nil (Map_TID.empty _);
       last_time := Map_TID.add (pkg_tid p) 1 (Map_TID.empty _);
       curr_state := s'
-    |}.
+    |} in
+    checks_add p checks_make = inl s'' /\ count_enqueued s'' = 0.
   Proof.
     intros.
     unfold checks_add, checks_make; simpl.
@@ -114,7 +118,8 @@ Section Defs.
     destruct b. {
       rewrite PeanoNat.Nat.eqb_eq in *.
       rewrite H0.
-      trivial.
+      unfold count_enqueued, s''; simpl.
+      auto.
     }
     rewrite PeanoNat.Nat.eqb_neq in *.
     symmetry in H.
@@ -222,4 +227,4 @@ Extract Inlined Constant eq_nat_dec => "( = )".
 
 Extraction Language Ocaml.
 
-Extraction "libhsem/lib/finish" checks_add checks_make.
+Extraction "libhsem/lib/finish" checks_add checks_make count_enqueued.

@@ -17,6 +17,7 @@ int main(int argc, char **argv)
     .time = 0,
     .arg = 0
   }));
+  assert(habanero_checks_count_enqueued(s) == 0);
 
   assert(habanero_checks_add(s, (habanero_action) {
     .task = 1,
@@ -25,6 +26,7 @@ int main(int argc, char **argv)
     .time = 1,
     .arg = 2
   }));
+  assert(habanero_checks_count_enqueued(s) == 0);
 
   assert(habanero_checks_add(s, (habanero_action) {
     .task = 2,
@@ -33,6 +35,7 @@ int main(int argc, char **argv)
     .time = 0,
     .arg = 0
   }));
+  assert(habanero_checks_count_enqueued(s) == 0);
   
   assert(habanero_checks_add(s, (habanero_action) {
     .task = 2,
@@ -41,6 +44,7 @@ int main(int argc, char **argv)
     .time = 1,
     .arg = 0
   }));
+  assert(habanero_checks_count_enqueued(s) == 0);
 
   assert(habanero_checks_add(s, (habanero_action) {
     .task = 1,
@@ -49,6 +53,8 @@ int main(int argc, char **argv)
     .time = 2,
     .arg = 0
   }));
+  assert(habanero_checks_count_enqueued(s) == 0);
+
   habanero_checks_free(s);
   puts("All tests passed!");
   return 0;
