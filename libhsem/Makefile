@@ -3,7 +3,7 @@ BUILDDIR=_build
 VPATH=$(BUILDDIR)
 OCAMLDIR=$(shell ocamlopt -where)
 $(shell mkdir -p $(BUILDDIR) $(BUILDDIR)/stub $(BUILDDIR)/lib $(BUILDDIR)/stub_generator $(BUILDDIR)/test $(BUILDDIR)/generated)
-PACKAGES=ctypes.stubs,ctypes.foreign
+PACKAGES=yojson,ctypes.stubs,ctypes.foreign
 
 # The files used to build the stub generator.
 GENERATOR_FILES=$(BUILDDIR)/lib/finish.cmx \

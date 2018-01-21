@@ -1,6 +1,7 @@
 open Ctypes
 open Foreign
 open Finish
+open List
 (* Define a struct of callbacks (C function pointers) *)
 
 let habanero_op = Ctypes.typedef Ctypes.int "enum habanero_op"
@@ -39,6 +40,26 @@ let pkg_new a : Finish.package =
         Finish.pkg_arg = getf a a_arg;
     }
 
+let all_ops = [
+    ("INIT", 0);
+    ("BEGIN_FINISH", 1);
+    ("END_FINISH", 2);
+    ("BEGIN_TASK", 3);
+    ("END_TASK", 4)
+]
+
+
+let json_to_package j =
+    let open Yojson.Basic.Util in
+    let op = member "op" j |> to_string in
+    {
+        Finish.pkg_task = member "task" j |> to_int;
+        Finish.pkg_op = List.find (fun x -> fst x = op) all_ops |> snd;
+        Finish.pkg_id = member "id" j |> to_int;
+        Finish.pkg_time = member "time" j |> to_int;
+        Finish.pkg_arg = member "arg" j |> to_int;
+    }
+
 let habanero_check (s:habanero_checks ptr) (a:habanero_action) : int =
     let ptr = to_voidp s in
     let s = Root.get ptr in
@@ -46,16 +67,26 @@ let habanero_check (s:habanero_checks ptr) (a:habanero_action) : int =
     | Inl s' -> Root.set ptr s'; 1
     | Inr _ -> 0
 
+exception Err of string
+
+let habanero_parse (filename:string) : habanero_checks ptr =
+    let stream_file c = Stream.from (fun _ ->
+         try Some (input_line c) with End_of_file -> None) in
+    let chk = ref Finish.checks_make in (* initialize hchecks *)
+    let chan = open_in filename in
+    Stream.iter (fun line ->
+        let pkg = Yojson.Basic.from_string line |> json_to_package in
+        match Finish.checks_add pkg !chk with
+        | Inl s' -> chk := s'
+        | Inr _ -> raise (Err "Error parsing")
+    ) (stream_file chan);
+    close_in chan;
+    Root.create (!chk) |> from_voidp habanero_checks
+
 module Stubs(I : Cstubs_inverted.INTERNAL) =
 struct
   (* Expose the type 'struct handlers' to C. *)
-  let () = I.enum [
-    ("INIT", Int64.of_int 0);
-    ("BEGIN_FINISH", Int64.of_int 1);
-    ("END_FINISH", Int64.of_int 2);
-    ("BEGIN_TASK", Int64.of_int 3);
-    ("END_TASK", Int64.of_int 4)] habanero_op
-
+  let () = I.enum (List.map (fun (k, v) -> (k, Int64.of_int v)) all_ops) habanero_op
   let () = I.structure struct_habanero_action
   let () = I.typedef struct_habanero_action "habanero_action"
   let () = I.structure habanero_checks
@@ -63,4 +94,5 @@ struct
   let () = I.internal "habanero_checks_free" (ptr habanero_checks @-> returning void) habanero_checks_free
   let () = I.internal "habanero_checks_add" (ptr habanero_checks @-> habanero_action @-> returning int)
     habanero_check
+  let () = I.internal "habanero_checks_open" (string @-> returning (ptr habanero_checks)) habanero_parse
 end

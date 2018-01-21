@@ -14,7 +14,7 @@ int main(int argc, char **argv)
     .task = 1,
     .op = INIT,
     .id = 1,
-    .time = 1,
+    .time = 0,
     .arg = 0
   }));
 
@@ -22,7 +22,7 @@ int main(int argc, char **argv)
     .task = 1,
     .op = BEGIN_TASK,
     .id = 1,
-    .time = 2,
+    .time = 1,
     .arg = 2
   }));
 
@@ -46,7 +46,7 @@ int main(int argc, char **argv)
     .task = 1,
     .op = END_TASK,
     .id = 1,
-    .time = 3,
+    .time = 2,
     .arg = 0
   }));
   habanero_checks_free(s);
