@@ -1,5 +1,5 @@
 PROJ=hsem
-BUILDDIR=_build
+BUILDDIR=$(PWD)/_build
 VPATH=$(BUILDDIR)
 OCAMLDIR=$(shell ocamlopt -where)
 $(shell mkdir -p $(BUILDDIR) $(BUILDDIR)/stub $(BUILDDIR)/lib $(BUILDDIR)/stub_generator $(BUILDDIR)/test $(BUILDDIR)/generated)
@@ -80,9 +80,9 @@ clean:
 test: all
 	$(MAKE) -C $@
 ifeq ($(OSTYPE),Win32)
-	PATH="$(BUILDDIR):$(PATH)" _build/test/test.native
+	(cd test && PATH="$(BUILDDIR):$(PATH)" $(BUILDDIR)/test/test.native)
 else
-	LD_LIBRARY_PATH=$(BUILDDIR) _build/test/test.native
+	(cd test && LD_LIBRARY_PATH=$(BUILDDIR) $(BUILDDIR)/test/test.native)
 endif
 
 .PHONY: test
