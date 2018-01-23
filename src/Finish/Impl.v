@@ -6,24 +6,119 @@ Require Import HJ.Fid.
 Require Import Coq.Arith.EqNat.
 
 Section Defs.
+  Import ListNotations.
+
+  Inductive package_op :=
+  | PKG_INIT
+  | PKG_BEGIN_FINISH
+  | PKG_END_FINISH
+  | PKG_BEGIN_TASK
+  | PKG_END_TASK.
+
+  Definition nat_to_op (o:nat) :=
+  match o with
+  | 0 => Some PKG_INIT
+  | 1 => Some PKG_BEGIN_FINISH
+  | 2 => Some PKG_END_FINISH
+  | 3 => Some PKG_BEGIN_TASK
+  | 4 => Some PKG_END_TASK
+  | _ => None
+  end.
+
+  Definition op_to_nat o :=
+  match o with
+  | PKG_INIT => 0
+  | PKG_BEGIN_FINISH => 1
+  | PKG_END_FINISH => 2
+  | PKG_BEGIN_TASK => 3
+  | PKG_END_TASK => 4
+  end.
+
+  Lemma op_to_nat_spec_1:
+    forall o,
+    nat_to_op (op_to_nat o) = Some o.
+  Proof.
+    destruct o; auto.
+  Qed.
+
+  Lemma op_to_nat_spec_2:
+    forall n o,
+    nat_to_op n = Some o ->
+    op_to_nat o = n.
+  Proof.
+    intros.
+    repeat (destruct n; simpl in *; inversion H; subst; auto).
+  Qed.
+
+  Lemma op_to_nat_spec_3:
+    forall n o,
+    op_to_nat o = n ->
+    nat_to_op n = Some o.
+  Proof.
+    intros.
+    destruct o; simpl in *; subst; simpl; auto.
+  Qed.
+
+  Definition nat_to_args o (a:nat) :=
+  match o with
+  | PKG_INIT => []
+  | PKG_BEGIN_FINISH => []
+  | PKG_END_FINISH => []
+  | PKG_BEGIN_TASK => [a]
+  | PKG_END_TASK => []
+  end.
+
   Structure package := make {
-    pkg_task : nat;
-    pkg_op: nat;
-    pkg_id: nat;
+    pkg_task : tid;
+    pkg_op: package_op;
+    pkg_id: fid;
     pkg_time: nat;
-    pkg_arg: nat;
-    pkg_tid := taskid pkg_task;
-    pkg_fid := finishid pkg_id;
+    pkg_args: list nat;
     pkg_parse_op :=
-    match pkg_op, pkg_arg with
-    | 0, 0 => Some (INIT pkg_fid)
-    | 1, 0 => Some (BEGIN_FINISH pkg_fid)
-    | 2, 0 => Some (END_FINISH pkg_fid)
-    | 3, x => Some (BEGIN_TASK (taskid x))
-    | 4, 0 => Some END_TASK
+    match pkg_op, pkg_args with
+    | PKG_INIT, [] => Some (INIT pkg_id)
+    | PKG_BEGIN_FINISH, [] => Some (BEGIN_FINISH pkg_id)
+    | PKG_END_FINISH, [] => Some (END_FINISH pkg_id)
+    | PKG_BEGIN_TASK, [x] => Some (BEGIN_TASK (taskid x))
+    | PKG_END_TASK, [] => Some END_TASK
     | _, _ => None
     end;
   }.
+
+  (** Test cases that catch bugs we found: *)
+
+  Goal forall p n,
+    pkg_args p = [n] ->
+    pkg_op p = PKG_BEGIN_TASK ->
+    pkg_parse_op p = Some (BEGIN_TASK (taskid n)).
+  Proof.
+    intros.
+    unfold pkg_parse_op.
+    rewrite H0.
+    rewrite H.
+    trivial.
+  Qed.
+
+  Goal forall p,
+    pkg_args p = [] ->
+    pkg_op p <> PKG_BEGIN_TASK ->
+    exists o, pkg_parse_op p = Some o.
+  Proof.
+    intros.
+    unfold pkg_parse_op.
+    remember (pkg_op p).
+    destruct p0; subst; rewrite H; eauto.
+    contradiction.
+  Qed.
+
+  Definition pkg_create (x:tid) (p:fid*nat) (o:package_op) (l:list nat) :=
+  {| 
+    pkg_task := x;
+    pkg_op := o;
+    pkg_id := (fst p);
+    pkg_time := snd p;
+    pkg_args := l;
+  |}.
 
   Inductive pkg_err :=
   | PARSE_ERROR.
@@ -35,7 +130,7 @@ Section Defs.
   Definition run (s:state) (p:package) : (state + run_err) % type :=
   match pkg_parse_op p with
   | Some o =>
-    match Lang.reduces s (pkg_tid p) o with
+    match Lang.reduces s (pkg_task p) o with
     | inl s' => inl s'
     | inr e => inr (REDUCES_ERROR e)
     end
@@ -46,6 +141,63 @@ Section Defs.
   if beq_nat n (pkg_time p)
   then (run s p, (S n, nil))
   else (inl s, (n, p::nil)).
+
+  Definition enq := (nat * list package) % type.
+
+  Definition enq_zero : enq := (0, []).
+
+  Definition enq_curr (e:enq) := fst e.
+
+  Definition enq_elems (e:enq) := snd e.
+
+  Definition empty_enq n : enq := (n, []).
+
+  Definition enq_cons p (e:enq) := let (x, y) := e in (x, p :: y).
+
+  Definition enq_succ (e:enq) := let (x, y) := e in (S x, y).
+
+  Definition enq_select p ps (e:enq) :=
+  if beq_nat (enq_curr e) (pkg_time p)
+  then (p::ps, enq_succ e)
+  else (ps, enq_cons p e).
+
+  Goal enq_select (pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []) [] enq_zero
+    = ([pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []], (1, [])).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
+  Goal enq_select (pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]) [] (1, [])
+    = ([pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]], (2, [])).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
+  Fixpoint poll_ready (n:nat) (elems:list package) {struct elems} :
+     ((list package) * enq) % type:=
+  match elems with
+  | [] => ([], empty_enq n)
+  | [p] => enq_select p [] (n, [])
+  | p::elems =>
+      let (ps, e) := poll_ready n elems in
+      enq_select p ps e
+  end.
+
+  Goal poll_ready 0 [pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []] =
+    ([pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []], (1, [])).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
+  Goal poll_ready 1 [pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]] =
+    ([pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]], (2, [])).
+  Proof.
+    compute.
+    trivial.
+  Qed.
 
   Fixpoint add_all (s:state) (n:nat) (elems:list package) {struct elems} : ((state + run_err) * (nat * list package)) % type:=
   match elems with
@@ -62,137 +214,169 @@ Section Defs.
     end
   end.
 
+  Definition buffer :=  Map_FID.t enq.
+
   Structure checks := {
-    enqueued : Map_TID.t (list package);
-    last_time : Map_TID.t nat;
-    curr_state : state;
+    checks_buffer : buffer;
+    checks_state : state;
   }.
 
-  Definition checks_add (p:package) s : (checks + run_err) %type :=
-  let x := pkg_tid p in
-  let ls := p::match Map_TID.find x (enqueued s) with
-  | Some ls => ls
-  | None => nil
-  end in
-  let n := match Map_TID.find x (last_time s) with
-  | Some n => n
-  | _ => 0
-  end in
-  let (s', y) := add_all (curr_state s) n ls in
-  let (n, ls) := y in
-  match s' with
-  | inl s' =>  inl {|
-      enqueued := Map_TID.add x ls (enqueued s);
-      last_time := Map_TID.add x n (last_time s);
-      curr_state := s'
-    |}
-  | inr x => inr x
+  Definition buffer_add (p:package) (b:buffer) : (list package * buffer) :=
+  let f := pkg_id p in
+  let e := enq_cons p (match Map_FID.find f b with
+  | Some e => e
+  | None => enq_zero
+  end) in
+  let (l, e) := poll_ready (fst e) (snd e) in
+  (l, Map_FID.add f e b).
+
+  Goal buffer_add (pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []) (Map_FID.empty _) =
+    ([pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []], Map_FID.add (finishid 1) (1, []) (Map_FID.empty _)).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
+  Goal 
+    let p := pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1] in
+    let m := Map_FID.add (finishid 1) (1, []) (Map_FID.empty _) in
+    buffer_add p m = ([p], Map_FID.add (finishid 1) (2, []) m).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
+  Fixpoint buffer_add_all (ps:list package) (b:buffer) :=
+  match ps with
+  | [] => ([], b)
+  | p::ps =>
+    let (ps1, b) := buffer_add p b in
+    let (ps2, b) := buffer_add_all ps b in
+    (ps1 ++ ps2, b)
   end.
 
+  Goal
+    let l := [
+      pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []
+    ] in
+    let m := Map_FID.add (finishid 1) (1, []) (Map_FID.empty _) in
+    buffer_add_all l (Map_FID.empty _) = (l, m).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
+  Goal
+    let l := [
+      pkg_create (taskid 0) (finishid 1, 0) PKG_INIT [];
+      pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]
+    ] in
+    let m := Map_FID.add (finishid 1) (1, []) (Map_FID.empty _) in
+    buffer_add_all l (Map_FID.empty _) = (l, Map_FID.add (finishid 1) (2, []) m).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+
+  (** Regression test: *)
+  Goal
+    let foo := [
+      pkg_create (taskid 0) (finishid 1, 0) PKG_INIT [];
+      pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1];
+      pkg_create (taskid 1) (finishid 2, 0) PKG_BEGIN_FINISH [];
+      pkg_create (taskid 1) (finishid 2, 1) PKG_BEGIN_TASK [2];
+      pkg_create (taskid 2) (finishid 3, 0) PKG_BEGIN_FINISH [];
+      pkg_create (taskid 2) (finishid 3, 1) PKG_BEGIN_TASK [5]
+    ] in
+    fst (buffer_add_all foo (Map_FID.empty _)) = foo.
+  Proof.
+   compute.
+   trivial.
+  Qed.
+
+  (** Regression test: *)
+  Goal
+    let foo := [
+      pkg_create (taskid 0) (finishid 0, 0) PKG_INIT [];
+      pkg_create (taskid 0) (finishid 1, 0) PKG_BEGIN_FINISH []
+    ] in
+    fst (buffer_add_all foo (Map_FID.empty _)) = foo.
+  Proof.
+   compute.
+   trivial.
+  Qed.
+
+  Fixpoint parse_trace (l:list package) : option (list action) :=
+  match l with
+  | [] => Some []
+  | p::l =>
+    match pkg_parse_op p, parse_trace l with
+    | Some o, Some l => Some ((pkg_task p, o)::l)
+    | _, _ => None
+    end
+  end.
+
+  Goal
+    let l := [
+      pkg_create (taskid 0) (finishid 1, 0) PKG_INIT [];
+      pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1];
+      pkg_create (taskid 1) (finishid 2, 0) PKG_BEGIN_FINISH [];
+      pkg_create (taskid 1) (finishid 2, 1) PKG_BEGIN_TASK [2];
+      pkg_create (taskid 2) (finishid 3, 0) PKG_BEGIN_FINISH [];
+      pkg_create (taskid 2) (finishid 3, 1) PKG_BEGIN_TASK [5]
+    ] in
+    parse_trace l = Some [
+      (taskid 0, INIT (finishid 1));
+      (taskid 0, BEGIN_TASK (taskid 1));
+      (taskid 1, BEGIN_FINISH (finishid 2));
+      (taskid 1, BEGIN_TASK (taskid 2));
+      (taskid 2, BEGIN_FINISH (finishid 3));
+      (taskid 2, BEGIN_TASK (taskid 5))
+    ].
+  Proof.
+   compute.
+   trivial.
+  Qed.
+
+  Fixpoint reduces_n (s:state) (l:list action): (state + reduces_err) % type :=
+  match l with
+  | [] => inl s
+  | a::l =>
+    match reduces s (fst a) (snd a) with
+    | inl s =>
+      reduces_n s l
+    | inr e => inr e
+    end
+  end.
+
+  Let checks_add_aux ps b s : (checks + run_err) %type :=
+  match parse_trace ps with
+  | Some l =>
+    match reduces_n s l with
+    | inl s => inl {| checks_buffer := b; checks_state := s |}
+    | inr e => inr (REDUCES_ERROR e)
+    end
+  | None => inr (PKG_ERROR PARSE_ERROR)
+  end.
+
+  Definition checks_add (p:package) s : (checks + run_err) %type :=
+  let (ps, b) := buffer_add p (checks_buffer s) in
+  checks_add_aux ps b (checks_state s).
+
   Definition checks_make := {|
-    enqueued := Map_TID.empty _;
-    last_time := Map_TID.empty _;
-    curr_state := Map_TID.empty _
+    checks_buffer := Map_FID.empty _;
+    checks_state := Map_TID.empty _
   |}.
 
   Definition count_enqueued s :=
-    List.fold_left (fun x y => x + length y) (Map_TID_Extra.values (enqueued s)) 0.
-
-  (** example of a reduction *)
-  Goal
-    forall p s',
-    pkg_time p = 0 ->
-    run (Map_TID.empty task) p = inl s'->
-    let s'' := {|
-      enqueued := Map_TID.add (pkg_tid p) nil (Map_TID.empty _);
-      last_time := Map_TID.add (pkg_tid p) 1 (Map_TID.empty _);
-      curr_state := s'
-    |} in
-    checks_add p checks_make = inl s'' /\ count_enqueued s'' = 0.
-  Proof.
-    intros.
-    unfold checks_add, checks_make; simpl.
-    unfold add1.
-    remember (PeanoNat.Nat.eqb 0 (pkg_time p)).
-    symmetry in Heqb.
-    destruct b. {
-      rewrite PeanoNat.Nat.eqb_eq in *.
-      rewrite H0.
-      unfold count_enqueued, s''; simpl.
-      auto.
-    }
-    rewrite PeanoNat.Nat.eqb_neq in *.
-    symmetry in H.
-    contradiction.
-  Qed.
-
-  (** another unit test of a reduction *)
-  Goal
-    forall p s' s'',
-    let e := Map_TID.add (pkg_tid p) nil (Map_TID.empty _) in
-    let l := Map_TID.add (pkg_tid p) 1 (Map_TID.empty _) in
-    let s := {|
-      enqueued := e;
-      last_time := l;
-      curr_state := s'
-    |} in
-    pkg_time p = 1 ->
-    run s' p = inl s'' ->
-    checks_add p s = inl {|
-      enqueued := Map_TID.add (pkg_tid p) nil e;
-      last_time := Map_TID.add (pkg_tid p) 2 l;
-      curr_state := s''
-    |}.
-  Proof.
-    intros.
-    unfold checks_add, checks_make; simpl.
-    unfold add1.
-    remember (PeanoNat.Nat.eqb 0 (pkg_time p)).
-    symmetry in Heqb.
-    destruct b. {
-      rewrite PeanoNat.Nat.eqb_eq in *.
-      rewrite H in *.
-      inversion Heqb.
-    }
-    rewrite PeanoNat.Nat.eqb_neq in *.
-    destruct (Map_TID_Extra.find_rw (pkg_tid p) e) as [(R,mt)|(?,(R,mt))];
-    rewrite R in *; clear R. {
-      unfold e in *.
-      contradiction mt.
-      rewrite Map_TID_Facts.add_in_iff.
-      auto.
-    }
-    destruct (Map_TID_Extra.find_rw (pkg_tid p) l) as [(R,mt2)|(z,(R,mt2))];
-    rewrite R in *; clear R. {
-      unfold l in *.
-      contradiction mt2.
-      rewrite Map_TID_Facts.add_in_iff.
-      auto.
-    }
-    assert (R: x = nil). {
-      unfold e in *.
-      rewrite Map_TID_Extra.P.F.add_mapsto_iff in *.
-      destruct mt as [(?,?)|(?,?)]; auto.
-      contradiction.
-    }
-    rewrite R; clear R.
-    assert (R: z = 1). {
-      unfold l in *.
-      rewrite Map_TID_Extra.P.F.add_mapsto_iff in *.
-      destruct mt2 as [(?,?)|(?,?)]; auto.
-      contradiction.
-    }
-    subst.
-    rewrite H0.
-    remember (PeanoNat.Nat.eqb 1 (pkg_time p)).
-    symmetry in Heqb0.
-    destruct b. {
-      trivial.
-    }
-    rewrite PeanoNat.Nat.eqb_neq in *.
-    symmetry in H.
-    contradiction.
-  Qed.
+    List.fold_left (fun accum y => accum + length (snd y)) (Map_FID_Extra.values (checks_buffer s)) 0.
+(*
+  Inductive load_err :=
+  | LOAD_ERROR: nat -> run_err -> load_err.
+*)
+  Definition checks_load (l:list package) : (checks + run_err) % type :=
+  let (ps, b) := buffer_add_all l (Map_FID.empty _) in
+  checks_add_aux ps b (Map_TID.empty _).
 End Defs.
 
 (* bools *)
@@ -227,4 +411,5 @@ Extract Inlined Constant eq_nat_dec => "( = )".
 
 Extraction Language Ocaml.
 
-Extraction "libhsem/lib/finish" checks_add checks_make count_enqueued.
+Extraction "libhsem/lib/finish"
+  checks_add checks_make count_enqueued nat_to_op nat_to_args op_to_nat.

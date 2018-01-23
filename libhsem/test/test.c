@@ -6,7 +6,24 @@
 
 int main(int argc, char **argv)
 {
-    struct habanero_checks* s = habanero_checks_new();
+    struct habanero_checks* s;
+
+    s = habanero_checks_open("example1.json", &puts);
+    assert(s != NULL);
+    assert(habanero_checks_count_enqueued(s) == 0);
+    habanero_checks_free(s);
+
+    s = habanero_checks_open("example2.json", &puts);
+    assert(s != NULL);
+    assert(habanero_checks_count_enqueued(s) == 0);
+    habanero_checks_free(s);
+
+    s = habanero_checks_open("example3.json", &puts);
+    assert(s != NULL);
+    assert(habanero_checks_count_enqueued(s) == 0);
+    habanero_checks_free(s);
+
+    s = habanero_checks_new();
     
     // Example where we initalize, create a task, and remove that task
     
@@ -56,9 +73,7 @@ int main(int argc, char **argv)
     assert(habanero_checks_count_enqueued(s) == 0);
 
     habanero_checks_free(s);
-    
-    assert(habanero_checks_open("example.json", &puts) == NULL);
-    
+        
     puts("All tests passed!");
     return 0;
 }
