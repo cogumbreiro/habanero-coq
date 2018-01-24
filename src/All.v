@@ -28,7 +28,7 @@ Module Semantics.
   | BEGIN_ASYNC : phased -> op
   | END_ASYNC
   | BEGIN_FINISH: fid -> op
-  | END_FINISH: fid -> op
+  | END_FINISH: op
   | PH_NEW : phid -> op
   | PH_SIGNAL : phid -> op
   | PH_DROP : phid -> op
@@ -46,7 +46,7 @@ Module Semantics.
   | BEGIN_ASYNC _
   | END_ASYNC => task_op
   | BEGIN_FINISH _ 
-  | END_FINISH _ => finish_op
+  | END_FINISH => finish_op
   | PH_NEW _
   | PH_SIGNAL _
   | PH_DROP _
@@ -69,7 +69,7 @@ Module Semantics.
   (* Pushes a finish scope  *)
   | BEGIN_FINISH f => only_f (F.BEGIN_FINISH f)
   (* Drops all phasers and pops a finish scope *)
-  | END_FINISH f => both DROP_ALL (F.END_FINISH f)
+  | END_FINISH => both DROP_ALL F.END_FINISH
   (* Phaser-only operations: *)
   | PH_NEW p => only_p (Phasermap.PH_NEW p)
   | PH_SIGNAL p => only_p (Phasermap.PH_SIGNAL p)
@@ -581,7 +581,7 @@ Module Progress.
         assert (Finish.DF.Enabled ffs x) by auto.
         unfold Finish.DF.Enabled in *.
         destruct Hp as (m, Hp).
-        assert (Hf: exists g, Finish.DF.Reduces ffs (x, F.END_FINISH f0) g) by auto.
+        assert (Hf: exists g, Finish.DF.Reduces ffs (x, F.END_FINISH) g) by auto.
         destruct Hf as (g, Hf).
         eapply reduces_both; simpl; eauto.
       Qed.
@@ -955,7 +955,7 @@ Section Defs.
         |- _ =>
           destruct o; simpl in *; inversion H1; inversion H2
         end.
-      - eapply H in H2; eauto.
+      - eapply H in H2; eauto; clear H.
         match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
         inversion H; subst; clear H end.
         eapply F.bind_or_open_reduces in H2; eauto 1.
@@ -989,17 +989,11 @@ Section Defs.
             eauto using F.ief_fun.
           }
           contradiction.
-        + assert (f0 = f). {
-            assert (F.IEF x f (f_state (State.finishes s))). {
-              match goal with H: Lang.Reduces _ _ _ |- _ =>
-              inversion H; subst; clear H
-              end.
-              simpl in *.
-              eauto using F.ief_cons.
-            }
-            eauto using F.ief_fun.
-          }
-          contradiction.
+        + simpl in *.
+          repeat match goal with H: ?P = ?P |- _ => clear H end.
+          eapply Lang.open_reduces_inv_end_finish in Hx; eauto.
+          destruct Hx as [?|(?,Hx)]; try (subst; contradiction).
+          auto.
     }
     match goal with H: Semantics.creates_finish _ = _ |- _ =>
     destruct o; inversion H; subst; clear H end;

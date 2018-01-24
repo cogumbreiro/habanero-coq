@@ -79,7 +79,7 @@ Require Import Aniceto.Graphs.FGraph.
   Inductive op :=
   | INIT: fid -> op
   | BEGIN_FINISH: fid -> op
-  | END_FINISH: fid -> op
+  | END_FINISH: op
   | BEGIN_TASK: tid -> op
   | END_TASK: op.
 
@@ -239,7 +239,7 @@ End Task.
     forall s t f l g,
     Map_TID.MapsTo t {| bind := g; open := (f::l) % list |} s ->
     Empty f s ->
-    Reduces s (t, END_FINISH f) (Map_TID.add t {| bind := g; open := l |} s)
+    Reduces s (t, END_FINISH) (Map_TID.add t {| bind := g; open := l |} s)
 
   (** A task [t] spawns a task [u]. The new task [u] is bound to the
       IEF of [t]. XXX: replace this by Prop *)
@@ -270,7 +270,7 @@ End Task.
   | valid_end_finish:
     forall t f g l,
     Map_TID.MapsTo t {| bind := g; open := (f::l) % list |} s ->
-    Valid s t (END_FINISH f)
+    Valid s t END_FINISH
   | valid_begin_task:
     forall t u,
     ~ Map_TID.In u s ->
@@ -928,8 +928,7 @@ Section Defs.
 
   Inductive Blocking: op -> Prop :=
   | blocking_def:
-    forall f,
-    Blocking (END_FINISH f).
+    Blocking END_FINISH.
 
   Inductive Nonblocking: op -> Prop :=
   | nonblocking_init:
@@ -1728,14 +1727,11 @@ Section Props.
     | None => inr (TASK_NOT_EXIST x)
     | Some {| bind := g; open := l|} => inl (Map_TID.add x {| bind := g; open := f :: l |} s)
     end
-  | END_FINISH f =>
+  | END_FINISH =>
     match Map_TID.find x s with
-    | Some {| bind := g; open := h ::l|} =>
-      if FID.eq_dec f h then
-      (if nonempty_empty_dec f s then inr (FINISH_NONEMPTY f) else
+    | Some {| bind := g; open := f ::l|} =>
+      if nonempty_empty_dec f s then inr (FINISH_NONEMPTY f) else
        inl (Map_TID.add x {| bind := g; open := l |} s)
-      )
-      else inr (FINISH_TOP_NEQ g)
     | Some {| bind := g; open := [] |} => inr FINISH_OPEN_EMPTY
     | None => inr (TASK_NOT_EXIST x)
     end
@@ -1780,13 +1776,9 @@ Section Props.
       destruct l. {
         inversion H1.
       }
-      destruct (Map_FID_Extra.P.F.eq_dec f f0). {
-        symmetry in e; subst.
-        destruct (nonempty_empty_dec f s);
-        inversion H1; subst; clear H1.
-        auto using reduces_end_finish.
-      }
-      inversion H1.
+      destruct (nonempty_empty_dec f s);
+      inversion H1; subst; clear H1.
+      eauto using reduces_end_finish.
     - destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|((g,l),(R,Hx))];
       rewrite R in *; clear R. {
         destruct (Map_TID_Extra.find_rw t s) as [(R,Hy)|((h,m),(R,Hy))];
@@ -1898,11 +1890,40 @@ Section Props.
       trivial.
   Qed.
 
+  Lemma open_reduces_inv_end_finish:
+    forall x f s s' g,
+    Open x f s ->
+    IEF x g s ->
+    Reduces s (x, END_FINISH) s' ->
+    f = g \/ (f <> g /\ Open x f s').
+  Proof.
+    intros.
+    inversion H1; subst; clear H1.
+    assert (f0 = g). {
+      inversion H0; subst; clear H0;
+      match goal with H1: Map_TID.MapsTo _ ?v1 _, H2: Map_TID.MapsTo _ ?v2 _ |- _
+      => assert (R: v1 = v2) by eauto using Map_TID_Facts.MapsTo_fun; inversion R; subst; clear R
+      end.
+      trivial.
+    }
+    subst.
+    inversion H; subst; clear H.
+    match goal with H1: Map_TID.MapsTo _ ?v1 _, H2: Map_TID.MapsTo _ ?v2 _ |- _
+    => assert (R: v1 = v2) by eauto using Map_TID_Facts.MapsTo_fun; inversion R; subst;
+    clear R H1
+    end.
+    inversion H1; subst; clear H1; auto.
+    destruct (FID.eq_dec f g). {
+      auto.
+    }
+    eauto using Map_TID.add_1, open_def.
+  Qed.
+
   Lemma open_reduces:
     forall x y f s s' o,
     Open y f s ->
     Reduces s (x, o) s' ->
-    (y = x /\ o = END_FINISH f) \/
+    (y = x /\ o = END_FINISH) \/
     Open y f s'.
   Proof.
     intros.
@@ -1924,10 +1945,7 @@ Section Props.
       assert(R: b = a) by eauto using Map_TID_Facts.MapsTo_fun;
       inversion R; subst; clear R
       end.
-      match goal with H: List.In _ _ |- _ =>
-        inversion H; subst; clear H
-      end; auto.
-      eauto 4 using open_def, Map_TID.add_1.
+      auto.
     - destruct (TID.eq_dec u y); subst; try (right; auto using open_add_neq; fail).
       assert (Map_TID.In y s) by eauto using open_to_in.
       contradiction.
@@ -1951,7 +1969,7 @@ Section Props.
     Reduces s (x, o) s' ->
     (Bind y f s /\ y = x /\ exists g, o = INIT g) \/
     (Bind y f s /\ y = x /\ o = END_TASK) \/
-    (Open y f s /\ y = x /\ o = END_FINISH f) \/
+    (Open y f s /\ y = x /\ o = END_FINISH) \/
     Bind y f s' \/
     Open y f s'.
   Proof.

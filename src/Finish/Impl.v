@@ -78,7 +78,7 @@ Section Defs.
     match pkg_op, pkg_args with
     | PKG_INIT, [] => Some (INIT pkg_id)
     | PKG_BEGIN_FINISH, [] => Some (BEGIN_FINISH pkg_id)
-    | PKG_END_FINISH, [] => Some (END_FINISH pkg_id)
+    | PKG_END_FINISH, [] => Some END_FINISH
     | PKG_BEGIN_TASK, [x] => Some (BEGIN_TASK (taskid x))
     | PKG_END_TASK, [] => Some END_TASK
     | _, _ => None
