@@ -17,7 +17,7 @@ let task_to_string (t:task) =
 *)
 exception Err of string
 
-let json_to_package j =
+let json_to_package j lineno =
   let open Yojson.Basic.Util in
   try (
     let op = member "op" j |> to_string in
@@ -28,6 +28,7 @@ let json_to_package j =
         pkg_id = member "id" j |> to_int;
         pkg_time = member "time" j |> to_int;
         pkg_args = member "args" j |> to_list |> List.map to_int;
+        pkg_lineno = lineno
       }
     ) with | Not_found -> raise (Err ("Unknown operation " ^ op))
   ) with | Type_error (e,_) -> raise (Err ("Error parsing an action: " ^ e))
@@ -70,10 +71,22 @@ let pkg_new a : Finish.package option =
       pkg_id = getf a a_id;
       pkg_time = getf a a_time;
       pkg_args = nat_to_args o (getf a a_arg);
+      pkg_lineno = None
     }
   | None -> None
 
-let run_err_to_string (r:Finish.run_err) : string =
+let run_err_to_string (r:Finish.checks_err) : string =
+  let pkg_parse_err_to_string e =
+  match e with
+  | PKG_PARSE_NOARGS_EXPECTED -> "No arguments expected."
+  | PKG_PARSE_TASK_EXPECTED -> "Expected 1 task identifier."
+  in
+  let parse_trace_err_to_string e =
+    match e with
+    | PARSE_TRACE_ERR (n, e) -> 
+      "Error parsing action " ^ string_of_int n ^ ": " ^
+      pkg_parse_err_to_string e
+  in
   let reduces_err_to_string (e:Finish.reduces_err) =
     match e with
     | TASK_EXIST x -> "Task " ^ string_of_int x ^ " already exists."
@@ -84,9 +97,18 @@ let run_err_to_string (r:Finish.run_err) : string =
     | FINISH_TOP_NEQ x -> "Finish " ^ string_of_int x ^ " is not the inner enclosing finish."
     | FINISH_OPEN_EMPTY -> "Task has no open finish scopes."
   in
+  let reduces_n_err_to_string n e =
+    "Error checking action #" ^ string_of_int n ^": " ^
+    reduces_err_to_string e
+  in
   match r with
-  | PKG_ERROR -> "Parsing action."
-  | REDUCES_ERROR e -> reduces_err_to_string e
+  | CHECKS_PARSE_TRACE_ERROR e -> parse_trace_err_to_string e
+  | CHECKS_REDUCES_N_ERROR (p, e) -> (
+    match p.pkg_lineno with
+    | Some n -> reduces_n_err_to_string n e
+    | None -> reduces_err_to_string e
+  )
+  | CHECKS_INTERNAL_ERROR -> "Internal error!"
 
 let habanero_check (s:habanero_checks ptr) (a:habanero_action) : int =
   let ptr = to_voidp s in
@@ -112,10 +134,10 @@ let habanero_parse (filename:string) on_error : habanero_checks ptr =
       lineno := !lineno + 1;
       let line = String.trim line in
       if (line <> "") && (String.get line 0 <> '#') then (
-        let pkg = Yojson.Basic.from_string line |> json_to_package in
+        let pkg = json_to_package (Yojson.Basic.from_string line) (Some !lineno)  in
         match Finish.checks_add pkg !chk with
         | Inl s' -> chk := s'
-        | Inr e -> raise (Err ("Error parsing action #"^ string_of_int !lineno ^": " ^ (run_err_to_string e)))
+        | Inr e -> raise (Err (run_err_to_string e))
       ) else () (* nothing to do *)
     ) (stream_file chan);
     close_in chan;
