@@ -89,13 +89,12 @@ let run_err_to_string (r:Finish.checks_err) : string =
   in
   let reduces_err_to_string (e:Finish.reduces_err) =
     match e with
-    | TASK_EXIST x -> "Task " ^ string_of_int x ^ " already exists."
-    | TASK_NOT_EXIST x -> "Task " ^ string_of_int x ^ " missing."
-    | FINISH_EXIST x -> "Finish " ^ string_of_int x ^ " already exists."
-    | FINISH_NOT_EXIST x -> "Finish " ^ string_of_int x ^ " missing."
-    | FINISH_NONEMPTY x -> "Finish " ^ string_of_int x ^ " is not empty."
-    | FINISH_TOP_NEQ x -> "Finish " ^ string_of_int x ^ " is not the inner enclosing finish."
-    | FINISH_OPEN_EMPTY -> "Task has no open finish scopes."
+    | TASK_EXIST x -> "Expecting task " ^ string_of_int x ^ " to be new, but it already exists."
+    | TASK_NOT_EXIST x -> "Task " ^ string_of_int x ^ " does not exist."
+    | FINISH_EXIST x -> "Expecting finish " ^ string_of_int x ^ " to be new, but it already exists."
+    | FINISH_NOT_EXIST x -> "Finish " ^ string_of_int x ^ " does not exist."
+    | FINISH_NONEMPTY x -> "Invoked END_FINISH, but finish " ^ string_of_int x ^ " is not empty."
+    | FINISH_OPEN_EMPTY -> "Invoked END_FINISH, but there are 0 open finish scopes."
   in
   let reduces_n_err_to_string n e =
     "Error checking action #" ^ string_of_int n ^": " ^
