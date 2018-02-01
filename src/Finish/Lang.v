@@ -1710,7 +1710,6 @@ Section Props.
   | FINISH_EXIST: fid -> reduces_err
   | FINISH_NOT_EXIST: fid -> reduces_err
   | FINISH_NONEMPTY: fid -> reduces_err
-  | FINISH_TOP_NEQ: fid -> reduces_err
   | FINISH_OPEN_EMPTY: reduces_err.
 
   Definition reduces s x o : state + reduces_err :=
