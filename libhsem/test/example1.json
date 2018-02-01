@@ -1,17 +1,18 @@
-{"task": 0, "type": "finish", "id": 0, "time": 0, "op": "INIT", "args": []}
+{"task": 0,"type": "finish", "id": 0, "time": 0, "op": "INIT", "args": []}
 {"task": 0, "type": "finish", "id": 1, "time": 0, "op": "BEGIN_FINISH", "args": []}
 {"task": 0, "type": "finish", "id": 1, "time": 1, "op": "BEGIN_TASK", "args": [1]}
 {"task": 1, "type": "finish", "id": 2, "time": 0, "op": "BEGIN_FINISH", "args": []}
-{"task": 1, "type": "finish", "id": 2, "time": 1, "op": "BEGIN_TASK", "args": [2]}
+{"task": 1, "type": "finish", "id": 2, "time": 1, "op": "BEGIN_TASK", "args": [3]}
+{"task": 3, "type": "finish", "id": 2, "time": 2, "op": "END_TASK", "args": []}
+{"task": 1, "type": "finish", "id": 2, "time": 3, "op": "BEGIN_TASK", "args": [2]}
 {"task": 2, "type": "finish", "id": 3, "time": 0, "op": "BEGIN_FINISH", "args": []}
 {"task": 2, "type": "finish", "id": 3, "time": 1, "op": "BEGIN_TASK", "args": [5]}
 {"task": 5, "type": "finish", "id": 3, "time": 2, "op": "END_TASK", "args": []}
 {"task": 2, "type": "finish", "id": 3, "time": 3, "op": "BEGIN_TASK", "args": [4]}
 {"task": 4, "type": "finish", "id": 3, "time": 4, "op": "END_TASK", "args": []}
 {"task": 2, "type": "finish", "id": 3, "time": 5, "op": "END_FINISH", "args": []}
-{"task": 2, "type": "finish", "id": 2, "time": 2, "op": "END_TASK", "args": []}
-{"task": 1, "type": "finish", "id": 2, "time": 3, "op": "BEGIN_TASK", "args": [3]}
-{"task": 3, "type": "finish", "id": 2, "time": 4, "op": "END_TASK", "args": []}
+{"task": 2, "type": "finish", "id": 2, "time": 4, "op": "END_TASK", "args": []}
 {"task": 1, "type": "finish", "id": 2, "time": 5, "op": "END_FINISH", "args": []}
 {"task": 1, "type": "finish", "id": 1, "time": 2, "op": "END_TASK", "args": []}
 {"task": 0, "type": "finish", "id": 1, "time": 3, "op": "END_FINISH", "args": []}
+
