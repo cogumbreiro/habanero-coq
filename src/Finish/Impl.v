@@ -186,12 +186,7 @@ Section Defs.
   Definition enq_cons p (e:enq) := let (x, y) := e in (x, p :: y).
 
   Definition enq_succ (e:enq) := let (x, y) := e in (S x, y).
-(*
-  Definition enq_select p ps (e:enq) :=
-  if beq_nat (enq_curr e) (pkg_time p)
-  then (p::ps, enq_succ e)
-  else (ps, enq_cons p e).
-*)
+
   Definition enq_step (n:nat) (elems:list package) :=
   let (l, r) :=
     partition (fun p => beq_nat n (pkg_time p)) elems
@@ -292,45 +287,7 @@ Section Defs.
     compute.
     trivial.
   Qed.
-(*
-  Goal enq_select (pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []) [] enq_zero
-    = ([pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []], (1, [])).
-  Proof.
-    compute.
-    trivial.
-  Qed.
 
-  Goal enq_select (pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]) [] (1, [])
-    = ([pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]], (2, [])).
-  Proof.
-    compute.
-    trivial.
-  Qed.
-
-  Fixpoint poll_ready (n:nat) (elems:list package) {struct elems} :
-     ((list package) * enq) % type:=
-  match elems with
-  | [] => ([], empty_enq n)
-  | [p] => enq_select p [] (n, [])
-  | p::elems =>
-      let (ps, e) := poll_ready n elems in
-      enq_select p ps e
-  end.
-
-  Goal poll_ready 0 [pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []] =
-    ([pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []], (1, [])).
-  Proof.
-    compute.
-    trivial.
-  Qed.
-
-  Goal poll_ready 1 [pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]] =
-    ([pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]], (2, [])).
-  Proof.
-    compute.
-    trivial.
-  Qed.
-*)
   Definition buffer :=  Map_FID.t enq.
 
   Structure checks := {
