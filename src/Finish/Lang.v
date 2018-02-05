@@ -281,6 +281,21 @@ End Task.
     Map_TID.MapsTo t {| bind := f; open := nil |} s ->
     Valid s t END_TASK.
 
+  Definition op_fid (o:op) :=
+  match o with
+  | INIT f | BEGIN_FINISH f => Some f
+  | _ => None
+  end.
+
+  Inductive ValidFid (s:state) x o f: Prop :=
+  | valid_fid_some:
+    op_fid o = Some f ->
+    ValidFid s x o f
+  | valid_fid_none:
+    op_fid o = None ->
+    IEF x f s ->
+    ValidFid s x o f.
+
   Inductive FEdge s : (fid * fid) -> Prop :=
   | f_edge_def:
     forall f g t,
@@ -1084,6 +1099,62 @@ Section Defs.
       unfold not; intros N.
       apply ief_to_some in N.
       rewrite N in *; inversion H.
+    Qed.
+
+    Definition valid_fid s x o :=
+    match op_fid o with
+    | Some f => Some f
+    | None => get_ief x s
+    end.
+
+    Lemma some_to_valid_fid:
+      forall s f x o,
+      valid_fid s x o = Some f ->
+      ValidFid s x o f.
+    Proof.
+      unfold valid_fid; intros.
+      remember (op_fid o).
+      destruct o0; inversion H; subst. {
+        auto using valid_fid_some.
+      }
+      auto using some_to_ief, valid_fid_none.
+    Qed.
+
+    Lemma valid_fid_to_some:
+      forall s f x o,
+      ValidFid s x o f ->
+      valid_fid s x o = Some f.
+    Proof.
+      intros.
+      inversion H; subst; clear H; unfold valid_fid;
+      rewrite H0; trivial.
+      auto using ief_to_some.
+    Qed.
+
+    Lemma in_to_ief:
+      forall x s,
+      Map_TID.In x s ->
+      exists f, IEF x f s.
+    Proof.
+      intros.
+      apply Map_TID_Extra.in_to_mapsto in H.
+      destruct H as ((f, [|l]), mt); eauto using ief_nil, ief_cons.
+    Qed.
+
+    Lemma valid_fid_incl_valid:
+      forall s x o,
+      Valid s x o ->
+      exists f, ValidFid s x o f.
+    Proof.
+      intros.
+      inversion H; subst; clear H;
+      try (exists f; apply valid_fid_some; simpl; auto; fail). (* handle some-cases *)
+      - assert (IEF x f s) by eauto using ief_cons, ief_nil.
+        eauto using valid_fid_none.
+      - assert (X: exists f, IEF x f s) by eauto using in_to_ief.
+        destruct X.
+        eauto using valid_fid_none.
+      - eauto using valid_fid_none, ief_nil.
     Qed.
 
     Lemma maps_to_to_ief:
