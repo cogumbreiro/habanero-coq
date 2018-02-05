@@ -15,4 +15,5 @@
 {"task": 1, "type": "finish", "id": 2, "time": 5, "op": "END_FINISH", "args": []}
 {"task": 1, "type": "finish", "id": 1, "time": 2, "op": "END_TASK", "args": []}
 {"task": 0, "type": "finish", "id": 1, "time": 3, "op": "END_FINISH", "args": []}
+{"task": 0,"type": "finish", "id": 0, "time": 1, "op": "END_TASK", "args": []}
 
