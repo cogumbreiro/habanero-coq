@@ -23,6 +23,16 @@ int main(int argc, char **argv)
     assert(habanero_checks_count_enqueued(s) == 0);
     habanero_checks_free(s);
 
+    s = habanero_checks_open("example4.json", &puts);
+    assert(s != NULL);
+    assert(habanero_checks_count_enqueued(s) == 0);
+    habanero_checks_free(s);
+
+    s = habanero_checks_open("example5.json", &puts);
+    assert(s != NULL);
+    assert(habanero_checks_count_enqueued(s) == 0);
+    habanero_checks_free(s);
+
     s = habanero_checks_new();
     
     // Example where we initalize, create a task, and remove that task
