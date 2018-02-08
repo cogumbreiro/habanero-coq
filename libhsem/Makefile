@@ -7,11 +7,13 @@ PACKAGES=yojson,ctypes.stubs,ctypes.foreign
 
 # The files used to build the stub generator.
 GENERATOR_FILES=$(BUILDDIR)/lib/finish.cmx \
+                $(BUILDDIR)/lib/hsem.cmx \
                 $(BUILDDIR)/lib/bindings.cmx		\
                 $(BUILDDIR)/stub_generator/generate.cmx
 
 # The files from which we'll build a shared library.
 LIBFILES=$(BUILDDIR)/lib/finish.cmx \
+         $(BUILDDIR)/lib/hsem.cmx			\
          $(BUILDDIR)/lib/bindings.cmx			\
          $(BUILDDIR)/generated/$(PROJ)_bindings.cmx	\
          $(BUILDDIR)/lib/apply_bindings.cmx		\
@@ -37,10 +39,11 @@ endif
 
 GENERATOR=$(BUILDDIR)/generate$(EXTEXE)
 
-all: sharedlib
+all: sharedlib build
 
 sharedlib: $(BUILDDIR)/lib$(PROJ)$(EXTDLL)
 
+build: $(BUILDDIR)/main.exe
 
 ifeq ($(OSTYPE),$(filter $(OSTYPE),Win32 Cygwin))
 $(BUILDDIR)/lib$(PROJ)$(EXTDLL): $(CAML_INIT) $(LIBFILES)
@@ -52,6 +55,8 @@ else
 $(BUILDDIR)/lib$(PROJ)$(EXTDLL): $(CAML_INIT) $(LIBFILES)
 	ocamlfind opt -o $@ -linkpkg -output-obj -runtime-variant _pic -verbose -package $(PACKAGES) $^
 endif
+$(BUILDDIR)/main.exe:  $(BUILDDIR)/lib/finish.cmx $(BUILDDIR)/lib/hsem.cmx bin/main.ml
+	ocamlfind opt -o $@ -linkpkg -I $(BUILDDIR)/generated -I $(BUILDDIR)/lib -package $(PACKAGES) $(BUILDDIR)/lib/finish.cmx $(BUILDDIR)/lib/hsem.cmx bin/main.ml
 
 stubs: $(GENERATED)
 
@@ -71,6 +76,9 @@ $(BUILDDIR)/%.cmi: %.mli
 $(BUILDDIR)/%.cmx: %.ml $(BUILDDIR)/lib/finish.cmi
 	ocamlfind opt -c -o $@ -I $(BUILDDIR)/generated -I $(BUILDDIR)/lib -package $(PACKAGES) $<
 
+$(BUILDDIR)/%.cma: %.ml $(BUILDDIR)/lib/finish.cmi  
+	ocamlfind opt -c -o $@ -I $(BUILDDIR)/generated -I $(BUILDDIR)/lib -package $(PACKAGES) $<
+
 $(GENERATOR): $(GENERATOR_FILES)
 	ocamlfind opt -o $@ -linkpkg -package $(PACKAGES) $^
 
@@ -85,4 +93,4 @@ else
 	(cd test && LD_LIBRARY_PATH=$(BUILDDIR) $(BUILDDIR)/test/test.native)
 endif
 
-.PHONY: test
+.PHONY: test build
