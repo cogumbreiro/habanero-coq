@@ -1,0 +1,4 @@
+<lib/hsem.*>: package(yojson)
+<lib/bindings.*> or <stub_generator/generate.*>: package(yojson),package(ctypes.stubs),package(ctypes.foreign)
+<bin/main.*>: package(yojson),package(cmdliner)
+

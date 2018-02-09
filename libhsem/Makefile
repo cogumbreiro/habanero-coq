@@ -3,7 +3,9 @@ BUILDDIR=$(PWD)/_build
 VPATH=$(BUILDDIR)
 OCAMLDIR=$(shell ocamlopt -where)
 $(shell mkdir -p $(BUILDDIR) $(BUILDDIR)/stub $(BUILDDIR)/lib $(BUILDDIR)/stub_generator $(BUILDDIR)/test $(BUILDDIR)/generated)
-PACKAGES=yojson,ctypes.stubs,ctypes.foreign
+HSEM_PACKAGES=yojson
+PACKAGES=$(HSEM_PACKAGES),ctypes.stubs,ctypes.foreign
+BIN_PACKAGES=$(HSEM_PACKAGES),cmdliner
 
 # The files used to build the stub generator.
 GENERATOR_FILES=$(BUILDDIR)/lib/finish.cmx \
@@ -39,11 +41,11 @@ endif
 
 GENERATOR=$(BUILDDIR)/generate$(EXTEXE)
 
+OCB = ocamlbuild
+
 all: sharedlib build
 
 sharedlib: $(BUILDDIR)/lib$(PROJ)$(EXTDLL)
-
-build: $(BUILDDIR)/main.exe
 
 ifeq ($(OSTYPE),$(filter $(OSTYPE),Win32 Cygwin))
 $(BUILDDIR)/lib$(PROJ)$(EXTDLL): $(CAML_INIT) $(LIBFILES)
@@ -55,8 +57,9 @@ else
 $(BUILDDIR)/lib$(PROJ)$(EXTDLL): $(CAML_INIT) $(LIBFILES)
 	ocamlfind opt -o $@ -linkpkg -output-obj -runtime-variant _pic -verbose -package $(PACKAGES) $^
 endif
-$(BUILDDIR)/main.exe:  $(BUILDDIR)/lib/finish.cmx $(BUILDDIR)/lib/hsem.cmx bin/main.ml
-	ocamlfind opt -o $@ -linkpkg -I $(BUILDDIR)/generated -I $(BUILDDIR)/lib -package $(PACKAGES) $(BUILDDIR)/lib/finish.cmx $(BUILDDIR)/lib/hsem.cmx bin/main.ml
+
+build:
+	$(OCB) -I lib/ -I bin/ main.native
 
 stubs: $(GENERATED)
 
