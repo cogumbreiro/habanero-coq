@@ -1,4 +1,10 @@
-<lib/hsem.*>: package(yojson)
-<lib/bindings.*> or <stub_generator/generate.*>: package(yojson),package(ctypes.stubs),package(ctypes.foreign)
+<src/hsem.*>: package(yojson)
 <bin/main.*>: package(yojson),package(cmdliner)
+# Subdirectories
+"src" or "lib": include
+
+# If we ever manage to port the shared library to ocamlbuild
+# <lib/**> or <support/**>: package(yojson),package(ctypes.stubs),package(ctypes.foreign)
+#"hsem_stubs.c": package(ctypes)
+#"hsem_bindings.ml": package(ctypes.stubs), package(ctypes.stubs),package(ctypes.foreign)
 

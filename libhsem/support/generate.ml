@@ -5,7 +5,7 @@ let generate dirname =
   let prefix = "hsem" in
   let path basename = Filename.concat dirname basename in
   let ml_fd = open_out (path "hsem_bindings.ml") in
-  let c_fd = open_out (path "hsem.c") in
+  let c_fd = open_out (path "hsem_stubs.c") in
   let h_fd = open_out (path "hsem.h") in
   let stubs = (module Bindings.Stubs : Cstubs_inverted.BINDINGS) in
   begin

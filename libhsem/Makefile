@@ -2,32 +2,32 @@ PROJ=hsem
 BUILDDIR=$(PWD)/_build
 VPATH=$(BUILDDIR)
 OCAMLDIR=$(shell ocamlopt -where)
-$(shell mkdir -p $(BUILDDIR) $(BUILDDIR)/stub $(BUILDDIR)/lib $(BUILDDIR)/stub_generator $(BUILDDIR)/test $(BUILDDIR)/generated)
+$(shell mkdir -p $(BUILDDIR) $(BUILDDIR)/src $(BUILDDIR)/lib $(BUILDDIR)/support $(BUILDDIR)/test $(BUILDDIR)/generated)
 HSEM_PACKAGES=yojson
 PACKAGES=$(HSEM_PACKAGES),ctypes.stubs,ctypes.foreign
 BIN_PACKAGES=$(HSEM_PACKAGES),cmdliner
 
 # The files used to build the stub generator.
-GENERATOR_FILES=$(BUILDDIR)/lib/finish.cmx \
-                $(BUILDDIR)/lib/hsem.cmx \
+GENERATOR_FILES=$(BUILDDIR)/src/finish.cmx \
+                $(BUILDDIR)/src/hsem.cmx \
                 $(BUILDDIR)/lib/bindings.cmx		\
-                $(BUILDDIR)/stub_generator/generate.cmx
+                $(BUILDDIR)/support/generate.cmx
 
 # The files from which we'll build a shared library.
-LIBFILES=$(BUILDDIR)/lib/finish.cmx \
-         $(BUILDDIR)/lib/hsem.cmx			\
+LIBFILES=$(BUILDDIR)/src/finish.cmx \
+         $(BUILDDIR)/src/hsem.cmx			\
          $(BUILDDIR)/lib/bindings.cmx			\
          $(BUILDDIR)/generated/$(PROJ)_bindings.cmx	\
          $(BUILDDIR)/lib/apply_bindings.cmx		\
-         $(BUILDDIR)/generated/$(PROJ).o
+         $(BUILDDIR)/generated/$(PROJ)_stubs.o
 
-CAML_INIT=$(BUILDDIR)/stub/init.o
+CAML_INIT=$(BUILDDIR)/support/init.o
 
 # The files that we'll generate
 GENERATED=$(BUILDDIR)/generated/$(PROJ).h \
-          $(BUILDDIR)/generated/$(PROJ).c \
+          $(BUILDDIR)/generated/$(PROJ)_stubs.c \
           $(BUILDDIR)/generated/$(PROJ)_bindings.ml
-
+INCS=-I $(BUILDDIR)/generated -I $(BUILDDIR)/lib -I $(BUILDDIR)/src  -package $(PACKAGES)
 OSTYPE:=$(shell ocamlfind ocamlc -config | awk '/^os_type:/ {print $$2}')
 SYSTEM:=$(shell ocamlfind ocamlc -config | awk '/^system:/ {print $$2}')
 EXTDLL:=$(shell ocamlfind ocamlc -config | awk '/^ext_dll:/ {print $$2}')
@@ -59,12 +59,13 @@ $(BUILDDIR)/lib$(PROJ)$(EXTDLL): $(CAML_INIT) $(LIBFILES)
 endif
 
 build:
-	$(OCB) -I lib/ -I bin/ main.native
+	$(OCB) -I src/ -I bin/ main.native
+	cp $(BUILDDIR)/bin/main.native $(PROJ)
 
 stubs: $(GENERATED)
 
-$(BUILDDIR)/stub/%.o:
-	ocamlc -g -c stub/init.c
+$(BUILDDIR)/support/%.o:
+	ocamlc -g -c support/init.c
 	mv init.o $@
 
 $(GENERATED): $(GENERATOR)
@@ -76,11 +77,11 @@ $(BUILDDIR)/%.o: %.c
 $(BUILDDIR)/%.cmi: %.mli
 	ocamlfind ocamlc -o $@ -c $<
 
-$(BUILDDIR)/%.cmx: %.ml $(BUILDDIR)/lib/finish.cmi
-	ocamlfind opt -c -o $@ -I $(BUILDDIR)/generated -I $(BUILDDIR)/lib -package $(PACKAGES) $<
+$(BUILDDIR)/%.cmx: %.ml $(BUILDDIR)/src/finish.cmi
+	ocamlfind opt -c -o $@ $(INCS) $<
 
-$(BUILDDIR)/%.cma: %.ml $(BUILDDIR)/lib/finish.cmi  
-	ocamlfind opt -c -o $@ -I $(BUILDDIR)/generated -I $(BUILDDIR)/lib -package $(PACKAGES) $<
+$(BUILDDIR)/%.cma: %.ml $(BUILDDIR)/src/finish.cmi  
+	ocamlfind opt -c -o $@ $(INCS) $<
 
 $(GENERATOR): $(GENERATOR_FILES)
 	ocamlfind opt -o $@ -linkpkg -package $(PACKAGES) $^
