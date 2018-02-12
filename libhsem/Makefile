@@ -21,7 +21,7 @@ LIBFILES=$(BUILDDIR)/src/finish.cmx \
          $(BUILDDIR)/lib/apply_bindings.cmx		\
          $(BUILDDIR)/generated/$(PROJ)_stubs.o
 
-CAML_INIT=$(BUILDDIR)/support/init.o
+CAML_INIT=$(BUILDDIR)/lib/init.o
 
 # The files that we'll generate
 GENERATED=$(BUILDDIR)/generated/$(PROJ).h \
@@ -65,7 +65,7 @@ build:
 stubs: $(GENERATED)
 
 $(BUILDDIR)/support/%.o:
-	ocamlc -g -c support/init.c
+	ocamlc -g -c lib/init.c
 	mv init.o $@
 
 $(GENERATED): $(GENERATOR)
