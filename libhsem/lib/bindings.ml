@@ -56,7 +56,7 @@ let habanero_check (s:habanero_checks ptr) (a:habanero_action) : int =
     | Inr _ -> 0
 
 let habanero_count (s: habanero_checks ptr): int =
-  to_voidp s |> Root.get |> Finish.count_enqueued
+  to_voidp s |> Root.get |> Finish.checks_enqueued |> length
 
 let habanero_parse (filename:string) on_error : habanero_checks ptr =
   let stream_file c = Stream.from (fun _ ->

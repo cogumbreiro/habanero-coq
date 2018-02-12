@@ -551,8 +551,11 @@ Section Defs.
     checks_state := Map_TID.empty _
   |}.
 
-  Definition count_enqueued s :=
-    List.fold_left (fun accum y => accum + length (snd y)) (Map_FID_Extra.values (checks_buffer s)) 0.
+  Definition checks_running s : list tid :=
+    Map_TID_Extra.keys (checks_state s).
+
+  Definition checks_enqueued s : list package :=
+    List.fold_left (fun accum y => accum ++ (snd y)) (Map_FID_Extra.values (checks_buffer s)) [].
 
   Definition checks_load (l:list package) : (checks + checks_err) % type :=
   let (ps, b) := buffer_add_all l (Map_FID.empty _) in
@@ -591,5 +594,5 @@ Extract Inlined Constant eq_nat_dec => "( = )".
 
 Extraction Language Ocaml.
 
-Extraction "libhsem/lib/finish"
-  checks_add checks_make checks_load count_enqueued nat_to_op nat_to_args op_to_nat.
+Extraction "libhsem/src/finish"
+  checks_add checks_make checks_load checks_enqueued checks_running nat_to_op nat_to_args op_to_nat.
