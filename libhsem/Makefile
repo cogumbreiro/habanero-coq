@@ -2,7 +2,7 @@ PROJ=hsem
 BUILDDIR=$(PWD)/_build
 VPATH=$(BUILDDIR)
 OCAMLDIR=$(shell ocamlopt -where)
-$(shell mkdir -p $(BUILDDIR) $(BUILDDIR)/src $(BUILDDIR)/lib $(BUILDDIR)/support $(BUILDDIR)/test $(BUILDDIR)/generated)
+$(shell mkdir -p $(BUILDDIR) $(BUILDDIR)/src $(BUILDDIR)/lib $(BUILDDIR)/codegen $(BUILDDIR)/test $(BUILDDIR)/generated)
 HSEM_PACKAGES=yojson
 PACKAGES=$(HSEM_PACKAGES),ctypes.stubs,ctypes.foreign
 BIN_PACKAGES=$(HSEM_PACKAGES),cmdliner
@@ -11,7 +11,7 @@ BIN_PACKAGES=$(HSEM_PACKAGES),cmdliner
 GENERATOR_FILES=$(BUILDDIR)/src/finish.cmx \
                 $(BUILDDIR)/src/hsem.cmx \
                 $(BUILDDIR)/lib/bindings.cmx		\
-                $(BUILDDIR)/support/generate.cmx
+                $(BUILDDIR)/codegen/generate.cmx
 
 # The files from which we'll build a shared library.
 LIBFILES=$(BUILDDIR)/src/finish.cmx \
@@ -64,7 +64,7 @@ build:
 
 stubs: $(GENERATED)
 
-$(BUILDDIR)/support/%.o:
+$(BUILDDIR)/lib/%.o:
 	ocamlc -g -c lib/init.c
 	mv init.o $@
 

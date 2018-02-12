@@ -6,33 +6,21 @@ let () =
       Options.use_ocamlfind := true;
       Options.make_links := false;
     | After_rules ->
-      let generator = "support/generate.native" in
+      let generator = "codegen/generate.native" in
+      let gen_dir = "generated" in
       rule "generates ctypes stubs"
         ~dep:generator
-        ~prods:["hsem_stubs.c"; "hsem.h"; "hsem_bindings.ml"]
-      (fun env _build -> Cmd (S
-        [A (env generator); A (env "")]
-        )
+        ~prods:[gen_dir ^ "/hsem_stubs.c"; gen_dir ^ "/hsem.h"; gen_dir ^ "/hsem_bindings.ml"]
+      (fun env _build -> Seq[
+          Cmd (S [A "mkdir"; A"-p"; A (env gen_dir)]);
+          Cmd (S [A (env generator); A (env gen_dir)]);
+        ]
       );
+      dep ["ocaml"; "compile"; "file:lib/apply_bindings.ml"] [gen_dir ^ "/hsem_bindings.cmx"];
+      flag ["ocaml"; "compile"; "file:lib/apply_bindings.ml"] (S [A"-I"; A gen_dir]);
+
       ocaml_lib "src/base";
       flag ["compile"; "c"; "file:hsem_stubs.c"] (S [ A"-cc"; A"gcc -fPIC";]);
-
-      rule "generate c"
-        ~deps:["%.c"]
-        ~prod:"%.exe"
-      (fun env _build -> (Cmd (S [ A"gcc"; A"-o"; A (env "%.exe"); A"-I"; A"."; A"-lhsem"; A"-L"; A"."; A (env "%.c"); ])));
-(*      let shell x = run_and_read x |> String.trim in *)
-
-      rule "generates shared object"
-        ~deps:["init.o"; "hsem_stubs.o"; "finish.cmx"; "hsem.cmx"; "apply_bindings.cmx"]
-        ~prod:"%.so"
-      (fun env _build -> Cmd (S
-        [!Options.ocamlopt; A"-o"; P"libhsem.so" ]
-        )
-      );
-        (*
-      dep ["compile"; "c"; "file:libhsem.so"]
-            ["init.o"; "hsem.o"];*)
-      (* XXX: generate the shared library; we need to add depedencies first *)
+      flag ["compile"; "c"; "file:init.c"] (S [ A"-cc"; A"gcc -fPIC";]);
     | _ -> ())
 

@@ -1,0 +1,6 @@
+lib/init.o
+lib/bindings.o
+generated/hsem_stubs.o
+lib/apply_bindings.o
+generated/hsem_bindings.o
+
