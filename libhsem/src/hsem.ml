@@ -12,21 +12,37 @@ let all_ops = [
 
 exception Err of string
 
+let string_to_op (o:string) : package_op = List.find (fun x -> fst x = o) all_ops |> snd
+let op_to_string (o:package_op) : string = List.find (fun x -> snd x = o) all_ops |> fst
+
 let json_to_package j lineno =
   let open Yojson.Basic.Util in
   try (
-    let op = member "op" j |> to_string in
+    let o : string = member "op" j |> to_string in
     try (
       {
         pkg_task = member "task" j |> to_int;
-        pkg_op = List.find (fun x -> fst x = op) all_ops |> snd;
+        pkg_op = string_to_op o;
         pkg_id = member "id" j |> to_int;
         pkg_time = member "time" j |> to_int;
         pkg_args = member "args" j |> to_list |> List.map to_int;
         pkg_lineno = lineno
       }
-    ) with | Not_found -> raise (Err ("Unknown operation " ^ op))
+    ) with | Not_found -> raise (Err ("Unknown operation " ^ o))
   ) with | Type_error (e,_) -> raise (Err ("Error parsing an action: " ^ e))
+
+let package_to_json p =
+  let open Yojson.Basic.Util in
+  `Assoc [
+    "pkg_task", `Int (pkg_task p);
+    "pkg_op", `String (op_to_string (pkg_op p));
+    "pkg_id", `Int (pkg_id p);
+    "pkg_args", `List (pkg_args p |> List.map (fun x -> `Int x));
+    "pkg_lineno", match p.pkg_lineno with
+      | Some x -> `Int x
+      | _ -> `Null
+  ]
+
 
 let run_err_to_string (r:Finish.checks_err) : string =
   let pkg_parse_err_to_string e =
