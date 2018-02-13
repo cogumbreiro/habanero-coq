@@ -1,6 +1,8 @@
 lib/init.o
-lib/bindings.o
+src/finish.cmx
+src/hsem.cmx
+lib/bindings.cmx
+generated/hsem_bindings.cmx
+lib/apply_bindings.cmx
 generated/hsem_stubs.o
-lib/apply_bindings.o
-generated/hsem_bindings.o
 

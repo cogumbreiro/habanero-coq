@@ -1,5 +1,26 @@
 open Ocamlbuild_plugin
 
+let link_C_library clib a libname env build =
+  let open Outcome in
+  let open Command in
+  let clib = env clib and a = env a and libname = env libname in
+  let objs = string_list_of_file clib in
+  let include_dirs = Pathname.include_dirs_of (Pathname.dirname a) in
+  let obj_of_o x =
+    if Filename.check_suffix x ".o" && !Options.ext_obj <> "o" then
+      Pathname.update_extension !Options.ext_obj x
+    else x in
+  let results = build (List.map (fun o -> List.map (fun dir -> dir / obj_of_o o) include_dirs) objs) in
+  let objs = List.map begin function
+    | Good o -> o
+    | Bad exn -> raise exn
+  end results in
+  
+  Cmd(S[!Options.ocamlopt; A"-o"; Px libname;
+  A"-linkpkg";
+  T(tags_of_pathname a++"c"++"compile");
+  (* only on macosx  -ccopt -dynamiclib *) atomize objs]);;
+
 let () =
   dispatch (function
     | Before_options ->
@@ -24,6 +45,16 @@ let () =
       (* 2. ensure that the compiler is aware of the code generator directory,
             so that it can see the generated file. *)
       flag ["ocaml"; "compile"; "file:lib/apply_bindings.ml"] (S [A"-I"; A gen_dir]);
+      
+      flag [ "compile" ; "c" ; "file:lib/libhsem.a"; "linux"] (S[A"-output-obj"; A"-runtime-variant"; A"_pic";]);
+      flag [ "compile" ; "c" ; "file:lib/libhsem.a"; "windows"] (S[A"-output-obj"; ]);
+      flag [ "compile" ; "c" ; "file:lib/libhsem.a"; "macos"] (S[A"-runtime-variant"; A"_pic";A"-ccopt"; A"-dynamiclib"]);
+
+      rule "generates libhsem"
+        ~dep:"%(path)lib%(libname)clib"
+        ~prod:("%(path)lib%(libname)" ^ (!Options.ext_dll))
+       (link_C_library "%(path)lib%(libname)clib" ("%(path)lib%(libname)" ^ !Options.ext_lib) ("%(path)lib%(libname)" ^ !Options.ext_dll))
+      ;
 
       (* XXX: In the orignal makefile we had these flags set; not sure if actually neede. *)
       flag ["compile"; "c"; "file:hsem_stubs.c"] (S [ A"-cc"; A"gcc -fPIC";]);

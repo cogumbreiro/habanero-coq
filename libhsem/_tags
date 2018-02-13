@@ -7,4 +7,3 @@
 <lib/**> or <codegen/**>: package(yojson),package(ctypes.stubs),package(ctypes.foreign)
 "generated/hsem_stubs.c": package(ctypes)
 "generated/hsem_bindings.ml": package(ctypes.stubs), package(ctypes.stubs),package(ctypes.foreign)
-
