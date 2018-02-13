@@ -521,12 +521,52 @@ Section Defs.
   | CHECKS_INTERNAL_ERROR
   | CHECKS_PARSE_TRACE_ERROR: parse_trace_err -> checks_err.
 
-  Fixpoint get {A} (n:nat) (l:list A) :=
-  match n, l with
-  | 0, [x] => Some x
-  | S n, x::l => get n l
-  | _, _ => None
+  Fixpoint get {A} (n:nat) (l:list A) {struct l} : option A :=
+  match l with
+  | x :: l => 
+    if Nat.eqb n (length l) then Some x
+    else (
+      if Nat.ltb n (length l) then get n l
+      else None
+    )
+  | _ => None
   end.
+
+  Goal
+    let l := [
+      (taskid 2, INIT (finishid 2));
+      (taskid 1, INIT (finishid 1));
+      (taskid 0, INIT (finishid 0))
+    ] in
+    get 0 l = Some (taskid 0, INIT (finishid 0)) /\
+    get 1 l = Some (taskid 1, INIT (finishid 1)) /\
+    get 2 l = Some (taskid 2, INIT (finishid 2)).
+  Proof.
+    compute.
+    intuition.
+  Qed.
+
+
+  (** Correctness check: *)
+  Let reduces_n_length:
+    forall l s n e,
+    reduces_n s l = inr (REDUCES_N_ERROR n e) ->
+    n < length l.
+  Proof.
+    induction l; intros. {
+      simpl in *.
+      inversion H.
+    }
+    simpl in *.
+    remember (reduces _ _ _).
+    symmetry in Heqs0.
+    destruct s0. {
+      apply IHl in H.
+      auto.
+    }
+    inversion H; subst; clear H.
+    auto.
+  Qed.
 
   Let checks_add_aux ps b s : (checks + checks_err) %type :=
   match parse_trace ps with
