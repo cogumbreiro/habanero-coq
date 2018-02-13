@@ -1,5 +1,19 @@
 open Ocamlbuild_plugin
 
+let command_output cmd =
+  let ic = Unix.open_process_in cmd in
+  let output = input_line ic in
+  let () = close_in ic in
+  String.trim output
+
+(* Taken from: https://gist.github.com/AltGr/5bfc8cea6f01e74b95de79ceaba39369 *)
+let os =
+  match Sys.os_type with
+  | "Unix" -> (match String.lowercase_ascii (command_output "uname -s") with
+      | "darwin" -> "macos"
+      | s -> s)
+  | s -> String.lowercase_ascii s
+
 let link_C_library clib a libname env build =
   let open Outcome in
   let open Command in
@@ -15,11 +29,16 @@ let link_C_library clib a libname env build =
     | Good o -> o
     | Bad exn -> raise exn
   end results in
-  
-  Cmd(S[!Options.ocamlopt; A"-o"; Px libname;
-  A"-linkpkg";
-  T(tags_of_pathname a++"c"++"compile");
-  (* only on macosx  -ccopt -dynamiclib *) atomize objs]);;
+  let extra = match os with
+  | "linux" -> (S[A"-output-obj"; A"-runtime-variant"; A"_pic";])
+  | "macos" -> (S[A"-runtime-variant"; A"_pic";A"-ccopt"; A"-dynamiclib"])
+  | "win32" -> (S[A"-output-obj"; ])
+  | _ -> (S[])
+  in
+  Cmd(S[!Options.ocamlopt; A"-o"; Px libname; A"-linkpkg"; extra;
+    (* it's important to append 'c' and 'compile' so that tags_of_pathname
+       generates all the -package fragments, which are essential to build. *)
+    T(tags_of_pathname a++"c"++"compile"); atomize objs])
 
 let () =
   dispatch (function
@@ -45,19 +64,12 @@ let () =
       (* 2. ensure that the compiler is aware of the code generator directory,
             so that it can see the generated file. *)
       flag ["ocaml"; "compile"; "file:lib/apply_bindings.ml"] (S [A"-I"; A gen_dir]);
-      
-      flag [ "compile" ; "c" ; "file:lib/libhsem.a"; "linux"] (S[A"-output-obj"; A"-runtime-variant"; A"_pic";]);
-      flag [ "compile" ; "c" ; "file:lib/libhsem.a"; "windows"] (S[A"-output-obj"; ]);
-      flag [ "compile" ; "c" ; "file:lib/libhsem.a"; "macos"] (S[A"-runtime-variant"; A"_pic";A"-ccopt"; A"-dynamiclib"]);
-
+      (* Rule to generate libhsem.so, which just delegates to link_C_library: *)
       rule "generates libhsem"
         ~dep:"%(path)lib%(libname)clib"
         ~prod:("%(path)lib%(libname)" ^ (!Options.ext_dll))
        (link_C_library "%(path)lib%(libname)clib" ("%(path)lib%(libname)" ^ !Options.ext_lib) ("%(path)lib%(libname)" ^ !Options.ext_dll))
       ;
 
-      (* XXX: In the orignal makefile we had these flags set; not sure if actually neede. *)
-      flag ["compile"; "c"; "file:hsem_stubs.c"] (S [ A"-cc"; A"gcc -fPIC";]);
-      flag ["compile"; "c"; "file:init.c"] (S [ A"-cc"; A"gcc -fPIC";]);
     | _ -> ())
 
