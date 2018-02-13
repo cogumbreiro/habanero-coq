@@ -37,6 +37,7 @@ let package_to_json p =
     "pkg_task", `Int (pkg_task p);
     "pkg_op", `String (op_to_string (pkg_op p));
     "pkg_id", `Int (pkg_id p);
+    "pkg_time", `Int (pkg_time p);
     "pkg_args", `List (pkg_args p |> List.map (fun x -> `Int x));
     "pkg_lineno", match p.pkg_lineno with
       | Some x -> `Int x
@@ -76,7 +77,7 @@ let run_err_to_string (r:Finish.checks_err) : string =
     | Some n -> reduces_n_err_to_string n e
     | None -> reduces_err_to_string e
   )
-  | CHECKS_INTERNAL_ERROR -> "Internal error!"
+  | CHECKS_INTERNAL_ERROR -> "Unexpected internal error."
 
 let parse (filename:string) =
   let stream_file c = Stream.from (fun _ ->
