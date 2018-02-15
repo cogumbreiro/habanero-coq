@@ -602,6 +602,76 @@ Section Defs.
   checks_add_aux ps b (Map_TID.empty _).
 End Defs.
 
+Module WF.
+  Definition trace := list package.
+  Section Defs.
+    Inductive At (f:fid) (n:nat) (p:package) : Prop :=
+    | at_def:
+      f = pkg_id p ->
+      n = pkg_time p ->
+      At f n p.
+
+    Inductive WF: trace -> Prop :=
+    | wf_nil:
+      WF nil
+    | wf_cons:
+      forall l p,
+      WF l ->
+      ~ Exists (At (pkg_id p) (pkg_time p)) l ->
+      WF (p::l).
+
+    Inductive Full: trace -> fid -> nat -> Prop :=
+    | full_zero:
+      forall f l,
+      ~ Exists (At f 0) l ->
+      Full l f 0
+    | full_succ:
+      forall f l n,
+      Full l f n ->
+      Exists (At f (S n)) l ->
+      Full l f (S n).
+
+    (* A package is an element of the trace if its time is full *)
+    Definition In p l := Full l (pkg_id p) (pkg_time p).
+
+    (* Sequential order within the trace : *)
+    Inductive SeqLt {A} : list A -> A -> A -> Prop :=
+    | seq_lt_eq:
+      forall x y l,
+      List.In y l ->
+      SeqLt (x::l) x y
+    | seq_lt_cons:
+      forall x y z l,
+      SeqLt l x y ->
+      SeqLt (z::l) x y.
+
+    Inductive Lt l x y: Prop :=
+    | lt_neq:
+      pkg_id x <> pkg_id y ->
+      SeqLt l x y ->
+      Lt l x y
+    | lt_eq:
+      pkg_id x = pkg_id y ->
+      pkg_time x < pkg_time y ->
+      Lt l x y.
+
+    Definition Incl l m := (forall x, In x l -> In x m).
+    Definition Continuous l := (forall x, List.In x l -> In x l).
+    Definition PreserveLt l m := (forall x y, Lt l x y -> Lt m x y).
+
+    Inductive Norm: trace -> trace -> Prop :=
+    | norm_def:
+      forall l m,
+      Incl l m ->
+      Continuous m ->
+      PreserveLt l m ->
+      PreserveLt m l ->
+      Norm l m.
+
+  End Defs.
+End WF.
+
+
 (* bools *)
 Extract Inductive bool => "bool" [ "true" "false" ].
 Extract Inlined Constant negb => "not".
