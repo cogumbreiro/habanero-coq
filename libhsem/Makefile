@@ -12,7 +12,7 @@ sharedlib:
 	cp $(BUILDDIR)/lib/lib$(PROJ).so $(BUILDDIR)/
 
 build:
-	$(OCB) -I src/ -I bin/ main.native
+	$(OCB) -I src/ -I bin/ main.native $(OCB_FLAGS)
 	cp $(BUILDDIR)/bin/main.native $(PROJ)
 
 clean:
