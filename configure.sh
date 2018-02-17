@@ -1,6 +1,6 @@
 #!/bin/bash
 check_pkg() {
-    opam search $@ > /dev/null
+    opam search -i "$1" | awk '{print $1}' | grep '^'"$1"'$' > /dev/null
 }
 
 install_coq() {
@@ -15,6 +15,7 @@ install_aniceto() {
     opam pin add --dev-repo coq-aniceto https://gitlab.com/cogumbreiro/aniceto-coq.git
   fi
 }
+
 coq_shell_url="https://raw.githubusercontent.com/gares/opam-coq-shell/master/src/opam-coq"
 (check_pkg coq || install_coq) &&
 (check_pkg coq-aniceto || install_aniceto) &&
