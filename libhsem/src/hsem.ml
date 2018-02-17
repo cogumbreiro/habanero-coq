@@ -51,12 +51,6 @@ let run_err_to_string (r:Finish.checks_err) : string =
   | PKG_PARSE_NOARGS_EXPECTED -> "No arguments expected."
   | PKG_PARSE_TASK_EXPECTED -> "Expected 1 task identifier."
   in
-  let parse_trace_err_to_string e =
-    match e with
-    | PARSE_TRACE_ERR (n, e) -> 
-      "Error parsing action " ^ string_of_int n ^ ": " ^
-      pkg_parse_err_to_string e
-  in
   let reduces_err_to_string (e:Finish.reduces_err) =
     match e with
     | TASK_EXIST x -> "Expecting task " ^ string_of_int x ^ " to be new, but it already exists."
@@ -71,7 +65,11 @@ let run_err_to_string (r:Finish.checks_err) : string =
     reduces_err_to_string e
   in
   match r with
-  | CHECKS_PARSE_TRACE_ERROR e -> parse_trace_err_to_string e
+  | CHECKS_PARSE_TRACE_ERROR (p, e) -> (
+    match p.pkg_lineno with
+    | Some n -> "Error parsing line #" ^ string_of_int n ^ ": " ^ pkg_parse_err_to_string e
+    | None -> pkg_parse_err_to_string e
+  )
   | CHECKS_REDUCES_N_ERROR (p, e) -> (
     match p.pkg_lineno with
     | Some n -> reduces_n_err_to_string n e

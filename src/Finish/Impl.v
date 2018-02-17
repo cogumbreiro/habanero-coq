@@ -517,7 +517,7 @@ Section Defs.
   Inductive checks_err :=
   | CHECKS_REDUCES_N_ERROR: package -> reduces_err -> checks_err
   | CHECKS_INTERNAL_ERROR
-  | CHECKS_PARSE_TRACE_ERROR: parse_trace_err -> checks_err.
+  | CHECKS_PARSE_TRACE_ERROR: package -> pkg_parse_err -> checks_err.
 
   Fixpoint get {A} (n:nat) (l:list A) {struct l} : option A :=
   match l with
@@ -543,7 +543,6 @@ Section Defs.
     compute.
     intuition.
   Qed.
-
 
   (** Correctness check: *)
   Let reduces_n_length:
@@ -577,7 +576,11 @@ Section Defs.
       | None => inr CHECKS_INTERNAL_ERROR
       end
     end
-  | inr e => inr (CHECKS_PARSE_TRACE_ERROR e)
+  | inr (PARSE_TRACE_ERR n e) =>
+    match get n ps with
+    | Some p => inr (CHECKS_PARSE_TRACE_ERROR p e)
+    | None => inr CHECKS_INTERNAL_ERROR
+    end
   end.
 
   Definition checks_add (p:package) s : (checks + checks_err) %type :=
