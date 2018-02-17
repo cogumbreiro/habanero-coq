@@ -1,15 +1,26 @@
 PROJ=hsem
 BUILDDIR=$(PWD)/_build
 
-OSTYPE:=$(shell ocamlfind ocamlc -config | awk '/^os_type:/ {print $$2}')
+ifeq ($(OS),Windows_NT)
+  OSTYPE:=Win32
+  DLL_EXT:=.dll
+else
+  OSTYPE:=$(shell uname -s)
+  ifeq ($(OSTYPE),Linux)
+    DLL_EXT:=.so
+  endif
+  ifeq ($(OSTYPE),Darwin)
+    DLL_EXT:=.dylib
+  endif
+endif
 
 OCB = ocamlbuild
 
-all: sharedlib build
+all: build
 
 sharedlib:
-	$(OCB) lib$(PROJ).so
-	cp $(BUILDDIR)/lib/lib$(PROJ).so $(BUILDDIR)/
+	$(OCB) lib$(PROJ).so $(OCB_FLAGS)
+	cp $(BUILDDIR)/lib/lib$(PROJ)$(DLL_EXT) $(BUILDDIR)/
 
 build:
 	$(OCB) -I src/ -I bin/ main.native $(OCB_FLAGS)
@@ -18,12 +29,12 @@ build:
 clean:
 	$(OCB) -clean
 
-test: all
+test: sharedlib
 	$(MAKE) -C $@
 ifeq ($(OSTYPE),Win32)
 	(cd test && PATH="$(BUILDDIR)/lib:$(PATH)" $(BUILDDIR)/test/test.native)
 else
-	(cd test && LD_LIBRARY_PATH=$(BUILDDIR)/lib $(BUILDDIR)/test/test.native)
+	(cd test && LD_LIBRARY_PATH="$(BUILDDIR)"/lib $(BUILDDIR)/test/test.native)
 endif
 
 .PHONY: test build sharedlib

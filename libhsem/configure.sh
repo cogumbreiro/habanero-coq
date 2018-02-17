@@ -1,3 +1,3 @@
 #!/bin/bash
-opam install yojson ctypes ctypes-foreign cmdliner
+opam install yojson cmdliner # ctypes ctypes-foreign
 
