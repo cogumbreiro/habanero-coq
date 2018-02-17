@@ -79,17 +79,18 @@ Section Defs.
     pkg_time: nat;
     pkg_args: list nat;
     pkg_lineno: option nat;
-    pkg_parse :=
-    match pkg_op, pkg_args with
-    | PKG_INIT, [] => inl (INIT pkg_id)
-    | PKG_BEGIN_FINISH, [] => inl (BEGIN_FINISH pkg_id)
-    | PKG_END_FINISH, [] => inl END_FINISH
-    | PKG_BEGIN_TASK, [x] => inl (BEGIN_TASK (taskid x))
-    | PKG_END_TASK, [] => inl END_TASK
-    | PKG_BEGIN_TASK, _ => inr PKG_PARSE_TASK_EXPECTED
-    | _, _ => inr PKG_PARSE_NOARGS_EXPECTED
-    end;
   }.
+
+  Definition pkg_parse p := 
+  match pkg_op p, pkg_args p with
+  | PKG_INIT, [] => inl (INIT (pkg_id p))
+  | PKG_BEGIN_FINISH, [] => inl (BEGIN_FINISH (pkg_id p))
+  | PKG_END_FINISH, [] => inl END_FINISH
+  | PKG_BEGIN_TASK, [x] => inl (BEGIN_TASK (taskid x))
+  | PKG_END_TASK, [] => inl END_TASK
+  | PKG_BEGIN_TASK, _ => inr PKG_PARSE_TASK_EXPECTED
+  | _, _ => inr PKG_PARSE_NOARGS_EXPECTED
+  end.
 
   (** Test cases that catch bugs we found: *)
 
@@ -324,9 +325,9 @@ Section Defs.
   match ps with
   | [] => ([], b)
   | p::ps =>
-    let (ps1, b) := buffer_add p b in
-    let (ps2, b) := buffer_add_all ps b in
-    (ps1 ++ ps2, b)
+    let (ps1, b1) := buffer_add_all ps b in
+    let (ps2, b2) := buffer_add p b1 in
+    (ps2 ++ ps1, b2)
   end.
 
   Goal
@@ -345,11 +346,12 @@ Section Defs.
       pkg_create (taskid 0) (finishid 1, 0) PKG_INIT [];
       pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]
     ] in
-    let m := Map_FID.add (finishid 1) (1, []) (Map_FID.empty _) in
-    buffer_add_all l (Map_FID.empty _) = (l, Map_FID.add (finishid 1) (2, []) m).
+    let (l', b) := buffer_add_all l (Map_FID.empty _) in
+    l = l' /\ Map_FID.MapsTo (finishid 1) (2, []) b.
   Proof.
-    compute.
-    trivial.
+    simpl.
+    split;
+    auto using Map_FID.add_1.
   Qed.
 
   Goal
@@ -387,14 +389,10 @@ Section Defs.
       pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1];
       pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []
     ] in
-    let m := Map_FID.add (finishid 1) (0, [pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]]) (Map_FID.empty _) in
-    buffer_add_all l (Map_FID.empty _) = ([
-      pkg_create (taskid 0) (finishid 1, 0) PKG_INIT [];
-      pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]
-    ], Map_FID.add (finishid 1) (2, []) m).
+    let (l', b) := buffer_add_all l (Map_FID.empty _) in
+    l' = l /\ Map_FID.MapsTo (finishid 1) (2, []) b.
   Proof.
-    compute.
-    auto.
+    simpl; split; auto using Map_FID.add_1.
   Qed.
 
   (** Regression test: *)
