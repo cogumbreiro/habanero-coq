@@ -688,6 +688,9 @@ Extract Inductive list => "list" [ "[]" "(::)" ].
 Extract Inlined Constant length => "List.length".
 Extract Inlined Constant app => "List.append".
 Extract Inlined Constant map => "List.map".
+Extract Inlined Constant List.rev => "List.rev".
+Extract Inlined Constant List.partition => "List.partition".
+Extract Inlined Constant List.filter => "List.filter".
 
 (* pairs *)
 Extract Inductive prod => "(*)"  [ "(,)" ].
@@ -695,13 +698,28 @@ Extract Inlined Constant fst => "fst".
 Extract Inlined Constant snd => "snd".
 
 (* nat *)
-Extract Inductive nat => "int"
-  [ "0" "(fun x -> x + 1)" ]
-  "(fun zero succ n ->
-      if n=0 then zero () else succ (n-1))".
-Extract Inlined Constant plus => "( + )".
-Extract Inlined Constant mult => "( * )".
-Extract Inlined Constant eq_nat_dec => "( = )".
+Extract Inductive nat => int [ "0" "Pervasives.succ" ]
+ "(fun fO fS n -> if n=0 then fO () else fS (n-1))".
+
+Extract Constant plus => "(+)".
+Extract Constant pred => "fun n -> Pervasives.max 0 (n-1)".
+Extract Constant minus => "fun n m -> Pervasives.max 0 (n-m)".
+Extract Constant mult => "( * )".
+Extract Inlined Constant max => "Pervasives.max".
+Extract Inlined Constant min => "Pervasives.min".
+(*Extract Inlined Constant nat_beq => "(=)".*)
+Extract Inlined Constant EqNat.beq_nat => "(=)".
+Extract Inlined Constant EqNat.eq_nat_decide => "(=)".
+
+Extract Inlined Constant Peano_dec.eq_nat_dec => "(=)".
+Extract Inlined Constant PeanoNat.Nat.eqb => "( = )".
+
+Extract Constant Compare_dec.nat_compare =>
+ "fun n m -> if n=m then Eq else if n<m then Lt else Gt".
+Extract Inlined Constant Compare_dec.leb => "(<=)".
+Extract Inlined Constant Compare_dec.le_lt_dec => "(<=)".
+Extract Inlined Constant Compare_dec.lt_dec => "(<)".
+Extract Constant Compare_dec.lt_eq_lt_dec => "fun n m -> if n>m then None else Some (n<m)".
 
 Extraction Language Ocaml.
 
