@@ -52,17 +52,23 @@ let () =
       let gen_dir = "generated" in
       rule "generates ctypes stubs"
         ~dep:generator
-        ~prods:[gen_dir ^ "/hsem_stubs.c"; gen_dir ^ "/hsem.h"; gen_dir ^ "/hsem_bindings.ml"]
-      (fun env _build -> Seq[
+        ~prods:[
+          gen_dir ^ "/hsem_stubs.c";
+          gen_dir ^ "/hsem.h";
+          gen_dir ^ "/hsem_bindings.ml"
+        ]
+      (fun env _build -> Seq [
           Cmd (S [A "mkdir"; A"-p"; A (env gen_dir)]);
           Cmd (S [A (env generator); A (env gen_dir)]);
         ]
       );
-      (if Sys.os_type = "Unix" then
-      flag ["link"; "file:codegen/generate.native"] (S [A"-cclib"; A(command_output "pkg-config --libs libffi")])
-      else ()
-      );
-
+      (* Try to use pkg-config to figure out the linking path of libffi *)
+      if Sys.os_type = "Unix" then begin
+        try
+          flag ["link"; "file:codegen/generate.native"]
+               (S [A"-cclib"; A(command_output "pkg-config --libs libffi")]);
+        with End_of_file -> ()
+      end;
       (* `apply_bindings.ml` has a dynamic dependency on a generated file `hsem_bindings.ml`. *)
       (* 1. ensure that we compile `hsem_bindings` before compiling `apply_bindings.ml` *)
       dep ["ocaml"; "compile"; "file:lib/apply_bindings.ml"] [gen_dir ^ "/hsem_bindings.cmx"];
