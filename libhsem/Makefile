@@ -23,7 +23,7 @@ sharedlib:
 	cp $(BUILDDIR)/lib/lib$(PROJ)$(DLL_EXT) $(BUILDDIR)/
 
 build:
-	$(OCB) -I src/ -I bin/ main.native $(OCB_FLAGS)
+	$(OCB) main.native $(OCB_FLAGS)
 	cp $(BUILDDIR)/bin/main.native $(PROJ)
 
 clean:
