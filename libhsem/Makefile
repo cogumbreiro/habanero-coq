@@ -1,8 +1,5 @@
 PROJ=hsem
-# Get the path relative to the Makefile, as that is what
-# ocamlbuild uses.
-ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-BUILDDIR=$(ROOT_DIR)_build
+BUILDDIR=_build
 
 ifeq ($(OS),Windows_NT)
   OSTYPE:=Win32
