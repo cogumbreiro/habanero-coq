@@ -17,19 +17,27 @@ let op_to_string (o:package_op) : string = List.find (fun x -> snd x = o) all_op
 
 let json_to_package j lineno =
   let open Yojson.Basic.Util in
+  let prefix = match lineno with
+  | Some l -> "Error parsing line #" ^ string_of_int l ^ ": "
+  | None -> ""
+  in
   try (
     let o : string = member "op" j |> to_string in
+    let replace_null d j = (match j with
+    | `Null -> d
+    | _ -> j)
+    in
     try (
       {
         pkg_task = member "task" j |> to_int;
         pkg_op = string_to_op o;
         pkg_id = member "id" j |> to_int;
         pkg_time = member "time" j |> to_int;
-        pkg_args = member "args" j |> to_list |> List.map to_int;
+        pkg_args = member "args" j |> replace_null (`List []) |> to_list |> List.map to_int;
         pkg_lineno = lineno
       }
-    ) with | Not_found -> raise (Err ("Unknown operation " ^ o))
-  ) with | Type_error (e,_) -> raise (Err ("Error parsing an action: " ^ e))
+    ) with | Not_found -> raise (Err (prefix ^ "Unknown operation " ^ o))
+  ) with | Type_error (e,_) -> raise (Err (prefix ^ e))
 
 let package_to_json p =
   let open Yojson.Basic.Util in
@@ -48,7 +56,7 @@ let package_to_json p =
 let run_err_to_string (r:Finish.checks_err) : string =
   let pkg_parse_err_to_string e =
   match e with
-  | PKG_PARSE_NOARGS_EXPECTED -> "No arguments expected."
+  | PKG_PARSE_NOARGS_EXPECTED -> "Expected 0 arguments."
   | PKG_PARSE_TASK_EXPECTED -> "Expected 1 task identifier."
   in
   let reduces_err_to_string (e:Finish.reduces_err) =
@@ -61,14 +69,17 @@ let run_err_to_string (r:Finish.checks_err) : string =
     | FINISH_OPEN_EMPTY -> "Invoked END_FINISH, but there are 0 open finish scopes."
   in
   let reduces_n_err_to_string n e =
-    "Error checking action #" ^ string_of_int n ^": " ^
+    "Error checking line #" ^ string_of_int n ^": " ^
     reduces_err_to_string e
   in
   match r with
   | CHECKS_PARSE_TRACE_ERROR (p, e) -> (
-    match p.pkg_lineno with
-    | Some n -> "Error parsing line #" ^ string_of_int n ^ ": " ^ pkg_parse_err_to_string e
-    | None -> pkg_parse_err_to_string e
+    let args : string = Yojson.Basic.pretty_to_string (`List (pkg_args p |> List.map (fun x -> `Int x))) in
+    (match p.pkg_lineno with
+    | Some n ->
+      "Error parsing line #" ^ string_of_int n ^": "
+    | None -> ""
+    )^ pkg_parse_err_to_string e ^ " Obtained: " ^ args
   )
   | CHECKS_REDUCES_N_ERROR (p, e) -> (
     match p.pkg_lineno with
@@ -87,10 +98,12 @@ let parse (filename:string) =
     lineno := !lineno + 1;
     let line = String.trim line in
     if (line <> "") && (String.get line 0 <> '#') then (
-      let pkg = json_to_package (Yojson.Basic.from_string line) (Some !lineno)  in
-      match Finish.checks_add pkg !chk with
-      | Inl s' -> chk := s'
-      | Inr e -> raise (Err (run_err_to_string e))
+      try (
+        let pkg = json_to_package (Yojson.Basic.from_string line) (Some !lineno)  in
+        match Finish.checks_add pkg !chk with
+        | Inl s' -> chk := s'
+        | Inr e -> raise (Err (run_err_to_string e))
+      ) with Yojson.Json_error e -> raise (Err("Error parsing line #"^string_of_int (!lineno) ^": " ^ e))
     ) else () (* nothing to do *)
   ) (stream_file chan);
   close_in chan;
