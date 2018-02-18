@@ -1,5 +1,5 @@
 PROJ=hsem
-BUILDDIR=_build
+BUILDDIR=$(abspath _build)
 
 ifeq ($(OS),Windows_NT)
   OSTYPE:=Win32
@@ -19,7 +19,7 @@ else
 endif
 
 OCB = ocamlbuild
-
+PROG = ./$(PROJ)$(EXE_EXT)
 all: exe
 
 dll:
@@ -28,17 +28,18 @@ dll:
 
 exe:
 	$(OCB) main.native $(OCB_FLAGS)
-	cp $(BUILDDIR)/bin/main$(NATIVE_EXT) $(PROJ)$(EXE_EXT)
+	cp $(BUILDDIR)/bin/main$(NATIVE_EXT) $(PROG)
 
 clean:
 	$(OCB) -clean
 
 test: dll
 	$(MAKE) -C $@
+	$(PROG) test/ok/*.jsonl
 ifeq ($(OSTYPE),Win32)
 	(cd test && PATH="$(BUILDDIR)/lib:$(PATH)" $(BUILDDIR)/test/test.native)
 else
-	(cd test && LD_LIBRARY_PATH="$(BUILDDIR)"/lib $(BUILDDIR)/test/test.native)
+	(cd test && LD_LIBRARY_PATH=${BUILDDIR}/lib $(BUILDDIR)/test/test.native)
 endif
 
 .PHONY: test dll exe
