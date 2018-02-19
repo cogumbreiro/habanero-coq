@@ -15,7 +15,7 @@ exception Err of string
 let string_to_op (o:string) : package_op = List.find (fun x -> fst x = o) all_ops |> snd
 let op_to_string (o:package_op) : string = List.find (fun x -> snd x = o) all_ops |> fst
 
-let err_line_prefix msg lineno =match lineno with
+let err_line_prefix msg lineno = match lineno with
   | Some l ->
     let msg = if msg = "" then "" else msg ^ " " in
     "Error " ^ msg ^ "at line #" ^ string_of_int l ^ ": "
@@ -23,21 +23,34 @@ let err_line_prefix msg lineno =match lineno with
 
 let json_to_package j lineno =
   let open Yojson.Basic.Util in
+  let do_err msg = raise (Err (err_line_prefix "parsing" lineno ^ msg)) in
+  let s_member k (obj:Yojson.Basic.json) = match obj with
+    | `Assoc l ->
+      begin
+        try
+          List.find (fun x -> fst x = k) l |> snd
+        with
+          Not_found -> do_err ("JSON key '" ^ k ^ "' was not found.")
+      end
+    | _ -> do_err ("Expected a JSON object, bug got: " ^ Yojson.Basic.pretty_to_string obj)
+  in
   try begin
-    let o : string = member "op" j |> to_string in
+    let o : string = s_member "op" j |> to_string in
     let replace_null d j = match j with
       | `Null -> d
       | _ -> j
     in
     try {
-      pkg_task = member "task" j |> to_int;
+      pkg_task = s_member "task" j |> to_int;
       pkg_op = string_to_op o;
-      pkg_id = member "id" j |> to_int;
-      pkg_time = member "time" j |> to_int;
+      pkg_id = s_member "id" j |> to_int;
+      pkg_time = s_member "time" j |> to_int;
       pkg_args = member "args" j |> replace_null (`List []) |> to_list |> List.map to_int;
       pkg_lineno = lineno
-    } with | Not_found -> raise (Err (err_line_prefix "parsing" lineno ^ "Unknown operation " ^ o))
-  end with | Type_error (e,_) -> raise (Err (err_line_prefix "parsing" lineno ^ e))
+    } with Not_found ->
+      do_err ("Unknown operation " ^ o)
+  end with Type_error (e,_) ->
+    do_err e
 
 let package_to_json p =
   let open Yojson.Basic.Util in
@@ -56,7 +69,8 @@ let package_to_json p =
 
 
 let run_err_to_string (r:Finish.checks_err) : string =
-  let pkg_parse_err_to_string e = match e with
+  let pkg_parse_err_to_string e = "Invalid arguments. " ^
+    match e with
     | PKG_PARSE_NOARGS_EXPECTED -> "Expected 0 arguments."
     | PKG_PARSE_TASK_EXPECTED -> "Expected 1 task identifier."
   in
