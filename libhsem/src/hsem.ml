@@ -15,15 +15,13 @@ exception Err of string
 let string_to_op (o:string) : package_op = List.find (fun x -> fst x = o) all_ops |> snd
 let op_to_string (o:package_op) : string = List.find (fun x -> snd x = o) all_ops |> fst
 
-let err_line_prefix msg lineno = match lineno with
-  | Some l ->
-    let msg = if msg = "" then "" else msg ^ " " in
-    "Error " ^ msg ^ "at line #" ^ string_of_int l ^ ": "
+let err_line_prefix lineno = match lineno with
+  | Some l -> "Error at line #" ^ string_of_int l ^ ": "
   | None -> ""
 
 let json_to_package j lineno =
   let open Yojson.Basic.Util in
-  let do_err msg = raise (Err (err_line_prefix "parsing" lineno ^ msg)) in
+  let do_err msg = raise (Err (err_line_prefix lineno ^ msg)) in
   let s_member k (obj:Yojson.Basic.json) = match obj with
     | `Assoc l ->
       begin
@@ -59,14 +57,15 @@ let package_to_json p =
     | _ -> `Null
   in
   `Assoc [
-    "pkg_task", `Int (pkg_task p);
-    "pkg_op", `String (op_to_string (pkg_op p));
-    "pkg_id", `Int (pkg_id p);
-    "pkg_time", `Int (pkg_time p);
-    "pkg_args", `List (pkg_args p |> List.map (fun x -> `Int x));
-    "pkg_lineno", lineno
+    "task", `Int (pkg_task p);
+    "op", `String (op_to_string (pkg_op p));
+    "id", `Int (pkg_id p);
+    "time", `Int (pkg_time p);
+    "args", `List (pkg_args p |> List.map (fun x -> `Int x));
+    "lineno", lineno
   ]
 
+let package_to_string p = package_to_json p |> Yojson.Basic.pretty_to_string
 
 let run_err_to_string (r:Finish.checks_err) : string =
   let pkg_parse_err_to_string e = "Invalid arguments. " ^
@@ -82,21 +81,16 @@ let run_err_to_string (r:Finish.checks_err) : string =
     | FINISH_NONEMPTY x -> "Invoked END_FINISH, but finish " ^ string_of_int x ^ " is not empty."
     | FINISH_OPEN_EMPTY -> "Invoked END_FINISH, but there are 0 open finish scopes."
   in
-  let reduces_n_err_to_string n e =
-    "Error checking line #" ^ string_of_int n ^": " ^
-    reduces_err_to_string e
+  let (l, msg) = match r with
+    | CHECKS_PARSE_TRACE_ERROR (p, e) ->
+      begin
+        let args : string = Yojson.Basic.pretty_to_string (`List (pkg_args p |> List.map (fun x -> `Int x))) in
+        (p.pkg_lineno, pkg_parse_err_to_string e ^ " Obtained: " ^ args)
+      end
+    | CHECKS_REDUCES_N_ERROR (p, e) -> (p.pkg_lineno, reduces_err_to_string e ^ "\n" ^ package_to_string p)
+    | CHECKS_INTERNAL_ERROR -> (None, "Unexpected internal error.")
   in
-  match r with
-  | CHECKS_PARSE_TRACE_ERROR (p, e) -> (
-    let args : string = Yojson.Basic.pretty_to_string (`List (pkg_args p |> List.map (fun x -> `Int x))) in
-    err_line_prefix "parsing" p.pkg_lineno ^ pkg_parse_err_to_string e ^ " Obtained: " ^ args
-  )
-  | CHECKS_REDUCES_N_ERROR (p, e) -> (
-    match p.pkg_lineno with
-    | Some n -> reduces_n_err_to_string n e
-    | None -> reduces_err_to_string e
-  )
-  | CHECKS_INTERNAL_ERROR -> "Unexpected internal error."
+  err_line_prefix l ^ msg
 
 let parse (filename:string) =
   let stream_file c = Stream.from (fun _ ->
@@ -114,7 +108,7 @@ let parse (filename:string) =
         match Finish.checks_add pkg !chk with
         | Inl s' -> chk := s'
         | Inr e -> raise (Err (run_err_to_string e))
-      end with Yojson.Json_error e -> raise (Err(err_line_prefix "parsing" (Some !lineno) ^ e))
+      end with Yojson.Json_error e -> raise (Err(err_line_prefix (Some !lineno) ^ e))
     end
   in
   Stream.iter do_iter (stream_file chan);
