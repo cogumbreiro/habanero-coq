@@ -1,3 +1,5 @@
+Set Implicit Arguments.
+
 Require Import Coq.Lists.List.
 Require Import Coq.Arith.Peano_dec.
 Require Import HJ.Finish.Lang.
@@ -5,8 +7,126 @@ Require Import HJ.Tid.
 Require Import HJ.Fid.
 Require Import Coq.Arith.EqNat.
 
+Import ListNotations.
+
+Module Queue.
+  Section Defs.
+  Variable A:Type.
+  Variable time: A -> nat.
+
+  Definition t := (nat * list A) % type.
+
+  Definition make : t := (0, @nil A).
+
+  Let curr (e:t) : nat := fst e.
+
+  Let values (e:t) := snd e.
+
+  Let empty n : t := (n, @nil A).
+
+  Definition add p (e:t) := let (x, y) := e in (x, p :: y).
+
+  (** Increments the current time of the queue. *)
+  Let inc (e:t) := let (x, y) := e in (S x, y).
+
+  Let step (n:nat) (elems:list A) :=
+  let (l, r) :=
+    partition (fun p => beq_nat n (time p)) elems
+  in
+  (l, (if beq_nat (length l) 0 then n else (S n), r)).
+
+  Lemma partition_length:
+    forall {A : Type} (f : A -> bool) (l : list A),
+    length (fst (partition f l)) + length (snd (partition f l)) = length l.
+  Proof.
+    induction l. {
+      simpl.
+      trivial.
+    }
+    simpl.
+    remember (f a).
+    symmetry in Heqb.
+    remember (partition f l).
+    destruct p as (x, y).
+    destruct b; simpl in *;
+    auto with *.
+  Qed.
+
+  Let step_length:
+    forall e l r n,
+    step n e = (l, r) ->
+    length l + length (snd r) = length e.
+  Proof.
+    induction e; intros; unfold step in *; simpl in *;
+    inversion H; subst; clear H.
+    - simpl.
+      trivial.
+    - remember (partition _ _).
+      remember (length e) as z.
+      symmetry in Heqz.
+      rewrite <- partition_length with (f:=fun p : A => PeanoNat.Nat.eqb n (time p)) in Heqz.
+      rewrite <- Heqp in *.
+      remember (PeanoNat.Nat.eqb n _).
+      symmetry in Heqb.
+      destruct b. {
+        rewrite PeanoNat.Nat.eqb_eq in *.
+        rewrite Heqb in *; clear Heqb.
+        destruct p as (a1, b1).
+        remember (PeanoNat.Nat.eqb _ _).
+        symmetry in Heqb.
+        destruct b. {
+          rewrite PeanoNat.Nat.eqb_eq in *.
+          simpl in *.
+          inversion Heqb.
+        }
+        rewrite PeanoNat.Nat.eqb_neq in *.
+        inversion H1; subst; clear H1.
+        simpl.
+        trivial.
+      }
+      rewrite PeanoNat.Nat.eqb_neq in *.
+      destruct p as (a1, b1).
+      remember (PeanoNat.Nat.eqb _ _).
+      symmetry in Heqb0.
+      destruct b. {
+        rewrite PeanoNat.Nat.eqb_eq in *.
+        inversion H1; subst; clear H1.
+        simpl.
+        rewrite Heqb0.
+        simpl.
+        trivial.
+      }
+      inversion H1; subst; clear H1.
+      rewrite PeanoNat.Nat.eqb_neq in *.
+      simpl.
+      auto with *.
+  Qed.
+
+  Function poll (n:nat) (elems: list A) {measure length elems} :=
+  let (l1, e1) := step n elems in
+  match l1 with
+  | nil => (l1, e1)
+  | _ =>
+    let (l2, e2) := poll (fst e1) (snd e1) in
+    (l1 ++ l2, e2)
+  end.
+  Proof.
+    intros.
+    apply step_length in teq.
+    rewrite <- teq.
+    simpl.
+    auto with *.
+  Defined.
+  End Defs.
+
+  Goal @poll _ (fun (x:nat) => x) 0 [1; 0; 3; 2] = ([0; 1; 2; 3], (4, [])).
+  Proof.
+    compute.
+    trivial.
+  Qed.
+End Queue.
+
 Section Defs.
-  Import ListNotations.
 
   Inductive package_op :=
   | PKG_INIT
@@ -174,122 +294,7 @@ Section Defs.
   then (run s p, (S n, nil))
   else (inl s, (n, p::nil)).
 
-  Definition enq := (nat * list package) % type.
-
-  Definition enq_zero : enq := (0, []).
-
-  Definition enq_curr (e:enq) := fst e.
-
-  Definition enq_elems (e:enq) := snd e.
-
-  Definition empty_enq n : enq := (n, []).
-
-  Definition enq_cons p (e:enq) := let (x, y) := e in (x, p :: y).
-
-  Definition enq_succ (e:enq) := let (x, y) := e in (S x, y).
-
-  Definition enq_step (n:nat) (elems:list package) :=
-  let (l, r) :=
-    partition (fun p => beq_nat n (pkg_time p)) elems
-  in
-  (l, (if beq_nat (length l) 0 then n else (S n), r)).
-
-  Lemma partition_length:
-    forall {A : Type} (f : A -> bool) (l : list A),
-    length (fst (partition f l)) + length (snd (partition f l)) = length l.
-  Proof.
-    induction l. {
-      simpl.
-      trivial.
-    }
-    simpl.
-    remember (f a).
-    symmetry in Heqb.
-    remember (partition f l).
-    destruct p as (x, y).
-    destruct b; simpl in *;
-    auto with *.
-  Qed.
-
-  Let enq_step_length:
-    forall elems l r n,
-    enq_step n elems = (l, r) ->
-    length l + length (snd r) = length elems.
-  Proof.
-    induction elems; intros; unfold enq_step in *; simpl in *;
-    inversion H; subst; clear H.
-    - simpl.
-      trivial.
-    - remember (partition _ _).
-      remember (length elems) as z.
-      symmetry in Heqz.
-      rewrite <- partition_length with (f:=fun p : package => PeanoNat.Nat.eqb n (pkg_time p)) in Heqz.
-      rewrite <- Heqp in *.
-      remember (PeanoNat.Nat.eqb n _).
-      symmetry in Heqb.
-      destruct b. {
-        rewrite PeanoNat.Nat.eqb_eq in *.
-        rewrite Heqb in *; clear Heqb.
-        destruct p as (a1, b1).
-        remember (PeanoNat.Nat.eqb _ _).
-        symmetry in Heqb.
-        destruct b. {
-          rewrite PeanoNat.Nat.eqb_eq in *.
-          simpl in *.
-          inversion Heqb.
-        }
-        rewrite PeanoNat.Nat.eqb_neq in *.
-        inversion H1; subst; clear H1.
-        simpl.
-        trivial.
-      }
-      rewrite PeanoNat.Nat.eqb_neq in *.
-      destruct p as (a1, b1).
-      remember (PeanoNat.Nat.eqb _ _).
-      symmetry in Heqb0.
-      destruct b. {
-        rewrite PeanoNat.Nat.eqb_eq in *.
-        inversion H1; subst; clear H1.
-        simpl.
-        rewrite Heqb0.
-        simpl.
-        trivial.
-      }
-      inversion H1; subst; clear H1.
-      rewrite PeanoNat.Nat.eqb_neq in *.
-      simpl.
-      auto with *.
-  Qed.
-
-  Function enq_partition (n:nat) (elems: list package) {measure length elems} :=
-  let (l1, e1) := enq_step n elems in
-  match l1 with
-  | [] => (l1, e1)
-  | _ =>
-    let (l2, e2) := enq_partition (fst e1) (snd e1) in
-    (l1 ++ l2, e2)
-  end.
-  Proof.
-    intros.
-    apply enq_step_length in teq.
-    rewrite <- teq.
-    simpl.
-    auto with *.
-  Defined.
-
-  Goal enq_partition 0 [
-    pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1];
-    pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []
-  ] = ([
-    pkg_create (taskid 0) (finishid 1, 0) PKG_INIT [];
-    pkg_create (taskid 0) (finishid 1, 1) PKG_BEGIN_TASK [1]
-  ], (2, [])).
-  Proof.
-    compute.
-    trivial.
-  Qed.
-
-  Definition buffer :=  Map_FID.t enq.
+  Definition buffer :=  Map_FID.t (Queue.t package).
 
   Structure checks := {
     checks_buffer : buffer;
@@ -298,11 +303,11 @@ Section Defs.
 
   Definition buffer_add (p:package) (b:buffer) : (list package * buffer) :=
   let f := pkg_id p in
-  let e := enq_cons p (match Map_FID.find f b with
+  let e := Queue.add p (match Map_FID.find f b with
   | Some e => e
-  | None => enq_zero
+  | None => Queue.make package
   end) in
-  let (l, e) := enq_partition (fst e) (snd e) in
+  let (l, e) := Queue.poll pkg_time (fst e) (snd e) in
   (l, Map_FID.add f e b).
 
   Goal buffer_add (pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []) (Map_FID.empty _) =
