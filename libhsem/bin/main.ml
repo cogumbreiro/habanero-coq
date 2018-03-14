@@ -19,9 +19,7 @@ let parse_t =
         match enqueued, running with
         | [], [] -> ()
         | _, _ ->
-          let js_enq = `List (List.map package_to_json enqueued) |> pretty_to_string in
-          let js_run = `List (List.map (fun x -> `Int x) running) |> pretty_to_string in
-          raise (Hsem.Err ("There are still operations enqueued or tasks running.\nOperations enqueued: " ^ js_enq ^ "\nTasks running: " ^ js_run))
+          raise (Hsem.Err ("There are still operations enqueued or tasks running.\n" ^ checks_to_string s))
       end with Hsem.Err e ->
           raise (Hsem.Err (fname ^ ": " ^ e)) (* prefix the error with the filename *)
       in

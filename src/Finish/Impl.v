@@ -18,7 +18,7 @@ Module Queue.
 
   Definition make : t := (0, @nil A).
 
-  Let curr (e:t) : nat := fst e.
+  Definition curr (e:t) : nat := fst e.
 
   Definition elements (e:t) := snd e.
 
@@ -433,16 +433,12 @@ Section Defs.
 
   (* ------------------------------------------------------------------------ *)
 
-  Let timed_package := (nat * package) % type.
-
-  Let queue := Queue.t timed_package.
+  Let queue := Queue.t package.
 
   Structure buffer := {
     buffer_f_queue : Map_FID.t queue;
-    buffer_t_queue: Map_TID.t queue;
-    buffer_next_tick: Map_TID.t nat;
+    buffer_t_queue: Map_TID.t (option (list package));
   }.
-
 
   Structure checks := {
     checks_buffer : buffer;
@@ -470,61 +466,47 @@ Section Defs.
 
     Finally, we poll the operations from each task queue.
     *)
-(*
-  Let f_queue_add (p:timed_package) (b:Map_FID.t queue) : (list timed_package * Map_FID.t queue) :=
-  let f := pkg_id (snd p) in
+
+  Let f_queue_add (p:package) (b:Map_FID.t queue) :
+    (list package * Map_FID.t queue) :=
+  let f := pkg_id p in
   let q := match Map_FID.find f b with
     | Some e => e
     | None => Queue.make _
     end
   in
   let e := Queue.add p q in
-  let (l, e) := Queue.poll (fun x => pkg_time (snd x)) (fst e) (snd e) in
+  let (l, e) := Queue.poll pkg_time (fst e) (snd e) in
   (l, Map_FID.add f e b).
-*)
-  Let f_queue_add_1 (p:timed_package) (r:list timed_package * Map_FID.t queue) : (list timed_package * Map_FID.t queue) :=
-  let (ps1, b) := r in
-  let f := pkg_id (snd p) in
-  let q := match Map_FID.find f b with
-    | Some e => e
-    | None => Queue.make _
-    end
-  in
-  let e := Queue.add p q in
-  let (l, e) := Queue.poll (fun x => pkg_time (snd x)) (fst e) (snd e) in
-  (ps1 ++ l, Map_FID.add f e b).
-
-  Let f_queue_add (ps:list timed_package) (b:Map_FID.t queue) : (list timed_package * Map_FID.t queue) :=
-  List.fold_right f_queue_add_1 ([], b) ps.
 
   Goal
-    let p := (0, pkg_create (taskid 1) (finishid 0, 0) PKG_INIT []) in
-    f_queue_add [p] (Map_FID.empty _) = ([p], Map_FID.add (finishid 0) (1, []) (Map_FID.empty _)).
+    let p := pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [] in
+    f_queue_add p (Map_FID.empty _) = ([p], Map_FID.add (finishid 0) (1, []) (Map_FID.empty _)).
   Proof.
     auto.
   Qed.
 
   Goal
-    let p := (1, pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2]) in
+    let p := pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2] in
     let m := Map_FID.add (finishid 0) (1, []) (Map_FID.empty _) in
-    f_queue_add [p] m = ([p], Map_FID.add (finishid 0) (2, []) m).
+    f_queue_add p m = ([p], Map_FID.add (finishid 0) (2, []) m).
   Proof.
     auto.
   Qed.
 
   Goal
-    let p := (0, pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_FINISH []) in
+    let p := pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_FINISH [] in
     let m := Map_FID.add (finishid 0) (1, []) (Map_FID.empty _) in
     let m := Map_FID.add (finishid 0) (2, []) m in
-    f_queue_add [p] m = ([], Map_FID.add (finishid 0) (2, [p]) m).
+    f_queue_add p m = ([], Map_FID.add (finishid 0) (2, [p]) m).
   Proof.
     unfold f_queue_add; simpl.
     auto.
   Qed.
 
   Goal
-    let p1 := (0, pkg_create (taskid 1) (finishid 0, 3) PKG_BEGIN_TASK [2]) in
-    let p2 := (0, pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH []) in
+    let p1 := pkg_create (taskid 1) (finishid 0, 3) PKG_BEGIN_TASK [2] in
+    let p2 := pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH [] in
     let m := Map_FID.add (finishid 0) (1, []) (Map_FID.empty _) in
     let m := Map_FID.add (finishid 0) (2, []) m in
     let m := Map_FID.add (finishid 0) (2, [p1]) m in
@@ -535,8 +517,8 @@ Section Defs.
   Qed.
 
   Goal
-    let p1 := (0, pkg_create (taskid 1) (finishid 0, 3) PKG_BEGIN_TASK [2]) in
-    let p2 := (0, pkg_create (taskid 1) (finishid 0, 2) PKG_END_TASK []) in
+    let p1 := pkg_create (taskid 1) (finishid 0, 3) PKG_BEGIN_TASK [2] in
+    let p2 := pkg_create (taskid 1) (finishid 0, 2) PKG_END_TASK [] in
     let m := Map_FID.add (finishid 0) (1, []) (Map_FID.empty _) in
     let m := Map_FID.add (finishid 0) (2, []) m in
     let m := Map_FID.add (finishid 0) (2, [p1]) m in
@@ -550,303 +532,67 @@ Section Defs.
   (** [t_poll] reorders timed packages and takes out the timestamp,
     leaving just the package. *)
 
-  Let t_poll (q:queue) :
-    (list timed_package * queue) :=
-    Queue.poll (@fst nat package) (fst q) (snd q).
 
-  Let t_queue_add_1 (p:timed_package) (r:list timed_package * Map_TID.t queue) : (list timed_package * Map_TID.t queue) :=
-  let (ps1,m) := r in
-  let x := pkg_task (snd p) in
-  let q := match Map_TID.find x m with
-    | Some q => q
-    | None => Queue.make _
+  Let t_queue_add_1 (p:package) (m:Map_TID.t (option (list package))):=
+  match pkg_parse p with
+  | inl (INIT _) =>
+    let x := pkg_task p in
+    match Map_TID.find x m with
+    | None => ([p], Map_TID.add x None m)
+    | _ => ([p], m)
     end
-  in
-  let (ps2, q) := t_poll (Queue.add p q) in
-  (ps1 ++ ps2, Map_TID.add x q m).
-
-  Let t_queue_add (ps:list timed_package) (m:Map_TID.t queue)
-    : (list timed_package * Map_TID.t queue) :=
-  List.fold_right t_queue_add_1 ([], m) ps.
-(*
-  Let t_queue_add (p:timed_package) (m:Map_TID.t queue) : Map_TID.t queue :=
-  let x := pkg_task (snd p) in
-  let q := match Map_TID.find x m with
-    | Some q => q
-    | None => Queue.make _
+  | inl (BEGIN_TASK x) =>
+    let m' := Map_TID.add x None m in
+    match Map_TID.find x m with
+    | Some (Some l) => (p::l, m')
+    | None => ([p], m')
+    | Some None => ([p], m)
     end
-  in
-  (Map_TID.add x (Queue.add p q) m).
+  | inl _ =>
+    let x := pkg_task p in
+    match Map_TID.find x m with
+    | Some (Some l) => ([], Map_TID.add x (Some (p::l)) m)
+    | Some None => ([p], m)
+    | None => ([], Map_TID.add x (Some [p]) m)
+    end
+  | inr e => ([p], m)
+  end.
 
-  Let t_queue_add_all ps q := List.fold_right t_queue_add q ps.
+  Let t_queue_add (ps:list package) (m:Map_TID.t (option (list package))) :=
+  List.fold_left (fun (r:list package * Map_TID.t (option (list package))) p =>
+    let (l1, m) := r in
+    let (l2, m) := t_queue_add_1 p m in
+    (l1 ++ l2, m)
+  ) ps ([], m).
 
   Goal
-    let p := (0, pkg_create (taskid 1) (finishid 0, 0) PKG_INIT []) in
-    t_queue_add_all [p] (Map_TID.empty _) = Map_TID.add (taskid 1) (1, []) (Map_TID.empty _).
+    let l := [
+      pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [];
+      pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2]
+    ] in
+    t_queue_add l (Map_TID.empty _) = (l, Map_TID.add (taskid 2) None
+      (Map_TID.add (taskid 1) None (Map_TID.empty _))).
   Proof.
-    unfold t_queue_add_all, t_queue_add; simpl.
-    auto.
-  Qed.
-
-  Goal forall p n,
-    t_queue_add_all [(n, p)] (Map_TID.empty _) =
-    Map_TID.add (pkg_task p) (Queue.add (n, p) (Queue.make _)) (Map_TID.empty _).
-  Proof.
-    intros.
-    unfold t_queue_add_all, t_queue_add; simpl.
-    auto.
-  Qed.
-
-  (** [t_poll] reorders timed packages and takes out the timestamp,
-    leaving just the package. *)
-
-  Let t_poll (q:queue) :
-    (list package * queue) :=
-  let (l,q) :=
-    Queue.poll (@fst nat package) (fst q) (snd q)
-  in
-  (snd (List.split l), q).
-
-  Let t_poll_example_1:
-    forall p q r,
-    t_poll (0, [(1,q); (0,p); (2,r)])
-    =
-    ([p;q;r], (3, [])).
-  Proof.
-    intros.
-    unfold t_poll.
     simpl; auto.
   Qed.
 
-  (** Poll the queue associated with a given task. *)
-
-  Let do_poll (k:tid) (p:list package * Map_TID.t queue) :=
-  let (l1, m) := p in
-  match Map_TID.find k m with
-  | Some q =>
-    let (l2, q') := t_poll q in
-    (l1 ++ l2, Map_TID.add k q' m)
-  | _ => (l1, m)
-  end.
-
-  Let do_poll_example_1 x qt qt' m q1 q2:
-    t_poll qt = (q2, qt') ->
-    let m' := Map_TID.add x qt m in
-    do_poll x (q1, m') =
-    (q1 ++ q2, Map_TID.add x qt' m').
-  Proof.
-    unfold do_poll; intros.
-    remember (Map_TID.add _ _ _) as m''.
-    destruct (Map_TID_Extra.find_rw x m'') as [(R,?)|(y,(R,?))];
-    rewrite R in *; clear R; subst. {
-      contradict H0.
-      rewrite Map_TID_Facts.add_in_iff.
-      auto.
-    }
-    assert (y = qt). {
-      rewrite Map_TID_Facts.add_mapsto_iff in *.
-      destruct H0 as [(_,?)|(N,?)]; try contradiction; auto.
-    }
-    subst.
-    rewrite H.
-    trivial.
-  Qed.
-
-  (** Polls all queues associated with all given tasks *)
-
-  Let t_poll_many (l:list tid) (m:Map_TID.t queue) :=
-  List.fold_right do_poll ([], m) l.
-
-  Let t_poll_many_example_1 x qt qt' m q2:
-    t_poll qt = (q2, qt') ->
-    let m' := Map_TID.add x qt m in
-    t_poll_many [x] m' =
-    (q2, Map_TID.add x qt' m').
-  Proof.
-    intros.
-    unfold t_poll_many, fold_right.
-    eapply do_poll_example_1 with (x:=x) (q1:=[]) (m:=m) in H; eauto.
-  Qed.
-
-  Let t_poll_all (m:Map_TID.t queue) : (list package * Map_TID.t queue) :=
-  t_poll_many (Map_TID_Extra.keys m) m.
-*)
-  Let clock_package p (m:Map_TID.t nat) :=
-  match (pkg_op p) with
-  | PKG_INIT =>
-    let x := pkg_task p in
-    match Map_TID.find x m with
-    | None => inl (0, Map_TID.add x 1 m)
-    | _ => inr (CHECKS_TASK_EXISTS_ERROR p x)
-    end
-  | _ =>
-    match Map_TID.find (pkg_task p) m with
-    | Some n =>
-      let m := Map_TID.add (pkg_task p) (S n) m in
-      match pkg_op p, pkg_args p with
-      | PKG_BEGIN_TASK, [ x ] =>
-        match Map_TID.find (taskid x) m with
-        | None => inl (n, Map_TID.add (taskid x) 0 m)
-        | Some _ => inr (CHECKS_TASK_EXISTS_ERROR p (taskid x))
-        end
-      | _, _ => inl (n, m)
-      end
-    | None => inr CHECKS_INTERNAL_ERROR
-    end
-  end.
-
   Goal
-    clock_package (pkg_create (taskid 1) (finishid 0, 0) PKG_INIT []) (Map_TID.empty _)
-    = inl (0, Map_TID.add (taskid 1) 1 (Map_TID.empty _)).
+    let l := [
+      pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [];
+      pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2];
+      pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH [];
+      pkg_create (taskid 1) (finishid 0, 2) PKG_END_TASK [];
+      pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3]
+    ] in
+    fst (t_queue_add l (Map_TID.empty _)) = [
+      pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [];
+      pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2];
+      pkg_create (taskid 1) (finishid 0, 2) PKG_END_TASK [];
+      pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3];
+      pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH []
+    ].
   Proof.
     auto.
-  Qed.
-
-  Goal
-    let m := Map_TID.add (taskid 1) 1 (Map_TID.empty _) in
-    clock_package (pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2]) m
-    = inl (1, Map_TID.add (taskid 2) 0 (Map_TID.add (taskid 1) 2 m)).
-  Proof.
-    auto.
-  Qed.
-
-  Goal
-    let m := Map_TID.add (taskid 1) 1 (Map_TID.empty _) in
-    let m := Map_TID.add (taskid 2) 0 (Map_TID.add (taskid 1) 2 m) in
-    clock_package (pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3]) m
-    = inl (0, Map_TID.add (taskid 3) 0 (Map_TID.add (taskid 2) 1 m)).
-  Proof.
-    unfold clock_package; simpl; auto.
-  Qed.
-
-
-  Goal
-    let m := Map_TID.add (taskid 1) 1 (Map_TID.empty _) in
-    let m := Map_TID.add (taskid 2) 0 (Map_TID.add (taskid 1) 2 m) in
-    let m := Map_TID.add (taskid 3) 0 (Map_TID.add (taskid 2) 1 m) in
-    clock_package (pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH []) m
-    = inl (0, Map_TID.add (taskid 3) 1 m).
-  Proof.
-    unfold clock_package; simpl; auto.
-  Qed.
-
-  Goal
-    let m := Map_TID.add (taskid 1) 1 (Map_TID.empty _) in
-    let m := Map_TID.add (taskid 2) 0 (Map_TID.add (taskid 1) 2 m) in
-    let m := Map_TID.add (taskid 3) 0 (Map_TID.add (taskid 2) 1 m) in
-    let m := Map_TID.add (taskid 3) 1 m in
-    clock_package (pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH []) m
-    = inl (1, Map_TID.add (taskid 3) 2 m).
-  Proof.
-    unfold clock_package; simpl; auto.
-  Qed.
-
-  Goal
-    let m := Map_TID.add (taskid 1) 1 (Map_TID.empty _) in
-    let m := Map_TID.add (taskid 2) 0 (Map_TID.add (taskid 1) 2 m) in
-    let m := Map_TID.add (taskid 3) 0 (Map_TID.add (taskid 2) 1 m) in
-    let m := Map_TID.add (taskid 3) 1 m in
-    let m := Map_TID.add (taskid 3) 2 m in
-    clock_package (pkg_create (taskid 1) (finishid 0, 2) PKG_END_TASK []) m
-    = inl (2, Map_TID.add (taskid 1) 3 m).
-  Proof.
-    unfold clock_package; simpl; auto.
-  Qed.
-
-  Let clock_package_init:
-    forall p m m' n,
-    pkg_op p = PKG_INIT ->
-    clock_package p m = inl (n, m') ->
-    n = 0 /\ m' = Map_TID.add (pkg_task p) 1 m.
-  Proof.
-    unfold clock_package; intros.
-    rewrite H in *.
-    destruct (Map_TID_Extra.find_rw (pkg_task p) m) as [(R,?)|(?,(R,?))];
-    rewrite R in *; clear R;
-    inversion H0; subst; clear H0.
-    split; auto.
-  Qed.
-
-  Let clock_package_other:
-    forall p m n m' n',
-    pkg_op p <> PKG_INIT ->
-    pkg_op p <> PKG_BEGIN_TASK ->
-    Map_TID.MapsTo (pkg_task p) n m ->
-    clock_package p m = inl (n', m') ->
-    n' = n /\ m' = Map_TID.add (pkg_task p) (S n) m.
-  Proof.
-    unfold clock_package.
-    intros.
-    destruct (pkg_op p);
-    try (contradiction);
-    try (destruct (Map_TID_Extra.find_rw (pkg_task p) m) as [(R,?)|(?,(R,?))];
-    rewrite R in *; destruct R);
-    inversion H2; subst; clear H2;
-        try match goal with
-      H: Map_TID.MapsTo ?k ?v1 ?m, H2: Map_TID.MapsTo ?k ?v2 ?m |- _
-    => assert (R: v1 = v2) by eauto using Map_TID_Facts.MapsTo_fun;
-       rewrite R in *; clear H2 R
-     end; auto.
-  Qed.
-
-  Let clock_package_begin_task:
-    forall p m m' n n' x,
-    pkg_op p = PKG_BEGIN_TASK ->
-    Map_TID.MapsTo (pkg_task p) n m ->
-    clock_package p m = inl (n', m') ->
-    pkg_args p = [ x ] ->
-    n' = n /\ m' = Map_TID.add (taskid x) 0 (Map_TID.add (pkg_task p) (S n) m).
-  Proof.
-    unfold clock_package; intros.
-    rewrite H in *; clear H.
-    rewrite H2 in *; clear H2.
-    destruct (Map_TID_Extra.find_rw (pkg_task p) m) as [(R,?)|(?,(R,?))];
-    rewrite R in *; destruct R. {
-      inversion H1.
-    }
-    assert (x0 = n) by eauto using Map_TID_Facts.MapsTo_fun; subst.
-    remember (Map_TID.add _ _ _) as m1.
-    destruct (Map_TID_Extra.find_rw (taskid x) m1) as [(R,?)|(?,(R,?))];
-    rewrite R in *; destruct R. {
-      subst.
-      inversion H1; subst; clear H1.
-      auto.
-    }
-    inversion H1.
-  Qed.
-
-  Let clock_package_inv_maps_to:
-    forall p m m' n,
-    clock_package p m = inl (n, m') ->
-    Map_TID.MapsTo (pkg_task p) (S n) m'.
-  Proof.
-    unfold clock_package.
-    intros.
-    destruct (pkg_op p);
-    try (destruct (Map_TID_Extra.find_rw (pkg_task p) m) as [(R,?)|(?,(R,?))];
-    rewrite R in *; destruct R);
-    inversion H; subst; clear H; auto using Map_TID.add_1.
-    destruct (pkg_args p). {
-      inversion H2; subst; clear H2.
-      auto using Map_TID.add_1.
-    }
-    destruct l. {
-      remember (Map_TID.add _ _ _) as m1.
-      destruct (Map_TID_Extra.find_rw (taskid n0) m1) as [(R,?)|(?,(R,?))];
-      rewrite R in *; destruct R. {
-        subst; inversion H2; subst; clear H2.
-        assert (taskid n0 <> pkg_task p). {
-          unfold not; intros R; rewrite R in *.
-          contradict H.
-          rewrite Map_TID_Facts.add_in_iff.
-          auto.
-        }
-        auto using Map_TID.add_1, Map_TID.add_2.
-      }
-      inversion H2.
-    }
-    inversion H2; subst; clear H2.
-    auto using Map_TID.add_1.
   Qed.
 
   Let checks_try_run ps b s : (checks + checks_err) %type :=
@@ -867,24 +613,17 @@ Section Defs.
     end
   end.
 
-  Definition buffer_add (p:package) b : ((list package * buffer) + checks_err) %type :=
-  match clock_package p (buffer_next_tick b) with
-  | inl (n, next_tick) =>
-    let (ps, qt) := t_queue_add [(n,p)] (buffer_t_queue b) in
-    let (ps, qf) := f_queue_add ps (buffer_f_queue b) in
-    inl (snd (List.split ps),
+  Definition buffer_add (p:package) b : (list package * buffer) :=
+  let (ps, qf) := f_queue_add p (buffer_f_queue b) in
+  let (ps, qt) := t_queue_add ps (buffer_t_queue b) in
+  (ps,
       {| buffer_f_queue := qf;
-         buffer_t_queue := qt;
-         buffer_next_tick := next_tick
-       |}
-    )
-  | inr e => inr e
-  end.
+         buffer_t_queue := qt
+       |}).
 
   Definition buffer_make := {|
     buffer_f_queue := Map_FID.empty _;
     buffer_t_queue := Map_TID.empty _;
-    buffer_next_tick := Map_TID.empty _;
   |}.
 
   Definition checks_make := {|
@@ -893,38 +632,23 @@ Section Defs.
   |}.
 
   Definition checks_add (p:package) s : (checks + checks_err) %type :=
-  match buffer_add p (checks_buffer s) with
-  | inl (ps, b) => checks_try_run ps b (checks_state s)
-  | inr e => inr e
-  end.
-
-  Let buffer_add_example_1:
-    let p := (pkg_create (taskid 0) (finishid 1, 0) PKG_INIT []) in
-    buffer_add p buffer_make =
-    inl ([p], 
-    {|
-      buffer_f_queue := Map_FID.add (pkg_id p) (1, []) (Map_FID.empty _);
-      buffer_t_queue := Map_TID.add (pkg_task p) (1, []) (Map_TID.empty _);
-      buffer_next_tick := Map_TID.add (pkg_task p) 1 (Map_TID.empty _) |}
-  ).
-  Proof.
-    unfold buffer_add, buffer_make.
-    simpl.
-    auto.
-  Qed.
+  let (ps, b) := buffer_add p (checks_buffer s) in
+  checks_try_run ps b (checks_state s).
 
   Definition checks_running s : list tid :=
   Map_TID_Extra.keys (checks_state s).
 
   Let to_packages (l:list queue) :=
-  let l := List.flat_map (@Queue.elements timed_package) l in
-  snd (List.split l).
+  List.flat_map (@Queue.elements package) l.
 
   Definition checks_f_enqueued s : list package :=
   to_packages (Map_FID_Extra.values (buffer_f_queue (checks_buffer s))).
 
   Definition checks_t_enqueued s : list package :=
-  to_packages (Map_TID_Extra.values (buffer_t_queue (checks_buffer s))).
+  List.flat_map (fun (x:option (list package))  => match x with
+  | Some l => l
+  | _ => []
+  end) (Map_TID_Extra.values (buffer_t_queue (checks_buffer s))).
 
   Definition checks_enqueued s : list package :=
   checks_f_enqueued s ++ checks_t_enqueued s.
@@ -943,7 +667,7 @@ Section Defs.
   buffer_add_all l checks_make.
 
   Section TestFAdd.
-
+(*
     Let clock_package_aux_1:
         clock_package (pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [])
          (buffer_next_tick buffer_make) = inl
@@ -982,7 +706,7 @@ Section Defs.
     Qed.
 
     Let f_queue_add_aux_1:
-      f_queue_add (0, pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [])
+      f_queue_add [(0, pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [])]
          (buffer_f_queue buffer_make) =
        ([(0, pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [])],
        Map_FID.add (finishid 0) (1, []) (Map_FID.empty queue)).
@@ -992,7 +716,7 @@ Section Defs.
 
     Let f_queue_add_aux_2:
       f_queue_add
-         (1, pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2])
+         [(1, pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2])]
          (Map_FID.add (finishid 0) (1, []) (Map_FID.empty queue)) =
       ([(1, pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2])],
        Map_FID.add (finishid 0) (2, [])
@@ -1003,7 +727,7 @@ Section Defs.
 
     Let f_queue_add_aux_3:
       f_queue_add
-         (0, pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3])
+         [(0, pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3])]
          (Map_FID.add (finishid 0) (2, [])
             (Map_FID.add (finishid 0) (1, []) (Map_FID.empty queue))) =
       ([],
@@ -1099,7 +823,7 @@ Section Defs.
       simpl.
       eauto using Map_TID.add_1.
     Qed.
-
+(*
     Goal
       let l := [
         pkg_create (taskid 0) (finishid 1, 0) PKG_INIT [];
@@ -1111,13 +835,25 @@ Section Defs.
       simpl.
       eauto.
     Qed.
-(*
+*)
+    Compute
+      match buffer_add (pkg_create (taskid 1) (finishid 0, 0) PKG_INIT []) buffer_make
+      with
+      | inl l => l
+      | _ => ([], buffer_make)
+      end
+    .
+
+    Goal init_package (pkg_create (taskid 1) (finishid 0, 0) PKG_INIT []) (Map_TID.empty _)
+    = inl (Map_TID.add (taskid 1) 0 (Map_TID.empty _)).
+    Proof. auto. Qed.
+
     Compute
       let l := [
         pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [];
-        pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2];
+        pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2](*;
         pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3];
-        pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH []
+        pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH []*)
         (*;
         ;
         pkg_create (taskid 1) (finishid 0, 2) PKG_END_TASK []*)
@@ -1125,6 +861,7 @@ Section Defs.
       buffer_add_all l buffer_make
     .
 *)
+(*
     Ltac simpl_rw H :=
     simpl in H;
     rewrite H in *;
@@ -1140,36 +877,46 @@ Section Defs.
       ] in
       exists s,
       buffer_add_all l buffer_make = inl s /\ fst s = [
-        pkg_create (taskid 1) (finishid 0, 0) PKG_INIT [];
-        pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2];
-        pkg_create (taskid 1) (finishid 0, 2) PKG_END_TASK [];
-        pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3];
-        pkg_create (taskid 3) (finishid 1, 0) PKG_BEGIN_FINISH []
+        pkg_create (taskid 1) (* 0 *) (finishid 0, 0) PKG_INIT [];
+        pkg_create (taskid 1) (* 1 *) (finishid 0, 1) PKG_BEGIN_TASK [2];
+        pkg_create (taskid 1) (* 2 *) (finishid 0, 2) PKG_END_TASK [];
+        pkg_create (taskid 2) (* 0 *) (finishid 0, 3) PKG_BEGIN_TASK [3];
+        pkg_create (taskid 3) (* 0 *) (finishid 1, 0) PKG_BEGIN_FINISH []
       ].
     Proof.
       intros.
       unfold buffer_add_all, buffer_add, l; clear l.
-      rewrite clock_package_aux_1, f_queue_add_aux_1, t_queue_add_aux_1.
+      rewrite clock_package_aux_1.
+      rewrite f_queue_add_aux_1.
+      rewrite t_queue_add_aux_1.
+      (* PKG_BEGIN_TASK [2] *)
+      (* clock *)
       remember (clock_package (pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2]) _).
       rewrite clock_package_aux_2 in Heqs; subst; clear Heqs.
-      remember (f_queue_add (1, pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2]) _).
+      (* f *)
+      remember (f_queue_add [(1, pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2])] _).
       simpl in Heqp; rewrite f_queue_add_aux_2 in Heqp; subst;
       clear Heqp.
+      (* t *)
       remember (t_queue_add
            [(1, pkg_create (taskid 1) (finishid 0, 1) PKG_BEGIN_TASK [2])] _).
       simpl in Heqp.
       rewrite Heqp; clear Heqp p.
+      (* PKG_BEGIN_TASK [3] *)
       remember (clock_package
             (pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3]) _).
       simpl in Heqs; rewrite clock_package_aux_3 in Heqs; subst;
       clear Heqs.
+      (* f *)
       remember (f_queue_add
-             (0, pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3]) _).
+             [(0, pkg_create (taskid 2) (finishid 0, 3) PKG_BEGIN_TASK [3])] _).
       simpl in Heqp.
       rewrite f_queue_add_aux_3 in Heqp.
       subst; clear Heqp.
+      (* t *)
       remember (t_queue_add [] (buffer_t_queue _)).
       simpl in Heqp; subst.
+      (* 
     Qed.
 *)
 (*
@@ -1230,6 +977,7 @@ Section Defs.
      compute.
      trivial.
     Qed.
+    *)
     *)
   End TestFAdd.
 End Defs.

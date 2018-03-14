@@ -88,9 +88,19 @@ let run_err_to_string (r:Finish.checks_err) : string =
         (p.pkg_lineno, pkg_parse_err_to_string e ^ " Obtained: " ^ args)
       end
     | CHECKS_REDUCES_N_ERROR (p, e) -> (p.pkg_lineno, reduces_err_to_string e ^ "\n" ^ package_to_string p)
+    | CHECKS_TASK_EXISTS_ERROR (p, x) -> (p.pkg_lineno, "Task " ^ string_of_int x ^ " already exists.\n" ^ package_to_string p)
     | CHECKS_INTERNAL_ERROR -> (None, "Unexpected internal error.")
   in
   err_line_prefix l ^ msg
+
+let checks_to_string s =
+  let t_enqueued = Finish.checks_t_enqueued s in
+  let f_enqueued = Finish.checks_f_enqueued s in
+  let running = Finish.checks_running s in
+  let js_f_enq = `List (List.map package_to_json f_enqueued) |> Yojson.Basic.pretty_to_string in
+  let js_t_enq = `List (List.map package_to_json t_enqueued) |> Yojson.Basic.pretty_to_string in
+  let js_run = `List (List.map (fun x -> `Int x) running) |> Yojson.Basic.pretty_to_string in
+  "Operations f-enqueued: " ^ js_f_enq ^ "\nOperations t-enqueued: " ^ js_t_enq ^ "\nTasks running: " ^ js_run
 
 let parse (filename:string) =
   let stream_file c = Stream.from (fun _ ->
@@ -105,9 +115,11 @@ let parse (filename:string) =
       try begin
         let j = Yojson.Basic.from_string line in
         let pkg = json_to_package j (Some !lineno)  in
+        (*print_string (package_to_string pkg ^ "\n");*)
         match Finish.checks_add pkg !chk with
         | Inl s' -> chk := s'
-        | Inr e -> raise (Err (run_err_to_string e))
+          (*print_string (checks_to_string !chk ^ "\n")*)
+        | Inr e -> raise (Err (run_err_to_string e ^ "\n" ^ checks_to_string !chk))
       end with Yojson.Json_error e -> raise (Err(err_line_prefix (Some !lineno) ^ e))
     end
   in
