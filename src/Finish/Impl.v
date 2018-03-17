@@ -639,19 +639,19 @@ Section Defs.
   Map_TID_Extra.keys (checks_state s).
 
   Let to_packages (l:list queue) :=
-  List.flat_map (@Queue.elements package) l.
+  List.flat_map_tr (@Queue.elements package) l.
 
   Definition checks_f_enqueued s : list package :=
-  to_packages (Map_FID_Extra.values (buffer_f_queue (checks_buffer s))).
+  to_packages (Map_FID_Extra.values_tr (buffer_f_queue (checks_buffer s))).
 
   Definition checks_t_enqueued s : list package :=
-  List.flat_map (fun (x:option (list package))  => match x with
+  List.flat_map_tr (fun (x:option (list package))  => match x with
   | Some l => l
   | _ => []
-  end) (Map_TID_Extra.values (buffer_t_queue (checks_buffer s))).
+  end) (Map_TID_Extra.values_tr (buffer_t_queue (checks_buffer s))).
 
   Definition checks_enqueued s : list package :=
-  checks_f_enqueued s ++ checks_t_enqueued s.
+  List.app_tr (checks_f_enqueued s) (checks_t_enqueued s).
 
   Definition checks_load (l:list package) : (checks + checks_err) % type :=
   let fix buffer_add_all l m :=
