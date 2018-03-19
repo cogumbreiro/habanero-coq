@@ -1,0 +1,19 @@
+---
+image: ocaml/opam:alpine_ocaml-4.06.0
+
+variables:
+  OPAMYES: "yes"
+
+before_script:
+  - sudo apk add libffi libffi-dev
+  - opam depext -y conf-m4.1
+  - eval $(opam config env)
+  - ./configure.sh
+
+test:
+  script:
+    - make
+    - cd libhsem
+    - make
+    - make test
+

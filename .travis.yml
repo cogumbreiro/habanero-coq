@@ -3,6 +3,7 @@ addons:
     packages:
       - aspcud
       - opam
+      - libffi-dev
     sources:
       - avsm
 
