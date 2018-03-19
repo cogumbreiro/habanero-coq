@@ -1,0 +1,31 @@
+addons:
+  apt:
+    packages:
+      - aspcud
+      - opam
+    sources:
+      - avsm
+
+before_cache:
+  - rm -rf ~/.opam/log/
+
+cache:
+  directories:
+    - $HOME/.opam
+env:
+  - OCAML_VERSION=4.05.0 COQ_VERSION=8.7.2 OPAMYES=yes
+
+install:
+  - opam init -n --compiler=$OCAML_VERSION
+  - eval `opam config env`
+  - ./configure.sh
+  - cd libhsem
+  - ./configure.sh
+
+language: c
+
+script:
+  - make
+  - cd libhsem
+  - make
+
