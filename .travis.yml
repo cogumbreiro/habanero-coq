@@ -26,6 +26,7 @@ install:
 language: c
 
 script:
+  - cd "$TRAVIS_BUILD_DIR"
   - make
   - cd libhsem
   - make
