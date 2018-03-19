@@ -9,6 +9,8 @@ before_script:
   - opam depext -y conf-m4.1
   - eval $(opam config env)
   - ./configure.sh
+  - cd libhsem
+  - ./configure.sh
 
 test:
   script:
