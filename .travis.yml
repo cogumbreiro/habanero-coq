@@ -30,7 +30,7 @@ script:
   - make
   - cd libhsem
   - make
-  - find _build/
+  - ocamlbuild libhsem.so; find _build/
   - make test
 
 
