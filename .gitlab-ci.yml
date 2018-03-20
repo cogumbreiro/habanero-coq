@@ -14,6 +14,7 @@ before_script:
 
 test:
   script:
+    - cd "$CI_PROJECT_DIR"
     - make
     - cd libhsem
     - make
