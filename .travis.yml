@@ -30,6 +30,7 @@ script:
   - make
   - cd libhsem
   - make
+  - find _build/
   - make test
 
 
