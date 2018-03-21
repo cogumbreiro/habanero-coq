@@ -19,10 +19,9 @@ env:
 install:
   - opam init -n --comp $OCAML_VERSION
   - opam update
-  - opam repo add coq-released https://coq.inria.fr/opam/released
   - opam install coq.$COQ_VERSION
   - opam install ocamlbuild.$OCB_VERSION
-  - eval `opam config env`
+  - eval $(opam config env)
   - ./configure.sh
   - cd libhsem
   - ./configure.sh
