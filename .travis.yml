@@ -17,6 +17,7 @@ env:
   - OCAML_VERSION=4.05.0 COQ_VERSION=8.7.2 OPAMYES=yes OCB_VERSION=0.12.0
 
 install:
+  - opam update
   - opam init -n --comp $OCAML_VERSION
   - opam repo add coq-released https://coq.inria.fr/opam/released
   - opam install coq.$COQ_VERSION

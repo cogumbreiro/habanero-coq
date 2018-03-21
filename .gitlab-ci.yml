@@ -8,6 +8,7 @@ variables:
 
 before_script:
   - sudo apk add libffi libffi-dev
+  - opam update
   - opam depext -y conf-m4.1
   - opam repo add coq-released https://coq.inria.fr/opam/released
   - opam install coq.$COQ_VERSION
