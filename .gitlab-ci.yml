@@ -18,5 +18,7 @@ test:
     - make
     - cd libhsem
     - make
-    - make test
+    - ocamlbuild libhsem.so
+    - find _build/
+
 
