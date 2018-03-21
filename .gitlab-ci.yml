@@ -8,7 +8,7 @@ variables:
 
 before_script:
   - sudo apk add libffi libffi-dev
-  - opam update
+  - opam repo add opam https://opam.ocaml.org
   - opam depext -y conf-m4.1
   - opam install coq.$COQ_VERSION
   - opam install ocamlbuild.$OCB_VERSION
