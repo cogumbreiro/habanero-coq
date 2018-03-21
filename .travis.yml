@@ -14,10 +14,13 @@ cache:
   directories:
     - $HOME/.opam
 env:
-  - OCAML_VERSION=4.05.0 COQ_VERSION=8.7.2 OPAMYES=yes
+  - OCAML_VERSION=4.05.0 COQ_VERSION=8.7.2 OPAMYES=yes OCB_VERSION=0.12.0
 
 install:
-  - opam init -n --compiler=$OCAML_VERSION
+  - opam init -n --comp $OCAML_VERSION
+  - opam repo add coq-released https://coq.inria.fr/opam/released
+  - opam install coq.$COQ_VERSION
+  - opam install ocamlbuild.$OCB_VERSION
   - eval `opam config env`
   - ./configure.sh
   - cd libhsem
