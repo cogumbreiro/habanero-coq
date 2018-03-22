@@ -23,7 +23,7 @@ PROG = ./$(PROJ)$(EXE_EXT)
 all: exe
 
 dll:
-	$(OCB) lib$(PROJ).so $(OCB_FLAGS)
+	$(OCB) lib/lib$(PROJ).so $(OCB_FLAGS)
 	cp $(BUILDDIR)/lib/lib$(PROJ)$(DLL_EXT) $(BUILDDIR)/
 
 exe:
