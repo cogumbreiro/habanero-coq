@@ -11,7 +11,7 @@ install_coq() {
 }
 
 install_aniceto() {
-  if  (echo -e "Require Aniceto.List.\n" | coqtop 2>&1 | grep Error) && ! check_pkg coq-aniceto; then
+  if (echo -e "Require Aniceto.List.\n" | coqtop 2>&1 | grep Error); then
     echo "Installing Aniceto..." &&
     opam pin add --dev-repo coq-aniceto https://gitlab.com/cogumbreiro/aniceto-coq.git
   fi
