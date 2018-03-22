@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/cogumbreiro/habanero-coq.svg?branch=master)](https://travis-ci.org/cogumbreiro/habanero-coq)
+[![pipeline status](https://gitlab.com/cogumbreiro/habanero-coq/badges/master/pipeline.svg)](https://gitlab.com/cogumbreiro/habanero-coq/commits/master)
+
 # Coq Formalization of the Habanero programming model
 
 Formalization of the
