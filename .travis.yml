@@ -33,7 +33,9 @@ script:
   - make
   - cd libhsem
   - make
-  - ocamlbuild libhsem.so; find _build/
+  - ocamlbuild libhsem.so
+  - find _build/
+  - cat _build/_log
   - make test
 
 

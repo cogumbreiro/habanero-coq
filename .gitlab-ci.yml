@@ -25,5 +25,6 @@ test:
     - make
     - ocamlbuild libhsem.so
     - find _build/
+    - cat _build/_log
 
 
