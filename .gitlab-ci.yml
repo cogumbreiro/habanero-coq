@@ -6,6 +6,11 @@ variables:
   OCB_VERSION: 0.12.0
   COQ_VERSION: 8.7.2
 
+cache:
+  key: ${COQ_VERSION}.${OCB_VERSION}
+  paths:
+    - ${HOME}/.opam
+
 before_script:
   - sudo apk add libffi libffi-dev
   - opam repo add opam https://opam.ocaml.org
