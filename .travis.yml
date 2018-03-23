@@ -16,6 +16,10 @@ cache:
 env:
   - OCAML_VERSION=4.05.0 COQ_VERSION=8.7.2 OPAMYES=yes OCB_VERSION=0.12.0
 
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install opam libffi; fi
+
 install:
   - opam init -n --comp $OCAML_VERSION
   - opam update
@@ -34,5 +38,9 @@ script:
   - cd libhsem
   - make
   - make test
+
+os:
+ - linux
+ - osx
 
 
