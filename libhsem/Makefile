@@ -6,30 +6,27 @@ ifeq ($(OS),Windows_NT)
   DLL_EXT:=.dll
   EXE_EXT:=.exe
   NATIVE_EXT:=.exe
-  OB_DLL_EXT:=.dll
-  DLL_PREFIX:=lib
 else
   NATIVE_EXT:=.native
   EXE_EXT:=
   OSTYPE:=$(shell uname -s)
-  DLL_PREFIX:=lib
   ifeq ($(OSTYPE),Linux)
-    OB_DLL_EXT:=.so
     DLL_EXT:=.so
   endif
   ifeq ($(OSTYPE),Darwin)
-    OB_DLL_EXT:=.dylib
     DLL_EXT:=.dylib
   endif
 endif
+
+PROJ_DLL = lib$(PROJ)$(DLL_EXT)
 
 OCB = ocamlbuild
 PROG = ./$(PROJ)$(EXE_EXT)
 all: exe
 
 dll:
-	$(OCB) lib/$(DLL_PREFIX)$(PROJ)$(OB_DLL_EXT) $(OCB_FLAGS)
-	cp $(BUILDDIR)/lib/$(DLL_PREFIX)$(PROJ)$(OB_DLL_EXT) $(BUILDDIR)/$(DLL_PREFIX)$(PROJ)$(DLL_EXT)
+	$(OCB) lib/$(PROJ_DLL) $(OCB_FLAGS)
+	cp $(BUILDDIR)/lib/$(PROJ_DLL) $(BUILDDIR)/$(PROJ_DLL)
 
 exe:
 	$(OCB) main.native $(OCB_FLAGS)
