@@ -6,10 +6,14 @@ ifeq ($(OS),Windows_NT)
   DLL_EXT:=.dll
   EXE_EXT:=.exe
   NATIVE_EXT:=.exe
+  OB_DLL_EXT:=.dll
+  DLL_PREFIX:=
 else
   NATIVE_EXT:=.native
   EXE_EXT:=
   OSTYPE:=$(shell uname -s)
+  DLL_PREFIX:=lib
+  OB_DLL_EXT:=.so
   ifeq ($(OSTYPE),Linux)
     DLL_EXT:=.so
   endif
@@ -23,8 +27,8 @@ PROG = ./$(PROJ)$(EXE_EXT)
 all: exe
 
 dll:
-	$(OCB) lib/lib$(PROJ)$(DLL_EXT) $(OCB_FLAGS)
-	cp $(BUILDDIR)/lib/lib$(PROJ)$(DLL_EXT) $(BUILDDIR)/
+	$(OCB) lib/$(DLL_PREFIX)$(PROJ)$(OB_DLL_EXT) $(OCB_FLAGS)
+	cp $(BUILDDIR)/lib/$(DLL_PREFIX)$(PROJ)$(OB_DLL_EXT) $(BUILDDIR)/$(DLL_PREFIX)$(PROJ)$(DLL_EXT)
 
 exe:
 	$(OCB) main.native $(OCB_FLAGS)

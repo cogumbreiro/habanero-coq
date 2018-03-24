@@ -44,9 +44,7 @@ script:
   - make
   - cd libhsem
   - make
-  - if [[ $TRAVIS_OS_NAME == 'osx' ]]; then export LIB_EXT=dylib; fi
-  - if [[ $TRAVIS_OS_NAME == 'linux' ]]; then export LIB_EXT=so; fi
-  - ocamlbuild lib/libhsem.${LIB_EXT}; find _build/lib
+  - ocamlbuild lib/libhsem.so; file _build/lib/libhsem.so
   - make test
 
 os:
