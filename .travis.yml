@@ -44,7 +44,8 @@ script:
   - make
   - cd libhsem
   - make
-  - ocamlbuild lib/libhsem.so; file _build/lib/libhsem.so
+  - ocamlbuild lib/libhsem.so
+  - cat _build/_log
   - make test
 
 os:

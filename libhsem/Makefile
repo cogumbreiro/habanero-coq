@@ -14,12 +14,12 @@ else
   OSTYPE:=$(shell uname -s)
   DLL_PREFIX:=lib
   OB_DLL_EXT:=.so
-  ifeq ($(OSTYPE),Linux)
-    DLL_EXT:=.so
-  endif
-  ifeq ($(OSTYPE),Darwin)
-    DLL_EXT:=.dylib
-  endif
+#  ifeq ($(OSTYPE),Linux)
+  DLL_EXT:=.so
+#  endif
+#  ifeq ($(OSTYPE),Darwin)
+#    DLL_EXT:=.dylib
+#  endif
 endif
 
 OCB = ocamlbuild
