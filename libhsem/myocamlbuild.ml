@@ -82,12 +82,14 @@ let () =
       (* 2. ensure that the compiler is aware of the code generator directory,
             so that it can see the generated file. *)
       flag ["ocaml"; "compile"; "file:lib/apply_bindings.ml"] (S [A"-I"; A gen_dir]);
-      print_string ("EXT LIB: " ^ ext_dll ^ "\n");
       (* Rule to generate libhsem.so, which just delegates to link_C_library: *)
+      let basename = "%(path)lib%(libname)" in
+      let src_name = basename ^ "clib" in
+      let dst_name = basename ^ ext_dll in
       rule "generates libhsem"
-        ~dep:"%(path)lib%(libname)clib"
-        ~prod:("%(path)lib%(libname)" ^ ext_dll)
-       (link_C_library "%(path)lib%(libname)clib" ("%(path)lib%(libname)" ^ !Options.ext_lib) ("%(path)lib%(libname)" ^ ext_dll))
+        ~dep:src_name
+        ~prod:dst_name
+       (link_C_library src_name (basename ^ !Options.ext_lib) dst_name)
       ;
 
     | _ -> ())
