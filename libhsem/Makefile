@@ -7,19 +7,20 @@ ifeq ($(OS),Windows_NT)
   EXE_EXT:=.exe
   NATIVE_EXT:=.exe
   OB_DLL_EXT:=.dll
-  DLL_PREFIX:=
+  DLL_PREFIX:=lib
 else
   NATIVE_EXT:=.native
   EXE_EXT:=
   OSTYPE:=$(shell uname -s)
   DLL_PREFIX:=lib
-  OB_DLL_EXT:=.so
-#  ifeq ($(OSTYPE),Linux)
-  DLL_EXT:=.so
-#  endif
-#  ifeq ($(OSTYPE),Darwin)
-#    DLL_EXT:=.dylib
-#  endif
+  ifeq ($(OSTYPE),Linux)
+    OB_DLL_EXT:=.so
+    DLL_EXT:=.so
+  endif
+  ifeq ($(OSTYPE),Darwin)
+    OB_DLL_EXT:=.dylib
+    DLL_EXT:=.dylib
+  endif
 endif
 
 OCB = ocamlbuild
@@ -44,9 +45,7 @@ ifeq ($(OSTYPE),Win32)
 	(cd test && PATH="$(BUILDDIR)/lib:$(PATH)" $(BUILDDIR)/test/test.native)
 endif
 ifeq ($(OSTYPE),Darwin)
-	LD_LIBRARY_PATH=${BUILDDIR}/lib otool -L $(BUILDDIR)/test/test.native
-	DYLD_LIBRARY_PATH=${BUILDDIR}/lib:"$(DYLD_LIBRARY_PATH)" otool -L $(BUILDDIR)/test/test.native
-	(cd test && LD_LIBRARY_PATH=${BUILDDIR}/lib $(BUILDDIR)/test/test.native)
+	(cd test && DYLD_LIBRARY_PATH=${BUILDDIR}/lib $(BUILDDIR)/test/test.native)
 endif
 ifeq ($(OSTYPE),Linux)
 	(cd test && LD_LIBRARY_PATH=${BUILDDIR}/lib $(BUILDDIR)/test/test.native)
