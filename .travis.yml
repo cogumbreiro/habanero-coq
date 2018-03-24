@@ -17,6 +17,13 @@ cache:
 env:
   - OCAML_VERSION=4.05.0 COQ_VERSION=8.7.2 OPAMYES=yes OCB_VERSION=0.12.0
 
+matrix:
+    include:
+        - os: osx
+          env: LIB_EXT=dylib
+        - os: linux
+          env: LIB_EXT=so
+
 before_install:
   - if [[ $TRAVIS_OS_NAME == 'osx' ]];
     then
@@ -44,7 +51,7 @@ script:
   - make
   - cd libhsem
   - make
-  - ocamlbuild lib/libhsem.so; find _build/lib
+  - ocamlbuild lib/libhsem.${LIB_EXT}; find _build/lib
   - make test
 
 os:
