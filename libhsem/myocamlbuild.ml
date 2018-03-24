@@ -40,6 +40,13 @@ let link_C_library clib a libname env build =
        generates all the -package fragments, which are essential to build. *)
     T(tags_of_pathname a++"c"++"compile"); atomize objs])
 
+let ext_dll =
+  match os with
+  | "linux" -> "so"
+  | "macos" -> "dylib"
+  | "win32" -> "dll"
+  | x -> invalid_arg x
+  
 let () =
   dispatch (function
     | Before_options ->
@@ -75,12 +82,12 @@ let () =
       (* 2. ensure that the compiler is aware of the code generator directory,
             so that it can see the generated file. *)
       flag ["ocaml"; "compile"; "file:lib/apply_bindings.ml"] (S [A"-I"; A gen_dir]);
-      print_string ("EXT LIB: " ^ !Options.ext_dll ^ "\n");
+      print_string ("EXT LIB: " ^ ext_dll ^ "\n");
       (* Rule to generate libhsem.so, which just delegates to link_C_library: *)
       rule "generates libhsem"
         ~dep:"%(path)lib%(libname)clib"
-        ~prod:("%(path)lib%(libname)" ^ (!Options.ext_dll))
-       (link_C_library "%(path)lib%(libname)clib" ("%(path)lib%(libname)" ^ !Options.ext_lib) ("%(path)lib%(libname)" ^ !Options.ext_dll))
+        ~prod:("%(path)lib%(libname)" ^ ext_dll)
+       (link_C_library "%(path)lib%(libname)clib" ("%(path)lib%(libname)" ^ !Options.ext_lib) ("%(path)lib%(libname)" ^ ext_dll))
       ;
 
     | _ -> ())
