@@ -42,7 +42,13 @@ test: dll
 	$(PROG) test/ok/*.jsonl
 ifeq ($(OSTYPE),Win32)
 	(cd test && PATH="$(BUILDDIR)/lib:$(PATH)" $(BUILDDIR)/test/test.native)
-else
+endif
+ifeq ($(OSTYPE),Darwin)
+	LD_LIBRARY_PATH=${BUILDDIR}/lib otool -L $(BUILDDIR)/test/test.native
+	DYLD_LIBRARY_PATH=${BUILDDIR}/lib:"$(DYLD_LIBRARY_PATH)" otool -L $(BUILDDIR)/test/test.native
+	(cd test && LD_LIBRARY_PATH=${BUILDDIR}/lib $(BUILDDIR)/test/test.native)
+endif
+ifeq ($(OSTYPE),Linux)
 	(cd test && LD_LIBRARY_PATH=${BUILDDIR}/lib $(BUILDDIR)/test/test.native)
 endif
 
