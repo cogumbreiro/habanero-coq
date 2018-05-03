@@ -37,7 +37,7 @@ Require Import Aniceto.Graphs.FGraph.
             diff[j] = Math.abs(newA[j]-oldA[j]);
           }                                         // (t_i, END_TASK)
         }
-      }
+      }                                             // (p, END_FINISH f2)
       delta = diff.sum(); iters++;
       temp = newA; newA = oldA; oldA = temp;
     } // while
@@ -52,13 +52,13 @@ Require Import Aniceto.Graphs.FGraph.
       each task maintains a stack of finish scopes it opened. *)
 
   Structure task := {
-    bind: fid;
+    registered: fid;
     open: list fid;
   }.
 
   (** Upon creation a task is initialized with its bound finish [f]. *)
 
-  Definition make f := {| bind := f; open := nil |}.
+  Definition make f := {| registered := f; open := nil |}.
 
   (** The state of the program keeps track of the finish state per task. *)
 
@@ -91,17 +91,17 @@ Require Import Aniceto.Graphs.FGraph.
 
   Definition ief (ft:task) :=
   match ft with
-  | {| bind := f; open := nil |} => f
-  | {| bind := g; open := (f::l)%list |} =>  f
+  | {| registered := f; open := nil |} => f
+  | {| registered := g; open := (f::l)%list |} =>  f
   end.
 
   Inductive IEF x f s: Prop :=
   | ief_nil:
-    Map_TID.MapsTo x {| bind := f; open := nil |} s ->
+    Map_TID.MapsTo x {| registered := f; open := nil |} s ->
     IEF x f s
   | ief_cons:
     forall g l,
-    Map_TID.MapsTo x {| bind := g; open := f::l |} s ->
+    Map_TID.MapsTo x {| registered := g; open := f::l |} s ->
     IEF x f s.
 
   Definition get_ief x s :=
@@ -110,13 +110,13 @@ Require Import Aniceto.Graphs.FGraph.
   | None => None
   end.
 
-  (** For simplictiy we define the bind operation on a state. *)
+  (** For simplictiy we define the registered operation on a state. *)
 
-  Inductive Bind : tid -> fid -> state -> Prop :=
-  | bind_def:
+  Inductive Registered : tid -> fid -> state -> Prop :=
+  | registered_def:
     forall t f l s,
-    Map_TID.MapsTo t {| bind := f; open := l |} s ->
-    Bind t f s.
+    Map_TID.MapsTo t {| registered := f; open := l |} s ->
+    Registered t f s.
 
   (** We also define the open operation on a state *)
 
@@ -124,7 +124,7 @@ Require Import Aniceto.Graphs.FGraph.
   | open_def:
     forall t f l s g,
     List.In f l ->
-    Map_TID.MapsTo t {| bind := g; open := l |} s ->
+    Map_TID.MapsTo t {| registered := g; open := l |} s ->
     Open t f s.
 
   (** The current open operation is the top of the open stack. *)
@@ -132,16 +132,16 @@ Require Import Aniceto.Graphs.FGraph.
   Inductive Current : tid -> fid -> state -> Prop :=
   | current_def:
     forall t f l s g,
-    Map_TID.MapsTo t {| bind := g; open := (f::l) |} s ->
+    Map_TID.MapsTo t {| registered := g; open := (f::l) |} s ->
     Current t f s.
 
-  (** We say that a finish-id is in a state if it is mentioned in a bind
+  (** We say that a finish-id is in a state if it is mentioned in a registered
   or a open relation. *)
 
   Inductive In (f:fid) s : Prop :=
-  | in_bind:
+  | in_registered:
     forall t,
-    Bind t f s ->
+    Registered t f s ->
     In f s
   | in_open:
     forall t,
@@ -150,16 +150,16 @@ Require Import Aniceto.Graphs.FGraph.
 
 Module Task.
 Section Defs.
-  Inductive Bind: fid -> task -> Prop :=
-  | bind_def:
+  Inductive Registered: fid -> task -> Prop :=
+  | registered_def:
     forall f l,
-    Bind f {| bind := f; open := l |}.
+    Registered f {| registered := f; open := l |}.
 
-  Definition bind_dec (f:fid) (ft:task) : { Bind f ft } + { ~ Bind f ft }.
+  Definition registered_dec (f:fid) (ft:task) : { Registered f ft } + { ~ Registered f ft }.
   Proof.
     destruct ft as (g, l).
     destruct (FID.eq_dec f g). {
-      subst; auto using bind_def.
+      subst; auto using registered_def.
     }
     right; unfold not; intros N.
     inversion N; subst.
@@ -170,7 +170,7 @@ Section Defs.
   | open_def:
     forall f g l,
     List.In f l ->
-    Open f {| bind := g; open := l |}.
+    Open f {| registered := g; open := l |}.
 
   Definition open_dec f ft : { Open f ft } + { ~ Open f ft }.
   Proof.
@@ -184,9 +184,9 @@ Section Defs.
   Defined.
 
   Inductive In: fid -> task -> Prop :=
-  | in_bind:
+  | in_registered:
     forall f ft,
-    Bind f ft ->
+    Registered f ft ->
     In f ft
   | in_open:
     forall f ft,
@@ -195,7 +195,7 @@ Section Defs.
 
   Definition in_dec f ft : { In f ft } + { ~ In f ft }.
   Proof.
-    destruct (bind_dec f ft); auto using in_bind.
+    destruct (registered_dec f ft); auto using in_registered.
     destruct (open_dec f ft); auto using in_open.
     right; unfold not; intros N.
     inversion N; subst; contradiction.
@@ -207,7 +207,7 @@ End Task.
 
   Inductive Empty f s : Prop :=
   | empty_def:
-    (forall x, ~ Bind x f s) ->
+    (forall x, ~ Registered x f s) ->
     Empty f s.
 
   (** We are now ready to define the semantics of the async-finish API. *)
@@ -228,18 +228,18 @@ End Task.
   | reduces_begin_finish:
     forall t f s l g,
     ~ In f s ->
-    Map_TID.MapsTo t {| bind := g; open := l |} s ->
+    Map_TID.MapsTo t {| registered := g; open := l |} s ->
     Reduces s (t, BEGIN_FINISH f) (
-      Map_TID.add t {| bind := g; open := f::l |} s)
+      Map_TID.add t {| registered := g; open := f::l |} s)
 
   (** Synchronization happens when [f] is at the top of open tasks
     and [f] is empty; the side effect is that the task pops [f] from the stack
     of open finishes. *)
   | reduces_end_finish:
     forall s t f l g,
-    Map_TID.MapsTo t {| bind := g; open := (f::l) % list |} s ->
+    Map_TID.MapsTo t {| registered := g; open := (f::l) % list |} s ->
     Empty f s ->
-    Reduces s (t, END_FINISH) (Map_TID.add t {| bind := g; open := l |} s)
+    Reduces s (t, END_FINISH) (Map_TID.add t {| registered := g; open := l |} s)
 
   (** A task [t] spawns a task [u]. The new task [u] is bound to the
       IEF of [t]. XXX: replace this by Prop *)
@@ -253,7 +253,7 @@ End Task.
       we ensure  that the task has zero finish scopes. *)
   | reduces_end_task:
     forall t f s ,
-    Map_TID.MapsTo t {| bind := f; open := nil |} s ->
+    Map_TID.MapsTo t {| registered := f; open := nil |} s ->
     Reduces s (t, END_TASK) (Map_TID.remove t s).
 
   Inductive Valid s : tid -> op -> Prop :=
@@ -269,7 +269,7 @@ End Task.
     Valid s t (BEGIN_FINISH f)
   | valid_end_finish:
     forall t f g l,
-    Map_TID.MapsTo t {| bind := g; open := (f::l) % list |} s ->
+    Map_TID.MapsTo t {| registered := g; open := (f::l) % list |} s ->
     Valid s t END_FINISH
   | valid_begin_task:
     forall t u,
@@ -278,7 +278,7 @@ End Task.
     Valid s t (BEGIN_TASK u)
   | typecheck_end_task:
     forall t f,
-    Map_TID.MapsTo t {| bind := f; open := nil |} s ->
+    Map_TID.MapsTo t {| registered := f; open := nil |} s ->
     Valid s t END_TASK.
 
   Definition op_fid (o:op) :=
@@ -296,41 +296,46 @@ End Task.
     IEF x f s ->
     ValidFid s x o f.
 
+  (** An f-edge links a finish [f] into a finish [g] iff there is a task 
+      registered with [f] and a finish [g]. *)
+
   Inductive FEdge s : (fid * fid) -> Prop :=
   | f_edge_def:
     forall f g t,
-    Bind t f s ->
+    Registered t f s ->
     Open t g s ->
     FEdge s (f, g).
+
+  (** A c-edge links a registered [f] to the top open finish [g] of a task *)
 
   Inductive CEdge s : (fid * fid) -> Prop :=
   | c_edge_def:
     forall f g t,
-    Bind t f s ->
+    Registered t f s ->
     Current t g s ->
     CEdge s (f, g).
 
 Section Defs.
-  Let bind_inv_add:
+  Let registered_inv_add:
     forall u g t s ft,
-    Bind u g (Map_TID.add t ft s) ->
-    (t = u /\ exists l, ft = {| bind := g; open := l |}) \/ (t <> u /\ Bind u g s).
+    Registered u g (Map_TID.add t ft s) ->
+    (t = u /\ exists l, ft = {| registered := g; open := l |}) \/ (t <> u /\ Registered u g s).
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.add_mapsto_iff in H0.
-    destruct H0 as [(?,?)|(?,?)]; eauto using bind_def.
+    destruct H0 as [(?,?)|(?,?)]; eauto using registered_def.
   Qed.
 
-  Lemma bind_inv_add_make:
+  Lemma registered_inv_add_make:
     forall t u f g s,
-    Bind t f (Map_TID.add u (make g) s) ->
+    Registered t f (Map_TID.add u (make g) s) ->
     (t = u /\ f = g) \/ 
-    (Bind t f s /\ u <> t).
+    (Registered t f s /\ u <> t).
   Proof.
     unfold make; intros.
     match goal with
-    | H: Bind _ _ _ |- _  =>  apply bind_inv_add in H;
+    | H: Registered _ _ _ |- _  =>  apply registered_inv_add in H;
       destruct H as [(?,(l,R))|(?,i)]
     end. {
       simpl in *.
@@ -359,12 +364,12 @@ Section Defs.
 
   Definition current (ft:task) :=
   match ft with
-  | {| bind := f; open := nil |} => None
-  | {| bind := g; open := (f::l)%list |} =>  Some f
+  | {| registered := f; open := nil |} => None
+  | {| registered := g; open := (f::l)%list |} =>  Some f
   end.
 
   Definition task_edges (ft:task) :=
-  List.map (fun f => (bind ft, f)) (open ft).
+  List.map (fun f => (registered ft, f)) (open ft).
 
   Definition f_edges (s:state) : list (fid * fid) := 
   List.flat_map task_edges (Map_TID_Extra.values s).
@@ -372,35 +377,35 @@ Section Defs.
   Definition c_edges (s:state) : list (fid * fid) := 
   let c_edge (ft:task) :=
   match current ft with
-  | Some g => Some (bind ft, g)
+  | Some g => Some (registered ft, g)
   | None => None
   end in
   List.omap c_edge (Map_TID_Extra.values s).
 
-  Lemma bind_eq:
+  Lemma registered_eq:
     forall t ft s,
     Map_TID.MapsTo t ft s ->
-    Bind t (bind ft) s.
+    Registered t (registered ft) s.
   Proof.
     intros.
     destruct ft; simpl in *.
-    eauto using bind_def.
+    eauto using registered_def.
   Qed.
 
-  Lemma in_to_bind:
+  Lemma in_to_registered:
     forall t s,
     Map_TID.In t s ->
-    exists f, Bind t f s.
+    exists f, Registered t f s.
   Proof.
     intros.
     apply Map_TID_Extra.in_to_mapsto in H.
     destruct H as (ft, mt).
-    eauto using bind_eq.
+    eauto using registered_eq.
   Qed.
 
-  Lemma not_bind_empty:
+  Lemma not_registered_empty:
     forall t f,
-    ~ Bind t f empty.
+    ~ Registered t f empty.
   Proof.
     unfold not, empty; intros ? ? N.
     inversion N; subst; clear N.
@@ -423,9 +428,9 @@ Section Defs.
     forall t f ft s,
     Map_TID.MapsTo t ft s ->
     List.In f (open ft) ->
-    FEdge s (bind ft, f).
+    FEdge s (registered ft, f).
   Proof.
-    eauto using f_edge_def, bind_eq, open_eq.
+    eauto using f_edge_def, registered_eq, open_eq.
   Qed.
 
   Lemma in_to_f_edge:
@@ -459,7 +464,7 @@ Section Defs.
     inversion H1; subst.
     eapply Map_TID_Facts.MapsTo_fun in H; eauto.
     inversion H; subst; clear H.
-    exists {| bind := f; open := l |}.
+    exists {| registered := f; open := l |}.
     split. {
       eauto using Map_TID_Extra.values_spec_2.
     }
@@ -506,7 +511,7 @@ Section Defs.
       inversion Hj.
     }
     inversion Hj; subst; clear Hj.
-    eauto using bind_def, current_def, c_edge_def.
+    eauto using registered_def, current_def, c_edge_def.
   Qed.
 
   Lemma open_inv_add:
@@ -560,8 +565,8 @@ Section Defs.
       eauto using in_open.
     }
     match goal with
-    | H: Bind _ _ _ |- _ =>
-      apply bind_inv_add_make in H; auto;
+    | H: Registered _ _ _ |- _ =>
+      apply registered_inv_add_make in H; auto;
       destruct H as [(?,?)|(?,?)]; subst; try contradiction
     end.
     unfold Edge.
@@ -603,8 +608,8 @@ Section Defs.
 
   Let f_edge_inv_add_begin_finish:
     forall t f l g s x y,
-    FEdge (Map_TID.add t {| bind := g; open := f :: l |} s) (x, y) ->
-    Map_TID.MapsTo t {| bind := g; open := l |} s ->
+    FEdge (Map_TID.add t {| registered := g; open := f :: l |} s) (x, y) ->
+    Map_TID.MapsTo t {| registered := g; open := l |} s ->
     (g = x /\ f = y) \/ FEdge s (x, y).
   Proof.
     intros.
@@ -615,7 +620,7 @@ Section Defs.
       rename H into Hs
     end.
     match goal with
-    H: Bind _ _ _ |- _ => apply bind_inv_add in H;
+    H: Registered _ _ _ |- _ => apply registered_inv_add in H;
     destruct H as [(?,(k,R))|(?,?)]
     end. {
       inversion R; clear R.
@@ -625,7 +630,7 @@ Section Defs.
           auto.
         }
         subst.
-        eauto using bind_def, open_def, f_edge_def.
+        eauto using registered_def, open_def, f_edge_def.
       }
       subst.
       contradiction.
@@ -638,8 +643,8 @@ Section Defs.
 
   Let f_edges_rw_add_begin_finish_1:
     forall t g f l s p,
-    Edge (f_edges (Map_TID.add t {| bind := g; open := f :: l |} s)) p ->
-    Map_TID.MapsTo t {| bind := g; open := l |} s ->
+    Edge (f_edges (Map_TID.add t {| registered := g; open := f :: l |} s)) p ->
+    Map_TID.MapsTo t {| registered := g; open := l |} s ->
     Edge ((g,f)::(f_edges s)) p.
   Proof.
     unfold Edge; intros.
@@ -660,7 +665,7 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using in_bind.
+    eauto using in_registered.
   Qed.
 
   Lemma f_edge_snd_to_in:
@@ -699,7 +704,7 @@ Section Defs.
 
   Lemma open_inv_add_eq:
     forall t g f l s,
-    Open t g (Map_TID.add t {| bind := f; open := l |} s) ->
+    Open t g (Map_TID.add t {| registered := f; open := l |} s) ->
     List.In g l.
   Proof.
     intros.
@@ -710,7 +715,7 @@ Section Defs.
 
   Lemma open_inv_add_neq:
     forall t g f l s u,
-    Open t g (Map_TID.add u {| bind := f; open := l |} s) ->
+    Open t g (Map_TID.add u {| registered := f; open := l |} s) ->
     t <> u ->
     Open t g s.
   Proof.
@@ -722,21 +727,21 @@ Section Defs.
 
   Lemma f_edge_finished:
     forall t g l s f p,
-    FEdge (Map_TID.add t {| bind := g; open := l |} s) p ->
-    Map_TID.MapsTo t {| bind := g; open := f :: l |} s ->
+    FEdge (Map_TID.add t {| registered := g; open := l |} s) p ->
+    Map_TID.MapsTo t {| registered := g; open := f :: l |} s ->
     Empty f s  ->
     FEdge s p.
   Proof.
     intros.
     inversion H; subst; clear H.
     match goal with
-      H2: Bind _ _ _ |- _ =>
-      apply bind_inv_add in H2;
+      H2: Registered _ _ _ |- _ =>
+      apply registered_inv_add in H2;
       destruct H2 as [(?, (?, R))|(?,?)]
     end. {
       inversion R; subst; clear R.
       match goal with H: Open _ _ _ |- _ => apply open_inv_add_eq in H end.
-      eauto using f_edge_def, bind_def, in_cons, open_def.
+      eauto using f_edge_def, registered_def, in_cons, open_def.
     }
     match goal with H: Open _ _ _ |- _ => apply open_inv_add_neq in H;auto end.
     eauto using f_edge_def.
@@ -749,7 +754,7 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    apply bind_inv_add_make in H0.
+    apply registered_inv_add_make in H0.
     destruct H0 as [(?,?)|(?,Hr)]. {
       subst.
       apply open_inv_add_make in H1.
@@ -759,16 +764,16 @@ Section Defs.
     destruct H1; eauto using f_edge_def.
   Qed.
 
-  Lemma bind_inv_remove:
+  Lemma registered_inv_remove:
     forall t f u s,
-    Bind t f (Map_TID.remove u s) ->
-    u <> t /\ Bind t f s.
+    Registered t f (Map_TID.remove u s) ->
+    u <> t /\ Registered t f s.
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.remove_mapsto_iff in H0.
     destruct H0.
-    eauto using bind_def.
+    eauto using registered_def.
   Qed.
 
   Lemma open_inv_remove:
@@ -786,12 +791,12 @@ Section Defs.
   Lemma f_edge_end_task:
     forall t s p f,
     FEdge (Map_TID.remove t s) p ->
-    Map_TID.MapsTo t {| bind := f; open := [] |} s ->
+    Map_TID.MapsTo t {| registered := f; open := [] |} s ->
     FEdge s p.
   Proof.
     intros.
     inversion H; subst; clear H.
-    apply bind_inv_remove in H1.
+    apply registered_inv_remove in H1.
     destruct H1 as (?,Hr).
     apply open_inv_remove in H2.
     destruct H2 as (?,Hs).
@@ -814,7 +819,7 @@ Section Defs.
       assert (f <> g). {
         unfold not; intros; subst.
         assert (In g s). {
-          eauto using bind_def, in_bind.
+          eauto using registered_def, in_registered.
         }
         contradiction.
       }
@@ -864,7 +869,7 @@ Section Defs.
 
   Lemma open_nil_to_not_open:
     forall x g s,
-    Map_TID.MapsTo x {| bind := g; open := [] |} s ->
+    Map_TID.MapsTo x {| registered := g; open := [] |} s ->
     forall f, ~ Open x f s.
   Proof.
     unfold not; intros.
@@ -876,7 +881,7 @@ Section Defs.
 
   Lemma open_nil_to_not_current:
     forall x g s,
-    Map_TID.MapsTo x {| bind := g; open := [] |} s ->
+    Map_TID.MapsTo x {| registered := g; open := [] |} s ->
     forall f, ~ Current x f s.
   Proof.
     unfold not; intros.
@@ -889,7 +894,7 @@ Section Defs.
     forall s, 
     DAG (Edge (c_edges s)) ->
     (forall x, Map_TID.In x s -> forall f, ~ Current x f s) \/
-    (exists t f, Current t f s /\ forall u, Bind u f s -> forall g, ~ Current u g s).
+    (exists t f, Current t f s /\ forall u, Registered u f s -> forall g, ~ Current u g s).
   Proof.
     intros.
     remember (c_edges s).
@@ -901,7 +906,7 @@ Section Defs.
       destruct l. {
         eauto using open_nil_to_not_current.
       }
-      assert (He: CEdge s (g, f0)) by eauto using List.in_eq, current_def, c_edge_def, bind_def.
+      assert (He: CEdge s (g, f0)) by eauto using List.in_eq, current_def, c_edge_def, registered_def.
       apply c_edge_to_edge in He.
       rewrite <- Heql in *.
       inversion He.
@@ -1032,7 +1037,7 @@ Section Defs.
   Inductive Nonempty (f:fid) (s:state) : Prop :=
   | nonempty_def:
     forall x,
-    Bind x f s ->
+    Registered x f s ->
     Nonempty f s.
 
   Lemma nonempty_to_in:
@@ -1042,12 +1047,12 @@ Section Defs.
   Proof.
     intros.
     inversion H.
-    eauto using in_bind.
+    eauto using in_registered.
   Qed.
 
-  Let has_bind t f s :=
+  Let has_registered t f s :=
   match Map_TID.find t s with
-  | Some ft => if FID.eq_dec f (bind ft) then true else false
+  | Some ft => if FID.eq_dec f (registered ft) then true else false
   | _ => false
   end.
 
@@ -1071,7 +1076,7 @@ Section Defs.
         contradiction.
       }
       inversion H; subst; clear H;
-      remember {| bind := _; open := _ |} as ft';
+      remember {| registered := _; open := _ |} as ft';
       assert (ft' = ft) by eauto using Map_TID_Facts.MapsTo_fun;
       subst; simpl; trivial.
     Qed.
@@ -1201,9 +1206,9 @@ Section Defs.
     Qed.
   End IEF_dec.
 
-  Lemma bind_to_in:
+  Lemma registered_to_in:
     forall t f s,
-    Bind t f s ->
+    Registered t f s ->
     Map_TID.In t s.
   Proof.
     intros.
@@ -1211,10 +1216,10 @@ Section Defs.
     eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
-  Lemma bind_fun:
+  Lemma registered_fun:
     forall t f s g,
-    Bind t f s ->
-    Bind t g s ->
+    Registered t f s ->
+    Registered t g s ->
     f = g.
   Proof.
     intros.
@@ -1226,12 +1231,12 @@ Section Defs.
     trivial.
   Qed.
 
-  Lemma bind_dec t f s:
-    { Bind t f s } + { ~ Bind t f s }.
+  Lemma registered_dec t f s:
+    { Registered t f s } + { ~ Registered t f s }.
   Proof.
-    remember (has_bind t f s).
+    remember (has_registered t f s).
     symmetry in Heqb;
-    unfold has_bind in *.
+    unfold has_registered in *.
     destruct b. {
       left.
       destruct (Map_TID_Extra.find_rw t s) as [(R,?)|((g,l),(R,?))];
@@ -1240,7 +1245,7 @@ Section Defs.
       - simpl in *.
         destruct (FID.eq_dec f g). {
           subst.
-          eauto using bind_def.
+          eauto using registered_def.
         }
         inversion Heqb.
     }
@@ -1248,7 +1253,7 @@ Section Defs.
     destruct (Map_TID_Extra.find_rw t s) as [(R,?)|((g,l),(R,?))];
     rewrite R in *. {
       unfold not; intros N.
-      apply bind_to_in in N.
+      apply registered_to_in in N.
       contradiction.
     }
     simpl in *.
@@ -1256,27 +1261,27 @@ Section Defs.
       inversion Heqb.
     }
     unfold not; intros N.
-    assert (Bind t g s) by eauto using bind_def.
-    assert (f = g)  by eauto using bind_fun.
+    assert (Registered t g s) by eauto using registered_def.
+    assert (f = g)  by eauto using registered_fun.
     contradiction.
   Defined.
 
-  Let filter_bind f s :=
-  Map_TID_Extra.filter (fun t ft => if FID.eq_dec f (bind ft) then true else false) s.
+  Let filter_registered f s :=
+  Map_TID_Extra.filter (fun t ft => if FID.eq_dec f (registered ft) then true else false) s.
 
   Lemma nonempty_empty_dec f s:
     { Nonempty f s } + { Empty f s }.
   Proof.
-    destruct (Map_TID_Extra.any_in_dec (filter_bind f s)) as [(t,Hi)|X];
-    unfold filter_bind in *. {
+    destruct (Map_TID_Extra.any_in_dec (filter_registered f s)) as [(t,Hi)|X];
+    unfold filter_registered in *. {
       left.
       apply Map_TID_Extra.in_to_mapsto in Hi.
       destruct Hi as (ft, mt).
       apply Map_TID_Extra.filter_spec in mt; auto using tid_eq_rw.
       destruct mt as (mt, Hx).
-      destruct (FID.eq_dec f (bind ft)). {
+      destruct (FID.eq_dec f (registered ft)). {
         subst.
-        eauto using nonempty_def, bind_eq.
+        eauto using nonempty_def, registered_eq.
       }
       inversion Hx.
     }
@@ -1332,7 +1337,7 @@ Section Defs.
     intros.
     inversion H; subst; clear H.
     inversion H0; subst; clear H0.
-    apply Map_TID_Facts.MapsTo_fun with (e:={| bind := g1; open := g :: l0 |}) in H1; auto.
+    apply Map_TID_Facts.MapsTo_fun with (e:={| registered := g1; open := g :: l0 |}) in H1; auto.
     inversion H1; subst; auto.
   Qed.
 
@@ -1353,7 +1358,7 @@ Section Defs.
         eauto using current_fun.
       }
       subst.
-      exists ((Map_TID.add t {| bind := g; open := l |} s)).
+      exists ((Map_TID.add t {| registered := g; open := l |} s)).
       eapply reduces_end_finish; eauto.
     }
     auto using progress_nonblocking.
@@ -1368,14 +1373,14 @@ Section Defs.
   [ H: X |- _ ] => f H
   end).
 
-  Let bind_to_ief:
+  Let registered_to_ief:
     forall x f s,
     (forall f, ~ Current x f s) ->
-    Bind x f s ->
+    Registered x f s ->
     IEF x f s.
   Proof.
     intros.
-    match goal with [H: Bind x _ _ |- _ ] => inversion H; subst; clear H end.
+    match goal with [H: Registered x _ _ |- _ ] => inversion H; subst; clear H end.
     destruct l. {
       auto using ief_nil.
     }
@@ -1394,9 +1399,9 @@ Section Defs.
     ((* [f] is nonempty and every task in [f] reduces. *)
       Nonempty f s
       /\
-      (forall x, Bind x f s -> Enabled s x)
+      (forall x, Registered x f s -> Enabled s x)
       /\
-      (forall x, Bind x f s -> IEF x f s)
+      (forall x, Registered x f s -> IEF x f s)
     )
     \/
     ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
@@ -1415,7 +1420,7 @@ Section Defs.
       destruct H0 as (y, Hi).
       apply Map_TID_Extra.in_to_mapsto in Hi.
       destruct Hi as ((g,l), mt).
-      assert (Hr: Bind y g s) by eauto using bind_def.
+      assert (Hr: Registered y g s) by eauto using registered_def.
       exists g.
       left.
       split; eauto using nonempty_def.
@@ -1430,7 +1435,7 @@ Section Defs.
       destruct (blocking_dec o). {
         inversion b; subst; clear b.
         match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
-        assert (g0 = g) by eauto using bind_fun, bind_def; subst.
+        assert (g0 = g) by eauto using registered_fun, registered_def; subst.
         assert (Xc: Current x f s) by eauto using current_def.
         contradict Xc.
         eauto using Map_TID_Extra.mapsto_to_in.
@@ -1446,13 +1451,13 @@ Section Defs.
           inversion b; subst; clear b.
           subst.
           match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
-          assert (g = f) by eauto using bind_fun, bind_def; subst.
+          assert (g = f) by eauto using registered_fun, registered_def; subst.
           assert (X: ~ Current x f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
           contradict X; eauto using current_def.
         }
         eauto using progress_nonblocking.
       }
-      eauto using bind_to_ief.
+      eauto using registered_to_ief.
     }
     exists f.
     right;
@@ -1462,18 +1467,18 @@ End Defs.
 
 Section Props.
 
-  Lemma bind_inv_add:
+  Lemma registered_inv_add:
     forall x y ft s f,
-    Bind y f (Map_TID.add x ft s) ->
-    (x = y /\ Task.Bind f ft) \/ Bind y f s.
+    Registered y f (Map_TID.add x ft s) ->
+    (x = y /\ Task.Registered f ft) \/ Registered y f s.
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.add_mapsto_iff in H0.
     destruct H0 as [(?,?)|(?,?)].
     + subst.
-      auto using Task.bind_def.
-    + eauto using bind_def, in_bind.
+      auto using Task.registered_def.
+    + eauto using registered_def, in_registered.
   Qed.
 
   Lemma in_inv_add:
@@ -1483,10 +1488,10 @@ Section Props.
   Proof.
     intros.
     inversion H.
-    - apply bind_inv_add in H0.
+    - apply registered_inv_add in H0.
       destruct H0 as [(?, ?)|?].
-      + auto using Task.in_bind.
-      + eauto using in_bind.
+      + auto using Task.in_registered.
+      + eauto using in_registered.
     - apply open_inv_add in H0.
       destruct H0 as [(?,?)|(?,?)]. {
         destruct ft in *; simpl in *.
@@ -1495,15 +1500,15 @@ Section Props.
       eauto using in_open.
   Qed.
 
-  Let task_bind_to_bind:
+  Let task_registered_to_registered:
     forall x ft s f,
     Map_TID.MapsTo x ft s ->
-    Task.Bind f ft ->
-    Bind x f s.
+    Task.Registered f ft ->
+    Registered x f s.
   Proof.
     intros.
     inversion H0; subst; clear H0.
-    eauto using bind_def.
+    eauto using registered_def.
   Qed.
 
   Let task_open_to_open:
@@ -1525,7 +1530,7 @@ Section Props.
   Proof.
     intros.
     inversion H; subst; clear H.
-    + eauto using task_bind_to_bind, in_bind.
+    + eauto using task_registered_to_registered, in_registered.
     + eauto using task_open_to_open, in_open.
   Qed.
 
@@ -1542,29 +1547,29 @@ Section Props.
     - inversion H2.
   Qed.
 
-  Let task_bind_inv_eq:
+  Let task_registered_inv_eq:
     forall f g l,
-    Task.Bind f {| bind := g; open := l |} ->
+    Task.Registered f {| registered := g; open := l |} ->
     g = f.
   Proof.
     intros.
     inversion H; auto.
   Qed.
 
-  Let task_bind_cons:
+  Let task_registered_cons:
     forall f g l h,
-    Task.Bind f {| bind := g; open := l |} ->
-    Task.Bind f {| bind := g; open := h::l |}.
+    Task.Registered f {| registered := g; open := l |} ->
+    Task.Registered f {| registered := g; open := h::l |}.
   Proof.
     intros.
     inversion H; subst; clear H.
-    auto using Task.bind_def.
+    auto using Task.registered_def.
   Qed.
 
   Let task_open_cons:
     forall f g l h,
-    Task.Open f {| bind := g; open := l |} ->
-    Task.Open f {| bind := g; open := h::l |}.
+    Task.Open f {| registered := g; open := l |} ->
+    Task.Open f {| registered := g; open := h::l |}.
   Proof.
     intros.
     inversion H; subst; clear H.
@@ -1573,12 +1578,12 @@ Section Props.
 
   Let task_in_cons:
     forall f g l h,
-    Task.In f {| bind := g; open := l |} ->
-    Task.In f {| bind := g; open := h::l |}.
+    Task.In f {| registered := g; open := l |} ->
+    Task.In f {| registered := g; open := h::l |}.
   Proof.
     intros.
     inversion H; subst; clear H. {
-      auto using task_bind_cons, Task.in_bind.
+      auto using task_registered_cons, Task.in_registered.
     }
     auto using task_open_cons, Task.in_open.
   Qed.
@@ -1590,20 +1595,20 @@ Section Props.
   Proof.
     intros.
     destruct ft as (f, [|g]); simpl.
-    + eauto using in_bind, bind_def.
+    + eauto using in_registered, registered_def.
     + eauto using in_open, in_eq, open_def.
   Qed.
 
-  Let bind_inv_remove:
+  Let registered_inv_remove:
     forall x f s y,
-    Bind y f (Map_TID.remove x s) ->
-    x <> y /\ Bind y f s.
+    Registered y f (Map_TID.remove x s) ->
+    x <> y /\ Registered y f s.
   Proof.
     intros.
     inversion H; subst; clear H.
     apply Map_TID_Facts.remove_mapsto_iff in H0.
     destruct H0 as (?, ?).
-    eauto using bind_def.
+    eauto using registered_def.
   Qed.
 
   Let open_inv_remove:
@@ -1625,9 +1630,9 @@ Section Props.
   Proof.
     intros.
     inversion H; subst; clear H.
-    - apply bind_inv_remove in H0.
+    - apply registered_inv_remove in H0.
       destruct H0.
-      eauto using in_bind.
+      eauto using in_registered.
     - apply open_inv_remove in H0.
       destruct H0.
       eauto using in_open.
@@ -1653,7 +1658,7 @@ Section Props.
       end.
       + assert (g = f) by eauto.
         subst.
-        eauto using in_bind, bind_def.
+        eauto using in_registered, registered_def.
       + match goal with H: Task.Open _ _ |- _ =>
           inversion H; subst; clear H
         end.
@@ -1670,58 +1675,58 @@ Section Props.
     - eauto using in_inv_remove.
   Qed.
 
-  Let bind_add_neq:
+  Let registered_add_neq:
     forall y f s x ft,
-    Bind y f s ->
+    Registered y f s ->
     x <> y ->
-    Bind y f (Map_TID.add x ft s).
+    Registered y f (Map_TID.add x ft s).
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using bind_def, Map_TID.add_2.
+    eauto using registered_def, Map_TID.add_2.
   Qed.
 
-  Lemma bind_reduces:
+  Lemma registered_reduces:
     forall x y f s s' o,
-    Bind y f s ->
+    Registered y f s ->
     Reduces s (x, o) s' ->
     (y = x /\ exists g, o = INIT g) \/
     (y = x /\ o = END_TASK) \/
-    Bind y f s'.
+    Registered y f s'.
   Proof.
     intros.
     inversion H0; subst; clear H0.
     - destruct (TID.eq_dec x y); subst. {
         eauto 4.
       }
-      eauto using bind_add_neq.
+      eauto using registered_add_neq.
     - destruct (TID.eq_dec x y); subst. {
-        assert (Bind y g s) by eauto using bind_def.
-        assert (f = g) by eauto using bind_fun.
+        assert (Registered y g s) by eauto using registered_def.
+        assert (f = g) by eauto using registered_fun.
         subst.
-        eauto using bind_def, Map_TID.add_1.
+        eauto using registered_def, Map_TID.add_1.
       }
-      eauto using bind_add_neq.
+      eauto using registered_add_neq.
     - destruct (TID.eq_dec x y); subst. {
-        assert (Bind y g s) by eauto using bind_def.
-        assert (f = g) by eauto using bind_fun.
+        assert (Registered y g s) by eauto using registered_def.
+        assert (f = g) by eauto using registered_fun.
         subst.
-        eauto using bind_def, Map_TID.add_1.
+        eauto using registered_def, Map_TID.add_1.
       }
-      eauto using bind_add_neq.
+      eauto using registered_add_neq.
     - destruct (TID.eq_dec y u); subst. {
-        apply bind_to_in in H.
+        apply registered_to_in in H.
         contradiction.
       }
-      eauto using bind_add_neq.
+      eauto using registered_add_neq.
     - destruct (TID.eq_dec y x); subst. {
         auto.
       }
-      assert (Bind x f0 s) by eauto using bind_def.
+      assert (Registered x f0 s) by eauto using registered_def.
       right.
       right.
       inversion H; subst; clear H.
-      eapply bind_def; eauto using Map_TID.remove_2.
+      eapply registered_def; eauto using Map_TID.remove_2.
   Qed.
 
   Let open_add_neq:
@@ -1761,17 +1766,17 @@ Section Props.
     unfold not; intros N; inversion N; clear N.
     - inversion H; subst; clear H.
       apply Hx in H0.
-      destruct (Task.in_dec f {| bind := f; open := l |}). {
+      destruct (Task.in_dec f {| registered := f; open := l |}). {
         inversion H0.
       }
-      assert (Task.In f {| bind := f; open := l |}) by auto using Task.in_bind, Task.bind_def.
+      assert (Task.In f {| registered := f; open := l |}) by auto using Task.in_registered, Task.registered_def.
       contradiction.
     - inversion H; subst; clear H.
       apply Hx in H1.
-      destruct (Task.in_dec f {| bind := g; open := l |}). {
+      destruct (Task.in_dec f {| registered := g; open := l |}). {
         inversion H1.
       }
-      assert (Task.In f {| bind := g; open := l |}) by auto using Task.in_open, Task.open_def.
+      assert (Task.In f {| registered := g; open := l |}) by auto using Task.in_open, Task.open_def.
       contradiction.
   Defined.
 
@@ -1795,14 +1800,14 @@ Section Props.
     if in_dec f s then inr (TASK_EXIST x) else
     match Map_TID.find x s with
     | None => inr (TASK_NOT_EXIST x)
-    | Some {| bind := g; open := l|} => inl (Map_TID.add x {| bind := g; open := f :: l |} s)
+    | Some {| registered := g; open := l|} => inl (Map_TID.add x {| registered := g; open := f :: l |} s)
     end
   | END_FINISH =>
     match Map_TID.find x s with
-    | Some {| bind := g; open := f ::l|} =>
+    | Some {| registered := g; open := f ::l|} =>
       if nonempty_empty_dec f s then inr (FINISH_NONEMPTY f) else
-       inl (Map_TID.add x {| bind := g; open := l |} s)
-    | Some {| bind := g; open := [] |} => inr FINISH_OPEN_EMPTY
+       inl (Map_TID.add x {| registered := g; open := l |} s)
+    | Some {| registered := g; open := [] |} => inr FINISH_OPEN_EMPTY
     | None => inr (TASK_NOT_EXIST x)
     end
   | BEGIN_TASK y =>
@@ -1813,7 +1818,7 @@ Section Props.
     end
   | END_TASK =>
     match Map_TID.find x s with
-    | Some {| bind := f; open := [] |} => inl (Map_TID.remove x s)
+    | Some {| registered := f; open := [] |} => inl (Map_TID.remove x s)
     | _ => inr (TASK_NOT_EXIST x)
     end
   end.
@@ -1859,7 +1864,7 @@ Section Props.
       rewrite R in *; clear R;
       inversion H; subst; clear H.
       remember(make _) as ft.
-      assert (R: ft = make (ief {| bind := g; open := l |})). {
+      assert (R: ft = make (ief {| registered := g; open := l |})). {
         rewrite Heqft in *; simpl.
         auto.
       }
@@ -1882,7 +1887,7 @@ Section Props.
     unfold not; intros N.
     inversion H; subst; clear H.
     inversion N; subst; clear N.
-    assert (~ Bind x f s) by auto.
+    assert (~ Registered x f s) by auto.
     contradiction.
   Qed.
 
@@ -1894,7 +1899,7 @@ Section Props.
     unfold not; intros.
     inversion H; subst; clear H.
     inversion H0; subst; clear H0.
-    assert (~ Bind x f s) by auto.
+    assert (~ Registered x f s) by auto.
     contradiction.
   Qed.
 
@@ -1922,7 +1927,7 @@ Section Props.
         apply Map_TID_Extra.mapsto_to_in in H5.
         contradiction.
       }
-      assert (ft = {| bind := g; open := l |}) by
+      assert (ft = {| registered := g; open := l |}) by
       eauto using Map_TID_Facts.MapsTo_fun; subst.
       trivial.
     - destruct (Map_TID_Extra.find_rw x s) as [(R,Hx)|(ft,(R,Hx))];
@@ -1930,7 +1935,7 @@ Section Props.
         apply Map_TID_Extra.mapsto_to_in in H3.
         contradiction.
       }
-      assert (ft = {| bind := g; open := f:: l |}) by
+      assert (ft = {| registered := g; open := f:: l |}) by
       eauto using Map_TID_Facts.MapsTo_fun; subst.
       destruct (FID.eq_dec f f). {
         destruct (nonempty_empty_dec f s). {
@@ -1956,7 +1961,7 @@ Section Props.
         contradict Hx.
         eauto using Map_TID_Extra.mapsto_to_in.
       }
-      assert (ft' = {| bind := f; open := [] |}) by eauto using Map_TID_Facts.MapsTo_fun; subst.
+      assert (ft' = {| registered := f; open := [] |}) by eauto using Map_TID_Facts.MapsTo_fun; subst.
       trivial.
   Qed.
 
@@ -2033,42 +2038,42 @@ Section Props.
       inversion H; subst; clear H.
       eapply open_def; eauto using Map_TID.remove_2.
   Qed.
-  Lemma bind_or_open_reduces:
+  Lemma registered_or_open_reduces:
     forall y f s o s' x,
-    Bind y f s \/ Open y f s ->
+    Registered y f s \/ Open y f s ->
     Reduces s (x, o) s' ->
-    (Bind y f s /\ y = x /\ exists g, o = INIT g) \/
-    (Bind y f s /\ y = x /\ o = END_TASK) \/
+    (Registered y f s /\ y = x /\ exists g, o = INIT g) \/
+    (Registered y f s /\ y = x /\ o = END_TASK) \/
     (Open y f s /\ y = x /\ o = END_FINISH) \/
-    Bind y f s' \/
+    Registered y f s' \/
     Open y f s'.
   Proof.
     intros.
     destruct H.
-    - edestruct bind_reduces as [(?,?)|[Hx|Hy]]; eauto.
+    - edestruct registered_reduces as [(?,?)|[Hx|Hy]]; eauto.
     - edestruct open_reduces; eauto.
   Qed.
 
-  Lemma bind_make_1:
+  Lemma registered_make_1:
     forall x f s,
-    Bind x f (Map_TID.add x (make f) s).
+    Registered x f (Map_TID.add x (make f) s).
   Proof.
     intros.
-    apply bind_def with (l:=nil); unfold make; simpl.
+    apply registered_def with (l:=nil); unfold make; simpl.
     auto using Map_TID.add_1.
   Qed.
 
-  Lemma reduces_inv_ief_bind:
+  Lemma reduces_inv_ief_registered:
     forall f x y s s',
     IEF x f s ->
     Reduces s (x, BEGIN_TASK y) s' ->
-    Bind y f s'.
+    Registered y f s'.
   Proof.
     intros.
     inversion H0; subst; clear H0.
     assert (ief ft = f) by eauto using ief_inv_1.
     subst.
-    auto using bind_make_1.
+    auto using registered_make_1.
   Qed.
 
   Lemma not_open_empty:
@@ -2088,7 +2093,7 @@ Section Props.
     intros.
     unfold not; intros N.
     inversion N; subst; clear N. {
-      apply not_bind_empty in H.
+      apply not_registered_empty in H.
       contradiction.
     }
     apply not_open_empty in H.
@@ -2119,7 +2124,7 @@ Module Trace.
         apply Graph.reaches_to_in_fst in H.
         destruct H as (?,(?,?)).
         inversion H; subst; clear H.
-        apply not_bind_empty in H1; auto.
+        apply not_registered_empty in H1; auto.
       - assert (DAG (FEdge s0)) by auto.
         eauto using dag_reduces.
     Qed.
@@ -2135,9 +2140,9 @@ Module Trace.
       ((* [f] is nonempty and every task in [f] reduces. *)
         Nonempty f s
         /\
-        (forall t, Bind t f s -> Enabled s t)
+        (forall t, Registered t f s -> Enabled s t)
         /\
-        (forall x, Bind x f s -> IEF x f s)
+        (forall x, Registered x f s -> IEF x f s)
       )
       \/
       ((* Or [f] is empty, and [t]'s current finish-scope is [f] *)
