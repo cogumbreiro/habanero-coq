@@ -405,7 +405,7 @@ Module Progress.
     forall x pm f,
     Map_FID.MapsTo f pm ps ->
     Phasermap.In x (pm_state pm) ->
-    F.Bind x f fs \/ F.Open x f fs.
+    F.Registered x f fs \/ F.InOpen x f fs.
 
   Section Defs.
   Variable s:State.t.
@@ -426,7 +426,7 @@ Module Progress.
       forall x pm f,
       Map_FID.MapsTo f pm (phasers s) ->
       Phasermap.In x (pm_state pm) ->
-      F.Bind x f (f_state (finishes s)) \/ F.Open x f (f_state (finishes s)).
+      F.Registered x f (f_state (finishes s)) \/ F.InOpen x f (f_state (finishes s)).
     Proof.
       auto.
     Qed.
@@ -473,12 +473,12 @@ Module Progress.
       Variable ief_nonempty: F.Nonempty f fs.
       Variable ief_can_run:
         forall x,
-        F.Bind x f fs ->
+        F.Registered x f fs ->
         Finish.DF.Enabled ffs x.
 
       Let reduces_f_ex:
         forall o o' x pm,
-        F.Bind x f fs ->
+        F.Registered x f fs ->
         Semantics.translate o = Semantics.only_f o' ->
         F.Valid fs x o' ->
         exists ctx', Semantics.CtxReduces (pm, ffs) x o ctx'.
@@ -491,7 +491,7 @@ Module Progress.
 
       Let reduces_both:
         forall o o_f o_p x pm pm',
-        F.Bind x f fs ->
+        F.Registered x f fs ->
         Semantics.translate o = Semantics.both o_p o_f ->
         F.Valid fs x o_f ->
         Phasers.DF.Reduces pm (x, o_p) pm' ->
@@ -508,7 +508,7 @@ Module Progress.
       Lemma ctx_progress_empty
         (pm_is_empty: Empty pm):
         exists x,
-        F.Bind x f fs /\
+        F.Registered x f fs /\
         (forall o,
         Typesystem.Valid ctx x o ->
         exists ctx', Semantics.CtxReduces ctx x o ctx').
@@ -532,7 +532,7 @@ Module Progress.
         exists (k:op_kind),
         k <> task_op /\
         exists x,
-        F.Bind x f fs /\
+        F.Registered x f fs /\
         (forall o,
         get_op_kind o = k ->
         Typesystem.Valid ctx x o ->
@@ -590,7 +590,7 @@ Module Progress.
         exists (k:op_kind),
         k <> task_op /\
         exists x,
-        F.Bind x f fs /\
+        F.Registered x f fs /\
         (forall o,
           get_op_kind o = k ->
           Typesystem.Valid ctx x o ->
@@ -812,12 +812,12 @@ Section Defs.
   Let ief_to_root_or_started:
     forall x f s,
     F.IEF x f (f_state (State.finishes s)) ->
-    F.Bind x f (f_state (State.finishes s)) \/ F.Open x f (f_state (State.finishes s)).
+    F.Registered x f (f_state (State.finishes s)) \/ F.InOpen x f (f_state (State.finishes s)).
   Proof.
     intros.
     inversion H; subst; clear H.
-    - eauto using F.bind_def.
-    - eauto using F.open_def, List.in_eq.
+    - eauto using F.registered_def.
+    - eauto using F.in_open_def, List.in_eq.
   Qed.
 
   Let not_in_make:
@@ -861,7 +861,7 @@ Section Defs.
         - match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
           inversion H; subst; clear H end.
           eapply H in H2; eauto.
-          eapply F.bind_or_open_reduces in H2; eauto 1.
+          eapply F.registered_or_in_open_reduces in H2; eauto 1.
           destruct H2 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
           try (
             match goal with
@@ -884,7 +884,7 @@ Section Defs.
           + eapply H in H0; eauto.
             match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
             inversion H; subst; clear H end.
-            eapply F.bind_or_open_reduces in H0; eauto 1.
+            eapply F.registered_or_in_open_reduces in H0; eauto 1.
             destruct H0 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
             try (
               match goal with
@@ -898,7 +898,7 @@ Section Defs.
           + eapply H in H0; eauto.
             match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
             inversion H; subst; clear H end.
-            eapply F.bind_or_open_reduces in H0; eauto 1.
+            eapply F.registered_or_in_open_reduces in H0; eauto 1.
             destruct H0 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
             try (
               match goal with
@@ -916,7 +916,7 @@ Section Defs.
           + eapply H in H0; eauto.
             match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
             inversion H; subst; clear H end.
-            eapply F.bind_or_open_reduces in H0; eauto 1.
+            eapply F.registered_or_in_open_reduces in H0; eauto 1.
             destruct H0 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
             try (
               match goal with
@@ -958,7 +958,7 @@ Section Defs.
       - eapply H in H2; eauto; clear H.
         match goal with H: Finish.DF.Reduces _ _ _ |- _ =>
         inversion H; subst; clear H end.
-        eapply F.bind_or_open_reduces in H2; eauto 1.
+        eapply F.registered_or_in_open_reduces in H2; eauto 1.
         destruct H2 as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst;
         try (
           match goal with
@@ -991,7 +991,7 @@ Section Defs.
           contradiction.
         + simpl in *.
           repeat match goal with H: ?P = ?P |- _ => clear H end.
-          eapply Lang.open_reduces_inv_end_finish in Hx; eauto.
+          eapply Lang.in_open_reduces_inv_end_finish in Hx; eauto.
           destruct Hx as [?|(?,Hx)]; try (subst; contradiction).
           auto.
     }
@@ -1007,10 +1007,10 @@ Section Defs.
     inversion H; subst; clear H end;
     match goal with H: F.Reduces _ _ _ |- _ =>
     assert (Hr := H);
-    eapply F.bind_or_open_reduces in H ; eauto;
+    eapply F.registered_or_in_open_reduces in H ; eauto;
     destruct H as [(Hx,(?,(g,?)))|[(Hx,(?,?))|[(Hx,(?,?))|Hx]]]; subst
     end; try inversion H4; subst; auto.
-    apply F.bind_to_in in Hx.
+    apply F.registered_to_in in Hx.
     inversion Hr; subst.
     contradiction.
   Qed.
