@@ -30,7 +30,7 @@ before_install:
 install:
   - opam init -n --comp $OCAML_VERSION; opam update
   - opam install ocamlbuild.$OCB_VERSION
-  - opam install coq.$COQ_VERSION
+  - travis_wait opam install coq.$COQ_VERSION
   - eval $(opam config env)
   - ./configure.sh
   - cd libhsem
