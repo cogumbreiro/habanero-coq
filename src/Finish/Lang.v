@@ -940,11 +940,37 @@ Section Defs.
     inversion H; subst; clear H.
   Qed.
 
+  Lemma registered_to_open:
+    forall x f s,
+    Registered x f s ->
+    exists l, Open x l s.
+  Proof.
+    intros.
+    inversion H; subst.
+    eauto using open_def.
+  Qed.
+
+  Lemma open_to_current:
+    forall x f l s,
+    Open x (f :: l) s ->
+    Current x f s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using current_def.
+  Qed.
+
+  (**
+    If a state is a c-DAG, then a) all tasks are closed,
+    or b) there is some task with an open finish [f] such that all taks
+    registered in [f] are closed.
+    *)
+
   Let dag_cond:
     forall s, 
     DAG (Edge (c_edges s)) ->
-    (forall x, Map_TID.In x s -> forall f, ~ Current x f s) \/
-    (exists t f, Current t f s /\ forall u, Registered u f s -> forall g, ~ Current u g s).
+    (forall x, Map_TID.In x s -> Open x [] s) \/
+    (exists t f, Current t f s /\ forall u, Registered u f s -> Open u [] s).
   Proof.
     intros.
     remember (c_edges s).
@@ -954,9 +980,9 @@ Section Defs.
       destruct H0 as (ft, mt).
       destruct ft as (g, l).
       destruct l. {
-        eauto using open_nil_to_not_current.
+        eauto using open_def.
       }
-      assert (He: CEdge s (g, f0)) by eauto using List.in_eq, current_def, c_edge_def, registered_def.
+      assert (He: CEdge s (g, f)) by eauto using List.in_eq, current_def, c_edge_def, registered_def.
       apply c_edge_to_edge in He.
       rewrite <- Heql in *.
       inversion He.
@@ -977,14 +1003,16 @@ Section Defs.
     inversion He; subst; clear He.
     exists t; exists b; split; auto.
     unfold not; intros.
-    assert (He : CEdge s (b, g)) by eauto using c_edge_def.
+    edestruct registered_to_open with (x:=u) as (lu, ?); eauto.
+    destruct lu; auto.
+    assert (He : CEdge s (b, f)) by eauto using open_to_current, c_edge_def.
     match goal with H: CEdge _ _ |- _ =>
       apply c_edge_to_edge in H;
       rewrite <- Heql in *;
       apply Graph.edge_to_reaches in H
     end.
     apply H1 in He.
-    assumption.
+    contradiction.
   Qed.
 
   Lemma dag_reduces:
@@ -1428,6 +1456,20 @@ Section Defs.
     contradict X; eauto using Map_TID_Extra.mapsto_to_in.
   Qed.
 
+  Lemma ief_open_nil:
+    forall x s f,
+    Open x [] s ->
+    Registered x f s ->
+    IEF x f s.
+  Proof.
+    intros.
+    apply ief_nil.
+    inversion H; subst; clear H.
+    assert (f0 = f) by eauto using registered_def, registered_fun.
+    subst.
+    assumption.
+  Qed.
+
   Theorem progress:
     forall s,
     (* Given that a finish-state is a DAG *)
@@ -1464,40 +1506,58 @@ Section Defs.
       exists g.
       left.
       split; eauto using nonempty_def.
+      (*
       assert (forall x f, ~Current x f s). {
         unfold not; intros ? ? N.
         inversion N; subst; clear N.
         assert (X:Current x f s) by eauto using current_def.
         contradict X; eauto using Map_TID_Extra.mapsto_to_in.
+      }*)
+      assert (l = []). {
+        assert (Hin : Map_TID.In y s) by eauto using Map_TID_Extra.mapsto_to_in.
+        apply H in Hin.
+        apply open_def in mt.
+        eauto using open_fun.
       }
-      split; auto.
-      intros.
-      destruct (blocking_dec o). {
-        inversion b; subst; clear b.
-        match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
-        assert (g0 = g) by eauto using registered_fun, registered_def; subst.
-        assert (Xc: Current x f s) by eauto using current_def.
-        contradict Xc.
-        eauto using Map_TID_Extra.mapsto_to_in.
+      subst; clear mt.
+      split; intros. {
+        destruct (blocking_dec o). {
+          inversion b; subst; clear b.
+          match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
+          match goal with H: Map_TID.MapsTo ?x _ s |- _ =>
+            assert (Hy: Open x [] s) by eauto using Map_TID_Extra.mapsto_to_in;
+            apply open_def in H;
+            apply open_fun with (l:=[]) in H;
+            auto;
+            inversion H
+          end.
+        }
+        eauto using progress_nonblocking.
       }
-      eauto using progress_nonblocking.
+      eauto using ief_open_nil, registered_to_in.
     }
     destruct (nonempty_empty_dec f s). {
       exists f.
       left; split; auto.
-      split. {
+      split; intros. {
         intros.
         destruct (blocking_dec o). {
           inversion b; subst; clear b.
           subst.
           match goal with H: Valid _ _ _ |- _ => inversion H; subst; clear H end.
           assert (g = f) by eauto using registered_fun, registered_def; subst.
-          assert (X: ~ Current x f0 s) by eauto using Map_TID_Extra.mapsto_to_in.
-          contradict X; eauto using current_def.
+          match goal with H: Map_TID.MapsTo _ _ _ |- _ =>
+            apply open_def in H
+          end.
+          match goal with H: Open x ?l s |- _ =>
+            assert (Open x [] s) by auto;
+            assert (N: l = []) by eauto using open_fun;
+            inversion N
+          end.
         }
         eauto using progress_nonblocking.
       }
-      eauto using registered_to_ief.
+      auto using ief_open_nil.
     }
     exists f.
     right;
