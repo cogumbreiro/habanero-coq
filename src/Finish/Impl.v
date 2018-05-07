@@ -371,8 +371,9 @@ Section Defs.
         contradiction.
       }
       inversion H; subst; clear H.
+      inversion H1; subst; clear H1.
       rewrite Map_TID_Facts.add_mapsto_iff in *.
-      destruct H1 as [(?,Hx)|(?,?)]. {
+      destruct H as [(?,Hx)|(?,?)]. {
         subst.
         inversion Hx; subst; clear Hx.
         contradiction.
@@ -1023,14 +1024,14 @@ Extract Inlined Constant EqNat.eq_nat_decide => "(=)".
 Extract Inlined Constant Peano_dec.eq_nat_dec => "(=)".
 Extract Inlined Constant PeanoNat.Nat.eqb => "( = )".
 
-Extract Constant Compare_dec.nat_compare =>
+Extract Constant PeanoNat.Nat.compare =>
  "fun n m -> if n=m then Eq else if n<m then Lt else Gt".
 Extract Inlined Constant Compare_dec.leb => "(<=)".
 Extract Inlined Constant Compare_dec.le_lt_dec => "(<=)".
 Extract Inlined Constant Compare_dec.lt_dec => "(<)".
 Extract Constant Compare_dec.lt_eq_lt_dec => "fun n m -> if n>m then None else Some (n<m)".
 
-Extraction Language Ocaml.
+Extraction Language OCaml.
 
 Extraction "libhsem/src/finish"
   checks_add checks_make checks_load checks_enqueued checks_t_enqueued

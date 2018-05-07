@@ -118,13 +118,19 @@ Require Import Aniceto.Graphs.FGraph.
     Map_TID.MapsTo t {| registered := f; open := l |} s ->
     Registered t f s.
 
+  Inductive Open t l s : Prop :=
+  | open_def:
+    forall f,
+    Map_TID.MapsTo t {| registered := f; open := l |} s ->
+    Open t l s.
+
   (** We also define the open operation on a state *)
 
   Inductive InOpen : tid -> fid -> state -> Prop :=
   | in_open_def:
-    forall t f l s g,
+    forall t f l s,
     List.In f l ->
-    Map_TID.MapsTo t {| registered := g; open := l |} s ->
+    Open t l s ->
     InOpen t f s.
 
   (** The current open operation is the top of the open stack. *)
@@ -421,7 +427,7 @@ Section Defs.
     intros.
     destruct ft.
     simpl in *.
-    eauto using in_open_def.
+    eauto using in_open_def, open_def.
   Qed.
 
   Lemma f_edge_eq:
@@ -430,7 +436,7 @@ Section Defs.
     List.In f (open ft) ->
     FEdge s (registered ft, f).
   Proof.
-    eauto using f_edge_def, registered_eq, in_open_eq.
+    eauto using f_edge_def, registered_eq, in_open_eq, open_def.
   Qed.
 
   Lemma in_to_f_edge:
@@ -451,6 +457,33 @@ Section Defs.
     eauto using f_edge_eq.
   Qed.
 
+  Lemma registered_to_in:
+    forall t f s,
+    Registered t f s ->
+    Map_TID.In t s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
+  Lemma in_open_to_list_in:
+    forall t g f s l,
+    InOpen t g s ->
+    Map_TID.MapsTo t {| registered := f; open := l |} s ->
+    List.In g l.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    assert (l0 = l). {
+      inversion H2; subst; clear H2.
+      apply Map_TID_Facts.MapsTo_fun with (e:={| registered := f; open := l |}) in H; auto.
+      inversion H; subst; auto.
+    }
+    subst.
+    trivial.
+  Qed.
+
   Lemma f_edge_to_in:
     forall p s,
     FEdge s p ->
@@ -460,15 +493,13 @@ Section Defs.
     intros.
     rewrite in_flat_map.
     inversion H; subst; clear H.
-    inversion H0; subst.
-    inversion H1; subst.
-    eapply Map_TID_Facts.MapsTo_fun in H; eauto.
-    inversion H; subst; clear H.
+    inversion H0; subst; clear H0.
     exists {| registered := f; open := l |}.
     split. {
-      eauto using Map_TID_Extra.values_spec_2.
+      eapply Map_TID_Extra.values_spec_2; eauto.
     }
-    rewrite in_map_iff; eauto.
+    rewrite in_map_iff.
+    eauto using in_open_to_list_in.
   Qed.
 
   Lemma f_edge_spec:
@@ -521,11 +552,12 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    apply Map_TID_Facts.add_mapsto_iff in H1.
-    destruct H1 as [(?,?)|(?,?)]. {
+    inversion H1; subst; clear H1.
+    apply Map_TID_Facts.add_mapsto_iff in H.
+    destruct H as [(?,?)|(?,?)]. {
       subst; auto.
     }
-    eauto using in_open_def.
+    eauto using in_open_def, open_def.
   Qed.
 
   Lemma in_open_inv_add_make:
@@ -621,16 +653,19 @@ Section Defs.
     end.
     match goal with
     H: Registered _ _ _ |- _ => apply registered_inv_add in H;
+    simpl in H;
     destruct H as [(?,(k,R))|(?,?)]
     end. {
-      inversion R; clear R.
-      destruct Hs as [(?,Hi)|(?,?)]. {
+      inversion R; subst; clear R.
+      destruct Hs as [(_,Hi)|(?,?)]. {
         simpl in *.
         destruct Hi. {
           auto.
         }
         subst.
-        eauto using registered_def, in_open_def, f_edge_def.
+        assert (Registered t0 x s) by eauto using registered_def.
+        assert (InOpen t0 y s) by eauto using open_def, in_open_def.
+        eauto using f_edge_def.
       }
       subst.
       contradiction.
@@ -741,7 +776,8 @@ Section Defs.
     end. {
       inversion R; subst; clear R.
       match goal with H: InOpen _ _ _ |- _ => apply in_open_inv_add_eq in H end.
-      eauto using f_edge_def, registered_def, in_cons, in_open_def.
+      assert (List.In g0 (f::x)) by auto using in_cons.
+      eauto using f_edge_def, registered_def, in_cons, in_open_def, open_def.
     }
     match goal with H: InOpen _ _ _ |- _ => apply in_open_inv_add_neq in H;auto end.
     eauto using f_edge_def.
@@ -783,9 +819,10 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst; clear H.
-    apply Map_TID_Facts.remove_mapsto_iff in H1.
-    destruct H1.
-    eauto using in_open_def.
+    inversion H1; subst; clear H1.
+    apply Map_TID_Facts.remove_mapsto_iff in H.
+    destruct H.
+    eauto using in_open_def, open_def.
   Qed.
 
   Lemma f_edge_end_task:
@@ -867,6 +904,19 @@ Section Defs.
     unfold Edge; auto using in_to_c_edge.
   Qed.
 
+  Lemma open_fun:
+    forall l l' t s,
+    Open t l s ->
+    Open t l' s ->
+    l = l'.
+  Proof.
+    intros.
+    inversion H; inversion H0.
+    eapply Map_TID_Facts.MapsTo_fun in H1; eauto.
+    inversion H1; subst.
+    trivial.
+  Qed.
+
   Lemma in_open_nil_to_not_open:
     forall x g s,
     Map_TID.MapsTo x {| registered := g; open := [] |} s ->
@@ -874,9 +924,9 @@ Section Defs.
   Proof.
     unfold not; intros.
     inversion H0; subst; clear H0.
-    eapply Map_TID_Facts.MapsTo_fun in H; eauto.
-    inversion H; subst; clear H.
-    contradiction.
+    apply open_def in H.
+    assert (l = []) by eauto using open_fun; subst.
+    inversion H1.
   Qed.
 
   Lemma open_nil_to_not_current:
@@ -1206,16 +1256,6 @@ Section Defs.
     Qed.
   End IEF_dec.
 
-  Lemma registered_to_in:
-    forall t f s,
-    Registered t f s ->
-    Map_TID.In t s.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    eauto using Map_TID_Extra.mapsto_to_in.
-  Qed.
-
   Lemma registered_fun:
     forall t f s g,
     Registered t f s ->
@@ -1306,7 +1346,7 @@ Section Defs.
   Proof.
     intros.
     inversion H; subst.
-    eauto using in_open_def, List.in_eq.
+    eauto using in_open_def, List.in_eq, open_def.
   Qed.
 
   Let c_edge_to_f_edge:
@@ -1519,7 +1559,7 @@ Section Props.
   Proof.
     intros.
     inversion H0; subst; clear H0.
-    eauto using in_open_def.
+    eauto using in_open_def, open_def.
   Qed.
 
   Let task_in_to_in:
@@ -1596,7 +1636,7 @@ Section Props.
     intros.
     destruct ft as (f, [|g]); simpl.
     + eauto using in_registered, registered_def.
-    + eauto using in_open, in_eq, in_open_def.
+    + eauto using in_open, in_eq, in_open_def, open_def.
   Qed.
 
   Let registered_inv_remove:
@@ -1611,18 +1651,6 @@ Section Props.
     eauto using registered_def.
   Qed.
 
-  Let open_inv_remove:
-    forall x f s y,
-    InOpen y f (Map_TID.remove x s) ->
-    x <> y /\ InOpen y f s.
-  Proof.
-    intros.
-    inversion H; subst; clear H.
-    apply Map_TID_Facts.remove_mapsto_iff in H1.
-    destruct H1 as (?, ?).
-    eauto using in_open_def.
-  Qed.
-
   Let in_inv_remove:
     forall x s f,
     In f (Map_TID.remove x s) ->
@@ -1633,7 +1661,7 @@ Section Props.
     - apply registered_inv_remove in H0.
       destruct H0.
       eauto using in_registered.
-    - apply open_inv_remove in H0.
+    - apply in_open_inv_remove in H0.
       destruct H0.
       eauto using in_open.
   Qed.
@@ -1666,7 +1694,8 @@ Section Props.
           inversion H; subst; clear H
         end.
         * auto.
-        * eauto using in_open_def, in_open.
+        * (* eauto without params does not work, so we need to try harder *)
+          eauto 6 using in_open_def, open_def, in_open.
     - eauto using task_in_to_in, task_in_cons.
     - match goal with H: Task.In _ (make _) |- _ =>
         apply task_in_inv_eq_make in H
@@ -1729,7 +1758,57 @@ Section Props.
       eapply registered_def; eauto using Map_TID.remove_2.
   Qed.
 
-  Let in_open_add_neq:
+  Lemma open_add_1:
+    forall x l f s,
+    Open x l (Map_TID.add x {|registered:=f; open:=l|} s).
+  Proof.
+    eauto using open_def, Map_TID.add_1.
+  Qed.
+
+  Lemma open_add_2:
+    forall y l s x ft,
+    Open y l s ->
+    x <> y ->
+    Open y l (Map_TID.add x ft s).
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using open_def, Map_TID.add_2.
+  Qed.
+
+  Lemma open_to_in:
+    forall x l s,
+    Open x l s ->
+    Map_TID.In x s.
+  Proof.
+    intros.
+    inversion H; subst; clear H.
+    eauto using Map_TID_Extra.mapsto_to_in.
+  Qed.
+
+  Lemma open_remove_1:
+    forall l x s y,
+    x = y ->
+    ~ Open y l (Map_TID.remove x s).
+  Proof.
+    intros.
+    unfold not; intros N.
+    apply open_to_in in N.
+    apply Map_TID.remove_1 in N; auto.
+  Qed.
+
+  Lemma open_remove_2:
+    forall s x y l,
+    x <> y ->
+    Open y l s ->
+    Open y l (Map_TID.remove x s).
+  Proof.
+    intros.
+    inversion H0; subst; clear H0.
+    eauto using open_def, Map_TID.remove_2.
+  Qed.
+
+  Lemma in_open_add_neq:
     forall y f s x ft,
     InOpen y f s ->
     x <> y ->
@@ -1737,7 +1816,7 @@ Section Props.
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using in_open_def, Map_TID.add_2.
+    eauto using in_open_def, open_add_2.
   Qed.
 
   Lemma in_open_to_in:
@@ -1747,7 +1826,7 @@ Section Props.
   Proof.
     intros.
     inversion H; subst; clear H.
-    eauto using Map_TID_Extra.mapsto_to_in.
+    eauto using open_to_in.
   Qed.
 
   Definition in_dec (f:fid) (s:state) :
@@ -1772,12 +1851,13 @@ Section Props.
       assert (Task.In f {| registered := f; open := l |}) by auto using Task.in_registered, Task.registered_def.
       contradiction.
     - inversion H; subst; clear H.
-      apply Hx in H1.
-      destruct (Task.in_dec f {| registered := g; open := l |}). {
-        inversion H1.
+      inversion H1; subst; clear H1.
+      apply Hx in H.
+      destruct (Task.in_dec f {| registered := f0; open := l |}). {
+        inversion H.
       }
-      assert (Task.In f {| registered := g; open := l |}) by auto using Task.in_open, Task.in_open_def.
-      contradiction.
+      contradict n.
+      auto using Task.in_open, Task.in_open_def.
   Defined.
 
   Inductive reduces_err :=
@@ -1975,23 +2055,22 @@ Section Props.
     intros.
     inversion H1; subst; clear H1.
     assert (f0 = g). {
-      inversion H0; subst; clear H0;
-      match goal with H1: Map_TID.MapsTo _ ?v1 _, H2: Map_TID.MapsTo _ ?v2 _ |- _
-      => assert (R: v1 = v2) by eauto using Map_TID_Facts.MapsTo_fun; inversion R; subst; clear R
-      end.
-      trivial.
+      apply ief_cons in H3.
+      eauto using ief_fun.
     }
     subst.
+    match goal with H: Map_TID.MapsTo _ _ _ |- _ => apply open_def in H end.
     inversion H; subst; clear H.
-    match goal with H1: Map_TID.MapsTo _ ?v1 _, H2: Map_TID.MapsTo _ ?v2 _ |- _
-    => assert (R: v1 = v2) by eauto using Map_TID_Facts.MapsTo_fun; inversion R; subst;
-    clear R H1
+    match goal with H1: Open _ ?l1 _, H2: Open _ ?l2 _ |- _ =>
+      assert (R: l1 = l2) by eauto using open_fun; subst; clear H2
     end.
-    inversion H1; subst; clear H1; auto.
+    match goal with H: List.In _ _ |- _ =>
+      inversion H; subst; clear H; auto
+    end.
     destruct (FID.eq_dec f g). {
       auto.
     }
-    eauto using Map_TID.add_1, in_open_def.
+    eauto using in_open_def, open_add_1.
   Qed.
 
   Lemma in_open_reduces:
@@ -2006,37 +2085,33 @@ Section Props.
     destruct (TID.eq_dec x y); subst; try (right; auto using in_open_add_neq; fail).
     - apply in_open_to_in in H.
       contradiction.
-    - inversion H; subst; clear H.
-      match goal with
-      H1: Map_TID.MapsTo y ?a _, H2: Map_TID.MapsTo y ?b _ |- _ =>
-      assert(R: a = b) by eauto using Map_TID_Facts.MapsTo_fun;
-      inversion R; subst; clear R
+    - match goal with H: Map_TID.MapsTo _ _ _ |- _ =>
+        apply open_def in H
       end.
-      assert (List.In f (f0::l0)) by auto using List.in_cons.
-      eauto 4 using in_open_def, Map_TID.add_1.
-    - inversion H; subst; clear H.
-      match goal with
-      H1: Map_TID.MapsTo y ?a _, H2: Map_TID.MapsTo y ?b _ |- _ =>
-      assert(R: b = a) by eauto using Map_TID_Facts.MapsTo_fun;
-      inversion R; subst; clear R
+      inversion H; subst; clear H.
+      match goal with H1: Open _ ?l1 _, H2: Open _ ?l2 _ |- _ =>
+        assert (l2 = l1) by eauto using open_fun;
+        clear H1;
+        subst
       end.
-      auto.
+      eauto using in_open_def, open_add_1, List.in_cons.
+    - auto.
     - destruct (TID.eq_dec u y); subst; try (right; auto using in_open_add_neq; fail).
       assert (Map_TID.In y s) by eauto using in_open_to_in.
       contradiction.
     - destruct (TID.eq_dec u y); subst; try (right; auto using in_open_add_neq; fail).
       assert (Map_TID.In y s) by eauto using in_open_to_in.
       contradiction.
-    - inversion H; subst; clear H.
-      match goal with
-      H1: Map_TID.MapsTo y ?a _, H2: Map_TID.MapsTo y ?b _ |- _ =>
-      assert(R: b = a) by eauto using Map_TID_Facts.MapsTo_fun;
-      inversion R; subst; clear R
+    - apply open_def in H5.
+      inversion H; subst; clear H.
+      assert (l = []) by eauto using open_fun.
+      subst.
+      match goal with H: List.In _ [] |- _ =>
+        inversion H
       end.
-      match goal with H: List.In _ _ |- _ => inversion H end.
     - right.
       inversion H; subst; clear H.
-      eapply in_open_def; eauto using Map_TID.remove_2.
+      eauto using in_open_def, open_remove_2.
   Qed.
 
   Lemma registered_or_in_open_reduces:
@@ -2083,6 +2158,7 @@ Section Props.
   Proof.
     unfold not, empty; intros.
     inversion H; subst; clear H.
+    inversion H1; subst; clear H1.
     rewrite Map_TID_Facts.empty_mapsto_iff in *.
     contradiction.
   Qed.

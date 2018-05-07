@@ -817,7 +817,7 @@ Section Defs.
     intros.
     inversion H; subst; clear H.
     - eauto using F.registered_def.
-    - eauto using F.in_open_def, List.in_eq.
+    - eauto using F.in_open_def, F.open_def, List.in_eq.
   Qed.
 
   Let not_in_make:
