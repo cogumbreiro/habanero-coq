@@ -28,10 +28,9 @@ before_install:
     fi
 
 install:
-  - opam init -n --comp $OCAML_VERSION
-  - opam update
-  - opam install coq.$COQ_VERSION
+  - opam init -n --comp $OCAML_VERSION; opam update
   - opam install ocamlbuild.$OCB_VERSION
+  - opam install coq.$COQ_VERSION
   - eval $(opam config env)
   - ./configure.sh
   - cd libhsem
