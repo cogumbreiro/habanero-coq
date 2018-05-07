@@ -7,7 +7,13 @@ Require Import HJ.Tid.
 Require Import HJ.Vars.
 Require Import HJ.Phasers.Lang.
 Require Import HJ.Phasers.PhaseDiff.
+
+Require Aniceto.Sig.
+Require Aniceto.Graphs.Graph.
+
 Require HJ.Phasers.TransClosure.
+Require HJ.Phasers.TransDiff.
+
 Open Scope Z.
 
 Section LE_DEC.
@@ -70,7 +76,7 @@ Proof.
 Qed.
 
 Section GET_DIFF.
-Require Import Aniceto.Sig.
+Import Aniceto.Sig.
 Variable ph: phaser.
 Variable t1: tid.
 Variable t2: tid.
@@ -415,8 +421,8 @@ Qed.
 End LE_DEC.
 
 Section LE_PM_DIFF.
-Require Import Aniceto.Graphs.Graph.
-Require Import HJ.Phasers.TransDiff.
+Import Aniceto.Graphs.Graph.
+Import HJ.Phasers.TransDiff.
 
 Variable pm:phasermap.
 Notation t_edge := (tid * tid) % type.
