@@ -15,7 +15,7 @@ cache:
   directories:
     - $HOME/.opam
 env:
-  - OCAML_VERSION=4.05.0 COQ_VERSION=8.7.2 OPAMYES=yes OCB_VERSION=0.12.0
+  - OCAML_VERSION=4.05.0 COQ_VERSION=8.8.0 OPAMYES=yes OCB_VERSION=0.12.0
 
 before_install:
   - if [[ $TRAVIS_OS_NAME == 'osx' ]];
